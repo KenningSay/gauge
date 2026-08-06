@@ -1,6 +1,7 @@
 import { useRef } from 'react'
-import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Gauge as GaugeIcon } from 'lucide-react'
+import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Gauge as GaugeIcon } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
+import { useUiStore } from '../store/useUiStore'
 import styles from './Toolbar.module.css'
 
 interface Props {
@@ -17,10 +18,14 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
   const selected = useFileStore((s) => s.selected)
   const entries = useFileStore((s) => s.entries)
   const deleteEntries = useFileStore((s) => s.deleteEntries)
+  const promptDialog = useUiStore((s) => s.promptDialog)
+  const confirmDialog = useUiStore((s) => s.confirmDialog)
+  const propertiesOpen = useUiStore((s) => s.propertiesOpen)
+  const toggleProperties = useUiStore((s) => s.toggleProperties)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const handleNewFolder = async () => {
-    const name = window.prompt('Имя новой папки')
+    const name = await promptDialog('Имя новой папки', 'Новая папка')
     if (name) await createFolder(name)
   }
 
@@ -35,7 +40,8 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
 
   const handleDelete = async () => {
     if (selected.size === 0) return
-    if (!window.confirm(`Удалить ${selected.size} объект(ов)?`)) return
+    const ok = await confirmDialog(`Удалить ${selected.size} объект(ов)? Это необратимо.`)
+    if (!ok) return
     const toDelete = entries.filter((en) => selected.has(en.path))
     await deleteEntries(toDelete)
   }
@@ -65,7 +71,7 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
 
       <button className={styles.paletteHint} onClick={openCommandPalette}>
         <Search size={15} />
-        Команды
+        Команды и поиск
         <kbd>Ctrl K</kbd>
       </button>
 
@@ -82,6 +88,13 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
         onClick={() => setViewMode('grid')}
       >
         <LayoutGrid size={18} />
+      </button>
+      <button
+        className={`${styles.iconBtn} ${propertiesOpen ? styles.active : ''}`}
+        title="Свойства (Ctrl I)"
+        onClick={toggleProperties}
+      >
+        <Info size={18} />
       </button>
       <button className={styles.iconBtn} title="Тема" onClick={onToggleTheme}>
         {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

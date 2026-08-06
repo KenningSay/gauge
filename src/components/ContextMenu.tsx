@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Eye, Pencil, Download, Trash2, FolderOpen } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
+import { useUiStore } from '../store/useUiStore'
 import { authorizedFetchUrl } from '../api/webdav'
 import styles from './ContextMenu.module.css'
 
@@ -11,6 +12,7 @@ export function ContextMenu() {
   const navigate = useFileStore((s) => s.navigate)
   const startRename = useFileStore((s) => s.startRename)
   const deleteEntries = useFileStore((s) => s.deleteEntries)
+  const confirmDialog = useUiStore((s) => s.confirmDialog)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -59,7 +61,8 @@ export function ContextMenu() {
         className={`${styles.item} ${styles.danger}`}
         onClick={async () => {
           closeContextMenu()
-          if (window.confirm(`Удалить «${entry.name}»?`)) await deleteEntries([entry])
+          const ok = await confirmDialog(`Удалить «${entry.name}»? Это необратимо.`)
+          if (ok) await deleteEntries([entry])
         }}
       >
         <Trash2 size={16} /> Удалить
