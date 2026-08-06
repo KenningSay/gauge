@@ -80,6 +80,33 @@
   flex: 1;
 }
 
+.selectionPill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 14px;
+  border-radius: 999px;
+  background: var(--bg-selected);
+  border: 1px solid var(--signal-dim);
+  color: var(--signal);
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.selectionClear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--signal);
+}
+
 .paletteHint {
   display: flex;
   align-items: center;

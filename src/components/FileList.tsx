@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Folder, Image, Video, Music, FileText, FileCode, File as FileIcon, Inbox } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { detectViewerKind, type FileEntry } from '../api/types'
 import { authorizedFetchUrl } from '../api/webdav'
 import { formatSize, formatDate, extensionOf } from '../utils/format'
+import { isCoarsePointer } from '../utils/device'
 import styles from './FileList.module.css'
 
 const CODE_EXT = new Set(['js', 'jsx', 'ts', 'tsx', 'py', 'sh', 'json', 'html', 'css', 'yml', 'yaml'])
@@ -33,10 +34,12 @@ export function FileList() {
   const sortDir = useFileStore((s) => s.sortDir)
   const setSort = useFileStore((s) => s.setSort)
   const selected = useFileStore((s) => s.selected)
+  const selectionMode = useFileStore((s) => s.selectionMode)
   const selectOnly = useFileStore((s) => s.selectOnly)
   const toggleSelect = useFileStore((s) => s.toggleSelect)
   const selectRange = useFileStore((s) => s.selectRange)
   const clearSelection = useFileStore((s) => s.clearSelection)
+  const enterSelectionMode = useFileStore((s) => s.enterSelectionMode)
   const navigate = useFileStore((s) => s.navigate)
   const openViewer = useFileStore((s) => s.openViewer)
   const openContextMenu = useFileStore((s) => s.openContextMenu)
@@ -49,16 +52,40 @@ export function FileList() {
 
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [dropZoneActive, setDropZoneActive] = useState(false)
-
-  const handleClick = (e: React.MouseEvent, entry: FileEntry) => {
-    if (e.shiftKey) selectRange(entry.path)
-    else if (e.ctrlKey || e.metaKey) toggleSelect(entry.path)
-    else selectOnly(entry.path)
-  }
+  const pressTimer = useRef<number | null>(null)
+  const longPressFired = useRef(false)
 
   const handleDoubleClick = (entry: FileEntry) => {
     if (entry.isDir) navigate(entry.path)
     else openViewer(entry)
+  }
+
+  const handleClick = (e: React.MouseEvent, entry: FileEntry) => {
+    if (longPressFired.current) { longPressFired.current = false; return }
+    if (e.shiftKey) { selectRange(entry.path); return }
+    if (e.ctrlKey || e.metaKey) { toggleSelect(entry.path); return }
+    // Already in multi-select mode (started via long-press on touch) — a
+    // plain tap keeps adding/removing items instead of opening them.
+    if (selectionMode) { toggleSelect(entry.path); return }
+    // Touch screens have no double-tap convention worth relying on — a plain
+    // tap should open the item directly, same as a desktop double-click.
+    if (isCoarsePointer()) { handleDoubleClick(entry); return }
+    selectOnly(entry.path)
+  }
+
+  const handleTouchStart = (entry: FileEntry) => {
+    longPressFired.current = false
+    pressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true
+      if (navigator.vibrate) navigator.vibrate(15)
+      enterSelectionMode(entry.path)
+    }, 480)
+  }
+  const cancelLongPress = () => {
+    if (pressTimer.current) {
+      window.clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
   }
 
   const handleDragStart = (e: React.DragEvent, entry: FileEntry) => {
@@ -152,6 +179,9 @@ export function FileList() {
                 onDragOver={(e) => { if (entry.isDir) { e.preventDefault(); setDragOverPath(entry.path) } }}
                 onDragLeave={() => setDragOverPath(null)}
                 onDrop={(e) => entry.isDir && handleRowDrop(e, entry)}
+                onTouchStart={() => handleTouchStart(entry)}
+                onTouchEnd={cancelLongPress}
+                onTouchMove={cancelLongPress}
               >
                 <td>
                   <div className={styles.nameCell}>
@@ -194,6 +224,9 @@ export function FileList() {
               onDragOver={(e) => { if (entry.isDir) { e.preventDefault(); setDragOverPath(entry.path) } }}
               onDragLeave={() => setDragOverPath(null)}
               onDrop={(e) => entry.isDir && handleRowDrop(e, entry)}
+              onTouchStart={() => handleTouchStart(entry)}
+              onTouchEnd={cancelLongPress}
+              onTouchMove={cancelLongPress}
             >
               <div className={styles.gridThumb}>
                 {isImage(entry) ? (
