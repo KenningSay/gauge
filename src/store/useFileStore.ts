@@ -20,6 +20,7 @@ interface FileStore {
 
   selected: Set<string>
   lastSelectedIndex: number | null
+  selectionMode: boolean
 
   sortKey: SortKey
   sortDir: 1 | -1
@@ -42,6 +43,7 @@ interface FileStore {
   toggleSelect: (path: string) => void
   selectRange: (path: string) => void
   clearSelection: () => void
+  enterSelectionMode: (path: string) => void
 
   moveCursor: (dir: 1 | -1) => void
   activateCursor: () => void
@@ -102,6 +104,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   selected: new Set(),
   lastSelectedIndex: null,
+  selectionMode: false,
 
   sortKey: 'name',
   sortDir: 1,
@@ -116,7 +119,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
   indexBuilding: false,
 
   navigate: async (path) => {
-    set({ currentPath: path, selected: new Set(), lastSelectedIndex: null, loading: true, error: null })
+    set({ currentPath: path, selected: new Set(), lastSelectedIndex: null, selectionMode: false, loading: true, error: null })
     try {
       const entries = await webdav.list(path)
       const { sortKey, sortDir } = get()
@@ -149,8 +152,13 @@ export const useFileStore = create<FileStore>((set, get) => ({
       const next = new Set(s.selected)
       if (next.has(path)) next.delete(path)
       else next.add(path)
-      return { selected: next, lastSelectedIndex: idx }
+      return { selected: next, lastSelectedIndex: idx, selectionMode: next.size > 0 && s.selectionMode }
     })
+  },
+
+  enterSelectionMode: (path) => {
+    const idx = get().entries.findIndex((e) => e.path === path)
+    set({ selected: new Set([path]), lastSelectedIndex: idx, selectionMode: true })
   },
 
   selectRange: (path) => {
@@ -165,7 +173,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     set({ selected: new Set(range) })
   },
 
-  clearSelection: () => set({ selected: new Set(), lastSelectedIndex: null }),
+  clearSelection: () => set({ selected: new Set(), lastSelectedIndex: null, selectionMode: false }),
 
   moveCursor: (dir) => {
     const { entries, lastSelectedIndex } = get()
