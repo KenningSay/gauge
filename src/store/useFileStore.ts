@@ -44,6 +44,7 @@ interface FileStore {
   selectRange: (path: string) => void
   clearSelection: () => void
   enterSelectionMode: (path: string) => void
+  selectAll: () => void
 
   moveCursor: (dir: 1 | -1) => void
   activateCursor: () => void
@@ -159,6 +160,15 @@ export const useFileStore = create<FileStore>((set, get) => ({
   enterSelectionMode: (path) => {
     const idx = get().entries.findIndex((e) => e.path === path)
     set({ selected: new Set([path]), lastSelectedIndex: idx, selectionMode: true })
+  },
+
+  selectAll: () => {
+    const { entries } = get()
+    set({
+      selected: new Set(entries.map((e) => e.path)),
+      lastSelectedIndex: entries.length - 1,
+      selectionMode: true,
+    })
   },
 
   selectRange: (path) => {

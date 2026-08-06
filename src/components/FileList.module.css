@@ -78,9 +78,32 @@
   color: var(--text);
 }
 
+.kebabCol {
+  display: none;
+  width: 40px;
+}
+
+.kebabBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+}
+.kebabBtn:active {
+  background: var(--bg-hover);
+}
+
 @media (max-width: 640px) {
   .dateCol, .typeCol {
     display: none;
+  }
+  .kebabCol {
+    display: table-cell;
   }
 }
 
@@ -136,6 +159,7 @@
 }
 
 .gridItem {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -144,6 +168,28 @@
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   text-align: center;
+}
+
+.gridKebab {
+  display: none;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+@media (max-width: 640px) {
+  .gridKebab {
+    display: flex;
+  }
 }
 .gridItem:hover {
   background: var(--bg-hover);

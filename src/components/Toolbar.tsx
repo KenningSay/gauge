@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Menu, LogOut, X, Gauge as GaugeIcon } from 'lucide-react'
+import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Menu, LogOut, X, CheckSquare, Gauge as GaugeIcon } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
 import { useAuthStore } from '../store/useAuthStore'
@@ -20,6 +20,7 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
   const entries = useFileStore((s) => s.entries)
   const deleteEntries = useFileStore((s) => s.deleteEntries)
   const clearSelection = useFileStore((s) => s.clearSelection)
+  const selectAll = useFileStore((s) => s.selectAll)
   const promptDialog = useUiStore((s) => s.promptDialog)
   const confirmDialog = useUiStore((s) => s.confirmDialog)
   const propertiesOpen = useUiStore((s) => s.propertiesOpen)
@@ -40,6 +41,11 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       await uploadFiles(e.target.files)
     }
     e.target.value = ''
+  }
+
+  const handleSelectAllToggle = () => {
+    if (entries.length > 0 && selected.size === entries.length) clearSelection()
+    else selectAll()
   }
 
   const handleDelete = async () => {
@@ -67,6 +73,15 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
         <Upload size={18} />
       </button>
       <input ref={fileInput} type="file" multiple hidden onChange={handleFileChange} />
+
+      <button
+        className={`${styles.iconBtn} ${entries.length > 0 && selected.size === entries.length ? styles.active : ''}`}
+        title="Выбрать всё (Ctrl A)"
+        onClick={handleSelectAllToggle}
+        disabled={entries.length === 0}
+      >
+        <CheckSquare size={18} />
+      </button>
 
       {selected.size > 0 && (
         <div className={styles.selectionPill}>
