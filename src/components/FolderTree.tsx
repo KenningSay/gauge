@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { ChevronRight, Folder, FolderOpen, HardDrive } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
+import { useUiStore } from '../store/useUiStore'
 import * as webdav from '../api/webdav'
 import type { FileEntry } from '../api/types'
 import styles from './FolderTree.module.css'
@@ -40,6 +41,7 @@ function TreeNode({ path, name, depth }: NodeProps) {
   const handleClick = () => {
     navigate(path)
     if (!open) setOpen(true)
+    useUiStore.getState().closeSidebar()
   }
 
   const handleDrop = async (e: React.DragEvent) => {
@@ -87,9 +89,14 @@ function TreeNode({ path, name, depth }: NodeProps) {
 }
 
 export function FolderTree() {
+  const sidebarOpen = useUiStore((s) => s.sidebarOpen)
+  const closeSidebar = useUiStore((s) => s.closeSidebar)
   return (
-    <div className={styles.sidebar}>
-      <TreeNode path="/" name="Gauge" depth={0} />
-    </div>
+    <>
+      <div className={`${styles.backdrop} ${sidebarOpen ? styles.open : ''}`} onClick={closeSidebar} />
+      <div className={`${styles.sidebar} ${sidebarOpen ? styles.open : ''}`}>
+        <TreeNode path="/" name="Gauge" depth={0} />
+      </div>
+    </>
   )
 }

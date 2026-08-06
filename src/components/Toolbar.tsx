@@ -1,7 +1,8 @@
 import { useRef } from 'react'
-import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Gauge as GaugeIcon } from 'lucide-react'
+import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Menu, LogOut, Gauge as GaugeIcon } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
+import { useAuthStore } from '../store/useAuthStore'
 import styles from './Toolbar.module.css'
 
 interface Props {
@@ -22,6 +23,8 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
   const confirmDialog = useUiStore((s) => s.confirmDialog)
   const propertiesOpen = useUiStore((s) => s.propertiesOpen)
   const toggleProperties = useUiStore((s) => s.toggleProperties)
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar)
+  const logout = useAuthStore((s) => s.logout)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const handleNewFolder = async () => {
@@ -48,6 +51,9 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
 
   return (
     <div className={styles.wrap}>
+      <button className={`${styles.iconBtn} ${styles.hamburger}`} title="Папки" onClick={toggleSidebar}>
+        <Menu size={18} />
+      </button>
       <div className={styles.brand}>
         <GaugeIcon size={20} color="var(--signal)" />
         Gauge
@@ -71,8 +77,8 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
 
       <button className={styles.paletteHint} onClick={openCommandPalette}>
         <Search size={15} />
-        Команды и поиск
-        <kbd>Ctrl K</kbd>
+        <span className={styles.hideOnMobile}>Команды и поиск</span>
+        <kbd className={styles.hideOnMobile}>Ctrl K</kbd>
       </button>
 
       <button
@@ -98,6 +104,9 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       </button>
       <button className={styles.iconBtn} title="Тема" onClick={onToggleTheme}>
         {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+      <button className={styles.iconBtn} title="Выйти" onClick={logout}>
+        <LogOut size={18} />
       </button>
     </div>
   )

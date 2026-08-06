@@ -134,9 +134,9 @@ export function FileList() {
           <thead>
             <tr className={styles.headRow}>
               <th onClick={(e) => { e.stopPropagation(); setSort('name') }}>Имя<SortArrow col="name" /></th>
-              <th onClick={(e) => { e.stopPropagation(); setSort('modified') }}>Изменён<SortArrow col="modified" /></th>
+              <th className={styles.dateCol} onClick={(e) => { e.stopPropagation(); setSort('modified') }}>Изменён<SortArrow col="modified" /></th>
               <th onClick={(e) => { e.stopPropagation(); setSort('size') }}>Размер<SortArrow col="size" /></th>
-              <th>Тип</th>
+              <th className={styles.typeCol} onClick={(e) => { e.stopPropagation(); setSort('type') }}>Тип<SortArrow col="type" /></th>
             </tr>
           </thead>
           <tbody>
@@ -173,9 +173,9 @@ export function FileList() {
                     )}
                   </div>
                 </td>
-                <td className={styles.dimCell}>{formatDate(entry.modified)}</td>
+                <td className={`${styles.dimCell} ${styles.dateCol}`}>{formatDate(entry.modified)}</td>
                 <td className={styles.dimCell}>{formatSize(entry.size, entry.isDir)}</td>
-                <td className={styles.dimCell}>{entry.isDir ? 'Папка' : extensionOf(entry.name) || '—'}</td>
+                <td className={`${styles.dimCell} ${styles.typeCol}`}>{entry.isDir ? 'Папка' : extensionOf(entry.name) || '—'}</td>
               </tr>
             ))}
           </tbody>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Toolbar } from './components/Toolbar'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { FileList } from './components/FileList'
@@ -8,9 +9,11 @@ import { CommandPalette } from './components/CommandPalette'
 import { PropertiesPanel } from './components/PropertiesPanel'
 import { ToastContainer } from './components/Toast'
 import { Dialog } from './components/Dialog'
+import { LoginScreen } from './components/LoginScreen'
 import { ViewerModal } from './components/Viewer/ViewerModal'
 import { useFileStore } from './store/useFileStore'
 import { useUiStore } from './store/useUiStore'
+import { useAuthStore } from './store/useAuthStore'
 import styles from './App.module.css'
 
 type Theme = 'dark' | 'light'
@@ -21,7 +24,7 @@ function getInitialTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
-export default function App() {
+function MainApp() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
   const navigate = useFileStore((s) => s.navigate)
   const openCommandPalette = useFileStore((s) => s.openCommandPalette)
@@ -110,4 +113,26 @@ export default function App() {
       <Dialog />
     </div>
   )
+}
+
+export default function App() {
+  const authenticated = useAuthStore((s) => s.authenticated)
+  const loading = useAuthStore((s) => s.loading)
+  const restoreSession = useAuthStore((s) => s.restoreSession)
+  const [restoring, setRestoring] = useState(true)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = getInitialTheme()
+    restoreSession().finally(() => setRestoring(false))
+  }, [restoreSession])
+
+  if (restoring && loading) {
+    return (
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={28} className="spin" color="var(--signal)" />
+      </div>
+    )
+  }
+
+  return authenticated ? <MainApp /> : <LoginScreen />
 }

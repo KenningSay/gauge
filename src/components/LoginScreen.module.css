@@ -1,0 +1,116 @@
+.wrap {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 20% 20%, var(--bg-selected), transparent 40%),
+    radial-gradient(circle at 80% 80%, var(--tick-dim), transparent 40%),
+    var(--bg);
+  padding: 20px;
+}
+
+.card {
+  width: min(380px, 100%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 36px 32px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  color: var(--text-faint);
+  font-size: 15px;
+  margin-bottom: 28px;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 11px 14px;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.input:focus {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-dim);
+}
+
+.submit {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--signal);
+  color: var(--bg);
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 120ms ease;
+}
+.submit:disabled {
+  opacity: 0.6;
+}
+
+.error {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: var(--danger);
+  font-size: 14px;
+  text-align: center;
+}
+
+.ratchet {
+  height: 4px;
+  margin-bottom: 24px;
+  background-image: repeating-linear-gradient(
+    to right, var(--border-strong) 0, var(--border-strong) 1px, transparent 1px, transparent 8px
+  );
+  position: relative;
+}
+.ratchet::after {
+  content: '';
+  position: absolute;
+  left: 30%;
+  top: -3px;
+  width: 10px;
+  height: 10px;
+  background: var(--tick);
+  border-radius: 2px;
+  box-shadow: 0 0 10px 1px var(--tick-dim);
+}
