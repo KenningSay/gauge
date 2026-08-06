@@ -1,0 +1,162 @@
+.scroller {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.dropOverlay {
+  position: absolute;
+  inset: 8px;
+  border: 2px dashed var(--signal);
+  border-radius: var(--radius-lg);
+  background: var(--bg-selected);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--signal);
+  font-size: 18px;
+  font-weight: 600;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-faint);
+  gap: 10px;
+}
+
+/* ----- table (list) view ----- */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.headRow th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  text-align: left;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  font-weight: 600;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.headRow th:hover {
+  color: var(--text-dim);
+}
+
+.row {
+  cursor: default;
+  border-bottom: 1px solid var(--border);
+}
+.row:hover {
+  background: var(--bg-hover);
+}
+.row.selected {
+  background: var(--bg-selected);
+}
+.row.dragOver {
+  outline: 2px solid var(--tick);
+  outline-offset: -2px;
+  background: var(--tick-dim);
+}
+
+.row td {
+  padding: 8px 16px;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.nameCell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dimCell {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.renameInput {
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--signal);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 2px 6px;
+  font-size: 16px;
+  width: 100%;
+}
+
+/* ----- grid view ----- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.gridItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  text-align: center;
+}
+.gridItem:hover {
+  background: var(--bg-hover);
+}
+.gridItem.selected {
+  background: var(--bg-selected);
+  border-color: var(--signal-dim);
+}
+.gridItem.dragOver {
+  outline: 2px solid var(--tick);
+  background: var(--tick-dim);
+}
+
+.gridThumb {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-elevated-2);
+}
+.gridThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gridName {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}

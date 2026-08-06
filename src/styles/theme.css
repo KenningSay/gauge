@@ -1,0 +1,143 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --bg: #1b1a18;
+  --bg-elevated: #232120;
+  --bg-elevated-2: #2b2926;
+  --bg-hover: rgba(232, 234, 230, 0.06);
+  --bg-selected: rgba(45, 212, 191, 0.14);
+
+  --text: #e8eae6;
+  --text-dim: #a8a6a0;
+  --text-faint: #716f68;
+
+  --border: #38352f;
+  --border-strong: #4a463d;
+
+  --signal: #2dd4bf;
+  --signal-dim: rgba(45, 212, 191, 0.35);
+  --tick: #fbbf24;
+  --tick-dim: rgba(251, 191, 36, 0.35);
+
+  --danger: #f87171;
+
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #e8eae6;
+  --bg-elevated: #ffffff;
+  --bg-elevated-2: #f4f3ef;
+  --bg-hover: rgba(27, 26, 24, 0.05);
+  --bg-selected: rgba(15, 118, 110, 0.12);
+
+  --text: #1b1a18;
+  --text-dim: #5b5952;
+  --text-faint: #8b8880;
+
+  --border: #d3d0c8;
+  --border-strong: #b8b4a8;
+
+  --signal: #0f766e;
+  --signal-dim: rgba(15, 118, 110, 0.25);
+  --tick: #b45309;
+  --tick-dim: rgba(180, 83, 9, 0.25);
+
+  --danger: #b91c1c;
+
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #e8eae6;
+    --bg-elevated: #ffffff;
+    --bg-elevated-2: #f4f3ef;
+    --bg-hover: rgba(27, 26, 24, 0.05);
+    --bg-selected: rgba(15, 118, 110, 0.12);
+    --text: #1b1a18;
+    --text-dim: #5b5952;
+    --text-faint: #8b8880;
+    --border: #d3d0c8;
+    --border-strong: #b8b4a8;
+    --signal: #0f766e;
+    --signal-dim: rgba(15, 118, 110, 0.25);
+    --tick: #b45309;
+    --tick-dim: rgba(180, 83, 9, 0.25);
+    --danger: #b91c1c;
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.18);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.12);
+    color-scheme: light;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+::selection {
+  background: var(--signal-dim);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+button {
+  font-family: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+input, textarea {
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.spin {
+  animation: gauge-spin 0.8s linear infinite;
+}
+@keyframes gauge-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
