@@ -83,3 +83,18 @@
 .navNext {
   right: 16px;
 }
+
+@media (max-width: 640px) {
+  .header {
+    padding: 10px 12px;
+  }
+  .body {
+    padding: 0 8px 16px;
+  }
+  .navBtn {
+    width: 38px;
+    height: 38px;
+  }
+  .navPrev { left: 4px; }
+  .navNext { right: 4px; }
+}

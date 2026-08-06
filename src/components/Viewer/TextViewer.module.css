@@ -9,6 +9,17 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
+@media (max-width: 640px) {
+  .bar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .editor {
+    padding: 14px;
+    font-size: 14px;
+  }
+}
+
 .bar {
   display: flex;
   align-items: center;

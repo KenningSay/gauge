@@ -3,7 +3,7 @@ import type { FileEntry } from '../api/types'
 import * as webdav from '../api/webdav'
 import { useUiStore } from './useUiStore'
 
-export type SortKey = 'name' | 'size' | 'modified'
+export type SortKey = 'name' | 'size' | 'modified' | 'type'
 export type ViewMode = 'list' | 'grid'
 
 interface ContextMenuState {
@@ -68,6 +68,12 @@ interface FileStore {
   moveEntries: (entries: FileEntry[], destDir: string) => Promise<void>
 }
 
+function typeKey(entry: FileEntry): string {
+  if (entry.isDir) return ''
+  const parts = entry.name.split('.')
+  return parts.length > 1 ? parts.pop()!.toLowerCase() : ''
+}
+
 function sortEntries(entries: FileEntry[], key: SortKey, dir: 1 | -1): FileEntry[] {
   const sorted = [...entries].sort((a, b) => {
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
@@ -75,6 +81,10 @@ function sortEntries(entries: FileEntry[], key: SortKey, dir: 1 | -1): FileEntry
     if (key === 'name') cmp = a.name.localeCompare(b.name, undefined, { numeric: true })
     if (key === 'size') cmp = a.size - b.size
     if (key === 'modified') cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime()
+    if (key === 'type') {
+      cmp = typeKey(a).localeCompare(typeKey(b))
+      if (cmp === 0) cmp = a.name.localeCompare(b.name, undefined, { numeric: true })
+    }
     return cmp * dir
   })
   return sorted

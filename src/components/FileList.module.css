@@ -78,6 +78,12 @@
   color: var(--text);
 }
 
+@media (max-width: 640px) {
+  .dateCol, .typeCol {
+    display: none;
+  }
+}
+
 .nameCell {
   display: flex;
   align-items: center;
@@ -113,6 +119,20 @@
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 12px;
   padding: 16px;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+    padding: 10px;
+  }
+  .row td {
+    padding: 12px 10px;
+  }
+  .headRow th {
+    padding: 8px 10px;
+  }
 }
 
 .gridItem {

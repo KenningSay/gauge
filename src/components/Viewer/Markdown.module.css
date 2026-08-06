@@ -8,6 +8,12 @@
   color: var(--text);
 }
 
+@media (max-width: 640px) {
+  .md {
+    padding: 16px;
+  }
+}
+
 .md h1, .md h2, .md h3, .md h4 {
   font-weight: 700;
   margin: 1.2em 0 0.5em;

@@ -25,6 +25,10 @@ interface UiStore {
 
   propertiesOpen: boolean
   toggleProperties: () => void
+
+  sidebarOpen: boolean
+  toggleSidebar: () => void
+  closeSidebar: () => void
 }
 
 let toastId = 0
@@ -67,4 +71,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
   propertiesOpen: false,
   toggleProperties: () => set((s) => ({ propertiesOpen: !s.propertiesOpen })),
+
+  sidebarOpen: false,
+  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  closeSidebar: () => set({ sidebarOpen: false }),
 }))

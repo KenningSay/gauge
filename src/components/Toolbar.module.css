@@ -5,6 +5,35 @@
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.wrap::-webkit-scrollbar {
+  display: none;
+}
+
+.hamburger {
+  display: none;
+  flex-shrink: 0;
+}
+
+.hideOnMobile {
+  display: inline;
+}
+
+@media (max-width: 768px) {
+  .hamburger {
+    display: flex;
+  }
+  .hideOnMobile {
+    display: none;
+  }
+  .brand {
+    margin-right: 4px;
+  }
+  .iconBtn, .paletteHint {
+    flex-shrink: 0;
+  }
 }
 
 .brand {

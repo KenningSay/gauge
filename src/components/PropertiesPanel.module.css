@@ -7,6 +7,58 @@
   overflow-y: auto;
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.closeBtn {
+  display: none;
+}
+
+.backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .closeBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    border: none;
+    background: var(--bg-hover);
+    color: var(--text-dim);
+  }
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 70;
+  }
+  .panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    z-index: 80;
+    width: 82vw;
+    max-width: 320px;
+    box-shadow: var(--shadow-lg);
+    animation: gauge-panel-in 180ms ease;
+  }
+}
+
+@keyframes gauge-panel-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
 .emptyState {
   color: var(--text-faint);
   font-size: 15px;

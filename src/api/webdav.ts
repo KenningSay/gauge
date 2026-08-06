@@ -1,7 +1,26 @@
 import type { FileEntry } from './types'
 
 const ROOT = '/dav/'
-const AUTH = 'Basic ' + btoa('alex:Cocacolla98')
+
+// Credentials are provided at runtime by the login screen (see useAuthStore),
+// never hardcoded — nothing secret ships in this bundle.
+let authHeader: string | null = null
+let rawUsername = ''
+let rawPassword = ''
+
+export function setCredentials(username: string, password: string) {
+  rawUsername = username
+  rawPassword = password
+  authHeader = 'Basic ' + btoa(`${username}:${password}`)
+}
+
+export function clearCredentials() {
+  authHeader = null
+  rawUsername = ''
+  rawPassword = ''
+}
+
+export class UnauthorizedError extends Error {}
 
 function joinPath(dir: string, name: string): string {
   return (dir.endsWith('/') ? dir : dir + '/') + name
@@ -12,14 +31,30 @@ function davUrl(path: string): string {
   return ROOT + clean
 }
 
+// Plain <img>/<video>/<audio>/<iframe> loads can't carry a custom
+// Authorization header, so those use credentials embedded in the URL instead
+// (same-origin only). All programmatic calls (PROPFIND/GET text/PUT/etc.) go
+// through request() below and use a real header.
+export function authorizedFetchUrl(path: string): string {
+  if (!rawUsername) return davUrl(path)
+  const user = encodeURIComponent(rawUsername)
+  const pass = encodeURIComponent(rawPassword)
+  return `${location.protocol}//${user}:${pass}@${location.host}${davUrl(path)}`
+}
+
 async function request(path: string, init: RequestInit & { headers?: Record<string, string> } = {}) {
+  if (!authHeader) throw new UnauthorizedError('Not authenticated')
   const res = await fetch(davUrl(path), {
     ...init,
     headers: {
-      Authorization: AUTH,
+      Authorization: authHeader,
       ...(init.headers ?? {}),
     },
   })
+  if (res.status === 401) {
+    clearCredentials()
+    throw new UnauthorizedError(`WebDAV ${init.method ?? 'GET'} ${path} -> 401`)
+  }
   if (!res.ok && res.status !== 207 && res.status !== 404) {
     throw new Error(`WebDAV ${init.method ?? 'GET'} ${path} -> ${res.status} ${res.statusText}`)
   }
@@ -81,16 +116,6 @@ export async function getTextContent(path: string): Promise<string> {
   const res = await request(path, { method: 'GET' })
   return res.text()
 }
-
-export function fileUrl(path: string): string {
-  return davUrl(path) + `?_auth=${encodeURIComponent(AUTH)}`
-}
-
-export function authorizedFetchUrl(path: string): string {
-  return davUrl(path)
-}
-
-export const AUTH_HEADER = AUTH
 
 export async function putTextContent(path: string, content: string): Promise<void> {
   await request(path, {
