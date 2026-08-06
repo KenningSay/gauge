@@ -5,8 +5,12 @@ import { FileList } from './components/FileList'
 import { FolderTree } from './components/FolderTree'
 import { ContextMenu } from './components/ContextMenu'
 import { CommandPalette } from './components/CommandPalette'
+import { PropertiesPanel } from './components/PropertiesPanel'
+import { ToastContainer } from './components/Toast'
+import { Dialog } from './components/Dialog'
 import { ViewerModal } from './components/Viewer/ViewerModal'
 import { useFileStore } from './store/useFileStore'
+import { useUiStore } from './store/useUiStore'
 import styles from './App.module.css'
 
 type Theme = 'dark' | 'light'
@@ -28,7 +32,13 @@ export default function App() {
   const deleteEntries = useFileStore((s) => s.deleteEntries)
   const clearSelection = useFileStore((s) => s.clearSelection)
   const startRename = useFileStore((s) => s.startRename)
+  const renamingPath = useFileStore((s) => s.renamingPath)
   const viewerEntry = useFileStore((s) => s.viewerEntry)
+  const moveCursor = useFileStore((s) => s.moveCursor)
+  const activateCursor = useFileStore((s) => s.activateCursor)
+  const goUp = useFileStore((s) => s.goUp)
+  const confirmDialog = useUiStore((s) => s.confirmDialog)
+  const toggleProperties = useUiStore((s) => s.toggleProperties)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -46,19 +56,41 @@ export default function App() {
         commandPaletteOpen ? closeCommandPalette() : openCommandPalette()
         return
       }
-      if (viewerEntry || commandPaletteOpen) return
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+        e.preventDefault()
+        toggleProperties()
+        return
+      }
+      if (viewerEntry || commandPaletteOpen || renamingPath) return
+
       if (e.key === 'Delete' && selected.size > 0) {
         const toDelete = entries.filter((en) => selected.has(en.path))
-        if (window.confirm(`Удалить ${toDelete.length} объект(ов)?`)) await deleteEntries(toDelete)
+        const ok = await confirmDialog(`Удалить ${toDelete.length} объект(ов)? Это необратимо.`)
+        if (ok) await deleteEntries(toDelete)
+        return
       }
       if (e.key === 'F2' && selected.size === 1) {
         startRename(Array.from(selected)[0])
+        return
       }
+
+      const target = e.target as HTMLElement | null
+      const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      if (typing) return
+
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveCursor(1) }
+      if (e.key === 'ArrowUp') { e.preventDefault(); moveCursor(-1) }
+      if (e.key === 'Enter') { e.preventDefault(); activateCursor() }
+      if (e.key === 'Backspace') { e.preventDefault(); goUp() }
       if (e.key === 'Escape') clearSelection()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [commandPaletteOpen, openCommandPalette, closeCommandPalette, viewerEntry, selected, entries, deleteEntries, startRename, clearSelection])
+  }, [
+    commandPaletteOpen, openCommandPalette, closeCommandPalette, viewerEntry, renamingPath,
+    selected, entries, deleteEntries, startRename, clearSelection,
+    moveCursor, activateCursor, goUp, confirmDialog, toggleProperties,
+  ])
 
   return (
     <div className={styles.app}>
@@ -69,10 +101,13 @@ export default function App() {
           <Breadcrumbs />
           <FileList />
         </div>
+        <PropertiesPanel />
       </div>
       <ContextMenu />
       <CommandPalette />
       <ViewerModal />
+      <ToastContainer />
+      <Dialog />
     </div>
   )
 }

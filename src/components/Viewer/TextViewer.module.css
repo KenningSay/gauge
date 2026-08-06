@@ -43,6 +43,32 @@
   opacity: 0.4;
 }
 
+.toggleGroup {
+  display: flex;
+  gap: 4px;
+  margin-left: 12px;
+  background: var(--bg-elevated-2);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.toggleBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+.toggleBtn.toggleActive {
+  background: var(--bg-selected);
+  color: var(--signal);
+  font-weight: 600;
+}
+
 .editor {
   flex: 1;
   resize: none;

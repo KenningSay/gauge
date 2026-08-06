@@ -1,0 +1,90 @@
+.md {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 40px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.md h1, .md h2, .md h3, .md h4 {
+  font-weight: 700;
+  margin: 1.2em 0 0.5em;
+  line-height: 1.3;
+}
+.md h1 { font-size: 1.8em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+.md h2 { font-size: 1.4em; }
+.md h3 { font-size: 1.15em; }
+
+.md p { margin: 0.8em 0; }
+
+.md a { color: var(--signal); text-decoration: none; }
+.md a:hover { text-decoration: underline; }
+
+.md code {
+  font-family: var(--font-mono);
+  background: var(--bg-elevated-2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.9em;
+}
+
+.md pre {
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+
+.md blockquote {
+  border-left: 3px solid var(--signal);
+  margin: 1em 0;
+  padding: 2px 16px;
+  color: var(--text-dim);
+  background: var(--bg-selected);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.md ul, .md ol {
+  padding-left: 1.5em;
+}
+.md li {
+  margin: 0.3em 0;
+}
+.md li > input[type='checkbox'] {
+  margin-right: 8px;
+  accent-color: var(--signal);
+}
+
+.md table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+.md th, .md td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+.md th {
+  background: var(--bg-elevated-2);
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.md img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}

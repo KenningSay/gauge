@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Folder, File as FileIcon, FolderPlus, Home, LayoutGrid, List } from 'lucide-react'
+import { Search, Folder, File as FileIcon, FolderPlus, Home, LayoutGrid, List, Loader2 } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
+import { useUiStore } from '../store/useUiStore'
 import styles from './CommandPalette.module.css'
 
 interface Cmd {
@@ -8,7 +9,13 @@ interface Cmd {
   label: string
   icon: React.ReactNode
   hint?: string
-  run: () => void
+  run: () => void | Promise<void>
+}
+
+function parentHint(path: string): string {
+  const parts = path.split('/').filter(Boolean)
+  parts.pop()
+  return parts.length ? '/' + parts.join('/') : '/'
 }
 
 export function CommandPalette() {
@@ -19,6 +26,9 @@ export function CommandPalette() {
   const createFolder = useFileStore((s) => s.createFolder)
   const setViewMode = useFileStore((s) => s.setViewMode)
   const entries = useFileStore((s) => s.entries)
+  const searchIndex = useFileStore((s) => s.searchIndex)
+  const indexBuilding = useFileStore((s) => s.indexBuilding)
+  const promptDialog = useUiStore((s) => s.promptDialog)
 
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
@@ -30,22 +40,43 @@ export function CommandPalette() {
   const commands: Cmd[] = useMemo(() => {
     const staticCmds: Cmd[] = [
       { id: 'root', label: 'Перейти в корень', icon: <Home size={16} />, run: () => navigate('/') },
-      { id: 'new-folder', label: 'Новая папка', icon: <FolderPlus size={16} />, run: () => { const n = window.prompt('Имя папки'); if (n) createFolder(n) } },
+      {
+        id: 'new-folder',
+        label: 'Новая папка',
+        icon: <FolderPlus size={16} />,
+        run: async () => { const n = await promptDialog('Имя новой папки', 'Новая папка'); if (n) createFolder(n) },
+      },
       { id: 'view-list', label: 'Вид: список', icon: <List size={16} />, run: () => setViewMode('list') },
       { id: 'view-grid', label: 'Вид: сетка', icon: <LayoutGrid size={16} />, run: () => setViewMode('grid') },
     ]
-    const entryCmds: Cmd[] = entries.map((entry) => ({
-      id: entry.path,
-      label: entry.name,
-      icon: entry.isDir ? <Folder size={16} color="var(--signal)" /> : <FileIcon size={16} />,
-      hint: entry.isDir ? 'папка' : 'файл',
-      run: () => (entry.isDir ? navigate(entry.path) : openViewer(entry)),
-    }))
-    const all = [...staticCmds, ...entryCmds]
-    if (!query.trim()) return all
-    const q = query.toLowerCase()
-    return all.filter((c) => c.label.toLowerCase().includes(q))
-  }, [entries, query, navigate, openViewer, createFolder, setViewMode])
+
+    const q = query.trim().toLowerCase()
+
+    if (!q) {
+      const entryCmds: Cmd[] = entries.map((entry) => ({
+        id: entry.path,
+        label: entry.name,
+        icon: entry.isDir ? <Folder size={16} color="var(--signal)" /> : <FileIcon size={16} />,
+        hint: entry.isDir ? 'папка' : 'файл',
+        run: () => (entry.isDir ? navigate(entry.path) : openViewer(entry)),
+      }))
+      return [...staticCmds, ...entryCmds]
+    }
+
+    const pool = searchIndex ?? entries
+    const matchCmds: Cmd[] = pool
+      .filter((entry) => entry.name.toLowerCase().includes(q))
+      .slice(0, 60)
+      .map((entry) => ({
+        id: entry.path,
+        label: entry.name,
+        icon: entry.isDir ? <Folder size={16} color="var(--signal)" /> : <FileIcon size={16} />,
+        hint: parentHint(entry.path),
+        run: () => (entry.isDir ? navigate(entry.path) : openViewer(entry)),
+      }))
+    const matchedStatic = staticCmds.filter((c) => c.label.toLowerCase().includes(q))
+    return [...matchedStatic, ...matchCmds]
+  }, [entries, searchIndex, query, navigate, openViewer, createFolder, setViewMode, promptDialog])
 
   useEffect(() => {
     if (!open) return
@@ -68,10 +99,11 @@ export function CommandPalette() {
           <Search size={18} color="var(--text-faint)" />
           <input
             autoFocus
-            placeholder="Команда или имя файла…"
+            placeholder="Команда или поиск по всему vault'у…"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setActiveIdx(0) }}
           />
+          {indexBuilding && <Loader2 size={16} className="spin" color="var(--text-faint)" />}
         </div>
         <div className={styles.list}>
           {commands.map((c, i) => (

@@ -1,14 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Save, Loader2 } from 'lucide-react'
+import { Save, Loader2, Eye, Pencil } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { getTextContent, putTextContent } from '../../api/webdav'
 import type { FileEntry } from '../../api/types'
 import styles from './TextViewer.module.css'
+import mdStyles from './Markdown.module.css'
 
 export function TextViewer({ entry }: { entry: FileEntry }) {
+  const isMarkdown = entry.name.toLowerCase().endsWith('.md')
   const [content, setContent] = useState<string | null>(null)
   const [original, setOriginal] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<'edit' | 'preview'>(isMarkdown ? 'preview' : 'edit')
 
   useEffect(() => {
     let cancelled = false
@@ -56,13 +61,36 @@ export function TextViewer({ entry }: { entry: FileEntry }) {
         <span className={`${styles.status} ${dirty ? styles.dirty : ''}`}>
           {error ? `Ошибка: ${error}` : dirty ? 'Есть несохранённые изменения' : 'Сохранено'}
         </span>
+
+        {isMarkdown && content !== null && (
+          <div className={styles.toggleGroup}>
+            <button
+              className={`${styles.toggleBtn} ${mode === 'preview' ? styles.toggleActive : ''}`}
+              onClick={() => setMode('preview')}
+            >
+              <Eye size={14} /> Превью
+            </button>
+            <button
+              className={`${styles.toggleBtn} ${mode === 'edit' ? styles.toggleActive : ''}`}
+              onClick={() => setMode('edit')}
+            >
+              <Pencil size={14} /> Правка
+            </button>
+          </div>
+        )}
+
         <button className={styles.saveBtn} disabled={!dirty || saving} onClick={save}>
           {saving ? <Loader2 size={15} className="spin" /> : <Save size={15} />}
           Сохранить
         </button>
       </div>
+
       {content === null ? (
         <div className={styles.loading}>{error ? 'Не удалось загрузить' : 'Загрузка…'}</div>
+      ) : isMarkdown && mode === 'preview' ? (
+        <div className={mdStyles.md}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        </div>
       ) : (
         <textarea
           className={styles.editor}

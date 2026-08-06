@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { FileEntry } from '../api/types'
 import * as webdav from '../api/webdav'
+import { useUiStore } from './useUiStore'
 
 export type SortKey = 'name' | 'size' | 'modified'
 export type ViewMode = 'list' | 'grid'
@@ -29,6 +30,9 @@ interface FileStore {
   contextMenu: ContextMenuState | null
   renamingPath: string | null
 
+  searchIndex: FileEntry[] | null
+  indexBuilding: boolean
+
   navigate: (path: string) => Promise<void>
   refresh: () => Promise<void>
   setSort: (key: SortKey) => void
@@ -39,12 +43,17 @@ interface FileStore {
   selectRange: (path: string) => void
   clearSelection: () => void
 
+  moveCursor: (dir: 1 | -1) => void
+  activateCursor: () => void
+  goUp: () => void
+
   openViewer: (entry: FileEntry) => void
   closeViewer: () => void
   viewNext: (dir: 1 | -1) => void
 
   openCommandPalette: () => void
   closeCommandPalette: () => void
+  buildSearchIndex: () => Promise<void>
 
   openContextMenu: (x: number, y: number, entry: FileEntry | null) => void
   closeContextMenu: () => void
@@ -71,6 +80,10 @@ function sortEntries(entries: FileEntry[], key: SortKey, dir: 1 | -1): FileEntry
   return sorted
 }
 
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
 export const useFileStore = create<FileStore>((set, get) => ({
   currentPath: '/',
   entries: [],
@@ -89,14 +102,17 @@ export const useFileStore = create<FileStore>((set, get) => ({
   contextMenu: null,
   renamingPath: null,
 
+  searchIndex: null,
+  indexBuilding: false,
+
   navigate: async (path) => {
-    set({ currentPath: path, selected: new Set(), loading: true, error: null })
+    set({ currentPath: path, selected: new Set(), lastSelectedIndex: null, loading: true, error: null })
     try {
       const entries = await webdav.list(path)
       const { sortKey, sortDir } = get()
       set({ entries: sortEntries(entries, sortKey, sortDir), loading: false })
     } catch (e) {
-      set({ loading: false, error: e instanceof Error ? e.message : String(e) })
+      set({ loading: false, error: errMsg(e) })
     }
   },
 
@@ -141,6 +157,32 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   clearSelection: () => set({ selected: new Set(), lastSelectedIndex: null }),
 
+  moveCursor: (dir) => {
+    const { entries, lastSelectedIndex } = get()
+    if (entries.length === 0) return
+    const next = lastSelectedIndex === null
+      ? (dir === 1 ? 0 : entries.length - 1)
+      : Math.min(entries.length - 1, Math.max(0, lastSelectedIndex + dir))
+    set({ selected: new Set([entries[next].path]), lastSelectedIndex: next })
+  },
+
+  activateCursor: () => {
+    const { entries, lastSelectedIndex, navigate, openViewer } = get()
+    if (lastSelectedIndex === null) return
+    const entry = entries[lastSelectedIndex]
+    if (!entry) return
+    if (entry.isDir) navigate(entry.path)
+    else openViewer(entry)
+  },
+
+  goUp: () => {
+    const { currentPath, navigate } = get()
+    if (currentPath === '/') return
+    const parts = currentPath.split('/').filter(Boolean)
+    parts.pop()
+    navigate('/' + parts.join('/'))
+  },
+
   openViewer: (entry) => set({ viewerEntry: entry }),
   closeViewer: () => set({ viewerEntry: null }),
   viewNext: (dir) => {
@@ -153,8 +195,35 @@ export const useFileStore = create<FileStore>((set, get) => ({
     set({ viewerEntry: viewable[nextIdx] })
   },
 
-  openCommandPalette: () => set({ commandPaletteOpen: true }),
+  openCommandPalette: () => {
+    set({ commandPaletteOpen: true })
+    if (!get().searchIndex && !get().indexBuilding) get().buildSearchIndex()
+  },
   closeCommandPalette: () => set({ commandPaletteOpen: false }),
+
+  buildSearchIndex: async () => {
+    set({ indexBuilding: true })
+    const all: FileEntry[] = []
+    const crawl = async (path: string, depth: number) => {
+      if (depth > 8) return
+      let children: FileEntry[]
+      try {
+        children = await webdav.list(path)
+      } catch {
+        return
+      }
+      for (const child of children) {
+        all.push(child)
+        if (child.isDir) await crawl(child.path, depth + 1)
+      }
+    }
+    try {
+      await crawl('/', 0)
+      set({ searchIndex: all, indexBuilding: false })
+    } catch {
+      set({ indexBuilding: false })
+    }
+  },
 
   openContextMenu: (x, y, entry) => set({ contextMenu: { x, y, entry } }),
   closeContextMenu: () => set({ contextMenu: null }),
@@ -164,35 +233,65 @@ export const useFileStore = create<FileStore>((set, get) => ({
   commitRename: async (entry, newName) => {
     set({ renamingPath: null })
     if (!newName || newName === entry.name) return
-    await webdav.renameEntry(entry, newName)
-    await get().refresh()
+    try {
+      await webdav.renameEntry(entry, newName)
+      await get().refresh()
+      useUiStore.getState().pushToast(`Переименовано в «${newName}»`)
+      set({ searchIndex: null })
+    } catch (e) {
+      useUiStore.getState().pushToast(`Не удалось переименовать: ${errMsg(e)}`, 'error')
+    }
   },
 
   createFolder: async (name) => {
-    await webdav.mkdir(get().currentPath, name)
-    await get().refresh()
+    try {
+      await webdav.mkdir(get().currentPath, name)
+      await get().refresh()
+      useUiStore.getState().pushToast(`Папка «${name}» создана`)
+      set({ searchIndex: null })
+    } catch (e) {
+      useUiStore.getState().pushToast(`Не удалось создать папку: ${errMsg(e)}`, 'error')
+    }
   },
 
   uploadFiles: async (files) => {
     const list = Array.from(files)
-    for (const f of list) {
-      await webdav.uploadFile(get().currentPath, f)
+    try {
+      for (const f of list) {
+        await webdav.uploadFile(get().currentPath, f)
+      }
+      await get().refresh()
+      useUiStore.getState().pushToast(list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`)
+      set({ searchIndex: null })
+    } catch (e) {
+      useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')
     }
-    await get().refresh()
   },
 
   deleteEntries: async (entries) => {
-    for (const entry of entries) {
-      await webdav.deleteEntry(entry)
+    try {
+      for (const entry of entries) {
+        await webdav.deleteEntry(entry)
+      }
+      set({ selected: new Set() })
+      await get().refresh()
+      useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» удалён` : `Удалено объектов: ${entries.length}`)
+      set({ searchIndex: null })
+    } catch (e) {
+      useUiStore.getState().pushToast(`Ошибка удаления: ${errMsg(e)}`, 'error')
     }
-    set({ selected: new Set() })
-    await get().refresh()
   },
 
   moveEntries: async (entries, destDir) => {
-    for (const entry of entries) {
-      await webdav.moveEntry(entry, destDir)
+    try {
+      for (const entry of entries) {
+        await webdav.moveEntry(entry, destDir)
+      }
+      await get().refresh()
+      useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`)
+      set({ searchIndex: null })
+    } catch (e) {
+      useUiStore.getState().pushToast(`Ошибка перемещения: ${errMsg(e)}`, 'error')
     }
-    await get().refresh()
   },
 }))
