@@ -1,0 +1,31 @@
+.video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  outline: none;
+}
+
+.audioWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  color: #e8eae6;
+}
+
+.audioIcon {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(45, 212, 191, 0.35), rgba(45, 212, 191, 0.05));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(45, 212, 191, 0.3);
+}
+
+.audio {
+  width: 360px;
+  max-width: 80vw;
+}
