@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Toolbar } from './components/Toolbar'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { FileList } from './components/FileList'
+import { FolderTree } from './components/FolderTree'
 import { ContextMenu } from './components/ContextMenu'
 import { CommandPalette } from './components/CommandPalette'
 import { ViewerModal } from './components/Viewer/ViewerModal'
@@ -62,9 +63,12 @@ export default function App() {
   return (
     <div className={styles.app}>
       <Toolbar theme={theme} onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
-      <Breadcrumbs />
-      <div className={styles.main}>
-        <FileList />
+      <div className={styles.content}>
+        <FolderTree />
+        <div className={styles.main}>
+          <Breadcrumbs />
+          <FileList />
+        </div>
       </div>
       <ContextMenu />
       <CommandPalette />

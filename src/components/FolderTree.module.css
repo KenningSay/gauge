@@ -1,0 +1,58 @@
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-elevated);
+  overflow-y: auto;
+  padding: 10px 6px;
+}
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+.node:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.node.active {
+  background: var(--bg-selected);
+  color: var(--signal);
+  font-weight: 600;
+}
+.node.dragOver {
+  outline: 2px solid var(--tick);
+  background: var(--tick-dim);
+}
+
+.chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: transform 120ms ease;
+}
+.chevron.open {
+  transform: rotate(90deg);
+}
+.chevron.empty {
+  visibility: hidden;
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
