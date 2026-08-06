@@ -40,6 +40,7 @@ function MainApp() {
   const moveCursor = useFileStore((s) => s.moveCursor)
   const activateCursor = useFileStore((s) => s.activateCursor)
   const goUp = useFileStore((s) => s.goUp)
+  const selectAll = useFileStore((s) => s.selectAll)
   const confirmDialog = useUiStore((s) => s.confirmDialog)
   const toggleProperties = useUiStore((s) => s.toggleProperties)
 
@@ -81,6 +82,7 @@ function MainApp() {
       const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
       if (typing) return
 
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); selectAll(); return }
       if (e.key === 'ArrowDown') { e.preventDefault(); moveCursor(1) }
       if (e.key === 'ArrowUp') { e.preventDefault(); moveCursor(-1) }
       if (e.key === 'Enter') { e.preventDefault(); activateCursor() }
@@ -92,7 +94,7 @@ function MainApp() {
   }, [
     commandPaletteOpen, openCommandPalette, closeCommandPalette, viewerEntry, renamingPath,
     selected, entries, deleteEntries, startRename, clearSelection,
-    moveCursor, activateCursor, goUp, confirmDialog, toggleProperties,
+    moveCursor, activateCursor, goUp, confirmDialog, toggleProperties, selectAll,
   ])
 
   return (

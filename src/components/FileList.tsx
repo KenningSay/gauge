@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Folder, Image, Video, Music, FileText, FileCode, File as FileIcon, Inbox } from 'lucide-react'
+import { Folder, Image, Video, Music, FileText, FileCode, File as FileIcon, Inbox, MoreVertical } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { detectViewerKind, type FileEntry } from '../api/types'
 import { authorizedFetchUrl } from '../api/webdav'
@@ -88,6 +88,14 @@ export function FileList() {
     }
   }
 
+  const handleKebab = (e: React.MouseEvent, entry: FileEntry) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!selected.has(entry.path)) selectOnly(entry.path)
+    const rect = e.currentTarget.getBoundingClientRect()
+    openContextMenu(rect.right, rect.bottom, entry)
+  }
+
   const handleDragStart = (e: React.DragEvent, entry: FileEntry) => {
     const paths = selected.has(entry.path) ? Array.from(selected) : [entry.path]
     e.dataTransfer.setData('application/x-gauge-paths', JSON.stringify(paths))
@@ -164,6 +172,7 @@ export function FileList() {
               <th className={styles.dateCol} onClick={(e) => { e.stopPropagation(); setSort('modified') }}>Изменён<SortArrow col="modified" /></th>
               <th onClick={(e) => { e.stopPropagation(); setSort('size') }}>Размер<SortArrow col="size" /></th>
               <th className={styles.typeCol} onClick={(e) => { e.stopPropagation(); setSort('type') }}>Тип<SortArrow col="type" /></th>
+              <th className={styles.kebabCol} />
             </tr>
           </thead>
           <tbody>
@@ -206,6 +215,11 @@ export function FileList() {
                 <td className={`${styles.dimCell} ${styles.dateCol}`}>{formatDate(entry.modified)}</td>
                 <td className={styles.dimCell}>{formatSize(entry.size, entry.isDir)}</td>
                 <td className={`${styles.dimCell} ${styles.typeCol}`}>{entry.isDir ? 'Папка' : extensionOf(entry.name) || '—'}</td>
+                <td className={styles.kebabCol}>
+                  <button className={styles.kebabBtn} onClick={(e) => handleKebab(e, entry)}>
+                    <MoreVertical size={16} />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -228,6 +242,9 @@ export function FileList() {
               onTouchEnd={cancelLongPress}
               onTouchMove={cancelLongPress}
             >
+              <button className={styles.gridKebab} onClick={(e) => handleKebab(e, entry)}>
+                <MoreVertical size={15} />
+              </button>
               <div className={styles.gridThumb}>
                 {isImage(entry) ? (
                   <img src={authorizedFetchUrl(entry.path)} loading="lazy" alt={entry.name} />
