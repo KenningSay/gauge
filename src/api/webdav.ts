@@ -80,7 +80,17 @@ export async function list(path: string): Promise<FileEntry[]> {
   const entries: FileEntry[] = []
 
   for (const r of responses) {
-    const href = decodeURIComponent(extText(r, 'href'))
+    const rawHref = extText(r, 'href')
+    let href: string
+    try {
+      href = decodeURIComponent(rawHref)
+    } catch {
+      // Filename bytes on disk aren't valid UTF-8 (e.g. a legacy
+      // Windows-1251 name) — skip this one entry instead of failing
+      // the whole listing (and, if this is the root listing, the login).
+      console.warn(`Gauge: skipping entry with malformed href: ${rawHref}`)
+      continue
+    }
     if (seen.has(href)) continue
     seen.add(href)
 
