@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Folder, Image, Video, Music, FileText, FileCode, File as FileIcon, Inbox, MoreVertical } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { detectViewerKind, type FileEntry } from '../api/types'
@@ -51,11 +51,40 @@ export function FileList() {
   const renamingPath = useFileStore((s) => s.renamingPath)
   const commitRename = useFileStore((s) => s.commitRename)
   const cancelRename = useFileStore((s) => s.cancelRename)
+  const silentRefresh = useFileStore((s) => s.silentRefresh)
 
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [dropZoneActive, setDropZoneActive] = useState(false)
   const pressTimer = useRef<number | null>(null)
   const longPressFired = useRef(false)
+
+  // Live updates: WebDAV/nginx has no push mechanism, so this polls the
+  // current folder every few seconds — silentRefresh() is a no-op re-render
+  // if nothing changed. Paused while the tab isn't visible (e.g. another
+  // browser tab or app is focused) to avoid pointless requests.
+  useEffect(() => {
+    const POLL_MS = 8000
+    let id: number | null = null
+    const start = () => {
+      if (id !== null) return
+      id = window.setInterval(() => { silentRefresh() }, POLL_MS)
+    }
+    const stop = () => {
+      if (id === null) return
+      window.clearInterval(id)
+      id = null
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') { silentRefresh(); start() }
+      else stop()
+    }
+    if (document.visibilityState === 'visible') start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [currentPath, silentRefresh])
 
   const handleDoubleClick = (entry: FileEntry) => {
     if (entry.isDir) navigate(entry.path)
