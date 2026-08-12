@@ -1,0 +1,28 @@
+.crash {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-faint);
+  background: var(--bg);
+  text-align: center;
+  padding: 24px;
+}
+
+.message {
+  font-size: 16px;
+  color: var(--text-dim);
+}
+
+.reload {
+  margin-top: 4px;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--signal);
+  color: var(--bg);
+  font-size: 16px;
+  font-weight: 700;
+}
