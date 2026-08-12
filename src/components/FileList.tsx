@@ -121,6 +121,7 @@ export function FileList() {
 
   const handleRowDrop = async (e: React.DragEvent, targetDir: FileEntry) => {
     e.preventDefault()
+    e.stopPropagation()
     setDragOverPath(null)
     const internal = e.dataTransfer.getData('application/x-gauge-paths')
     if (internal) {
@@ -198,7 +199,7 @@ export function FileList() {
                 onDoubleClick={() => handleDoubleClick(entry)}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selected.has(entry.path)) selectOnly(entry.path); openContextMenu(e.clientX, e.clientY, entry) }}
                 onDragStart={(e) => handleDragStart(e, entry)}
-                onDragOver={(e) => { if (entry.isDir) { e.preventDefault(); setDragOverPath(entry.path) } }}
+                onDragOver={(e) => { if (entry.isDir) { e.preventDefault(); e.stopPropagation(); setDragOverPath(entry.path) } }}
                 onDragLeave={() => setDragOverPath(null)}
                 onDrop={(e) => entry.isDir && handleRowDrop(e, entry)}
                 onTouchStart={() => handleTouchStart(entry)}
@@ -248,7 +249,7 @@ export function FileList() {
               onDoubleClick={() => handleDoubleClick(entry)}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selected.has(entry.path)) selectOnly(entry.path); openContextMenu(e.clientX, e.clientY, entry) }}
               onDragStart={(e) => handleDragStart(e, entry)}
-              onDragOver={(e) => { if (entry.isDir) { e.preventDefault(); setDragOverPath(entry.path) } }}
+              onDragOver={(e) => { if (entry.isDir) { e.preventDefault(); e.stopPropagation(); setDragOverPath(entry.path) } }}
               onDragLeave={() => setDragOverPath(null)}
               onDrop={(e) => entry.isDir && handleRowDrop(e, entry)}
               onTouchStart={() => handleTouchStart(entry)}
