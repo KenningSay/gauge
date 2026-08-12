@@ -110,7 +110,14 @@ function entriesFingerprint(entries: FileEntry[]): string {
     .join('\n')
 }
 
-export const useFileStore = create<FileStore>((set, get) => ({
+export const useFileStore = create<FileStore>((set, get) => {
+  // Guards against out-of-order async responses: navigate() bumps this on
+  // every call, silentRefresh() just reads it. If a response resolves after
+  // a newer navigate()/silentRefresh() has superseded it, it's discarded
+  // instead of clobbering the current (correct) listing.
+  let requestGen = 0
+
+  return {
   currentPath: '/',
   entries: [],
   loading: false,
@@ -133,12 +140,15 @@ export const useFileStore = create<FileStore>((set, get) => ({
   indexBuilding: false,
 
   navigate: async (path) => {
+    const gen = ++requestGen
     set({ currentPath: path, selected: new Set(), lastSelectedIndex: null, selectionMode: false, loading: true, error: null })
     try {
       const entries = await webdav.list(path)
+      if (gen !== requestGen) return // superseded by a newer navigate() before this resolved
       const { sortKey, sortDir } = get()
       set({ entries: sortEntries(entries, sortKey, sortDir), loading: false })
     } catch (e) {
+      if (gen !== requestGen) return
       set({ loading: false, error: errMsg(e) })
     }
   },
@@ -153,9 +163,11 @@ export const useFileStore = create<FileStore>((set, get) => ({
   // run silently every few seconds without disrupting whatever the user is
   // doing (renaming, dragging, viewing a file, etc).
   silentRefresh: async () => {
+    const gen = requestGen // don't bump: a background poll shouldn't supersede a real navigate()
     const { currentPath, entries: prevEntries, sortKey, sortDir } = get()
     try {
       const fresh = await webdav.list(currentPath)
+      if (gen !== requestGen) return // user navigated away while this was in flight
       if (entriesFingerprint(fresh) !== entriesFingerprint(prevEntries)) {
         set({ entries: sortEntries(fresh, sortKey, sortDir), searchIndex: null })
       }
@@ -391,4 +403,5 @@ export const useFileStore = create<FileStore>((set, get) => ({
       useUiStore.getState().pushToast(`Ошибка перемещения: ${errMsg(e)}`, 'error')
     }
   },
-}))
+  }
+})
