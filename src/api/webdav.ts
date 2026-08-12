@@ -36,7 +36,14 @@ function joinPath(dir: string, name: string): string {
 
 function davUrl(path: string): string {
   const clean = path.replace(/^\/+/, '')
-  return ROOT + clean
+  // Percent-encode each segment (preserving '/' as separators). Needed for
+  // more than just correctness: the Destination header on MOVE/COPY must be
+  // a plain ByteString per the Fetch spec, and a raw non-Latin1 character
+  // (e.g. Cyrillic) there throws a TypeError before the request is even
+  // sent — this crashed every rename/move once the destination path had a
+  // Cyrillic segment, which in this vault is nearly always.
+  const encoded = clean.split('/').map(encodeURIComponent).join('/')
+  return ROOT + encoded
 }
 
 // Plain <img>/<video>/<audio>/<iframe> loads can't carry a custom
