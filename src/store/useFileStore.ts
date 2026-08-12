@@ -3,6 +3,7 @@ import type { FileEntry } from '../api/types'
 import * as webdav from '../api/webdav'
 import { useUiStore } from './useUiStore'
 import type { DroppedFile } from '../utils/dropFolder'
+import { runPool } from '../utils/pool'
 
 export type SortKey = 'name' | 'size' | 'modified' | 'type'
 export type ViewMode = 'list' | 'grid'
@@ -329,9 +330,7 @@ export const useFileStore = create<FileStore>((set, get) => {
     const list = Array.from(files)
     const base = targetDir ?? get().currentPath
     try {
-      for (const f of list) {
-        await webdav.uploadFile(base, f)
-      }
+      await runPool(list, 3, (f) => webdav.uploadFile(base, f))
       await get().refresh()
       useUiStore.getState().pushToast(list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`)
       set({ searchIndex: null })
@@ -362,11 +361,11 @@ export const useFileStore = create<FileStore>((set, get) => {
         const name = slash === -1 ? dir : dir.slice(slash + 1)
         await webdav.mkdir(parent, name)
       }
-      for (const { relPath, file } of dropped) {
+      await runPool(dropped, 3, ({ relPath, file }) => {
         const dirPart = relPath.slice(0, -1).join('/')
         const targetDir = dirPart ? `${base}/${dirPart}` : base
-        await webdav.uploadFile(targetDir, file)
-      }
+        return webdav.uploadFile(targetDir, file)
+      })
       await get().refresh()
       useUiStore.getState().pushToast(
         dropped.length === 1 ? `Загружен «${dropped[0].file.name}»` : `Загружено файлов: ${dropped.length}`,
@@ -379,9 +378,7 @@ export const useFileStore = create<FileStore>((set, get) => {
 
   deleteEntries: async (entries) => {
     try {
-      for (const entry of entries) {
-        await webdav.deleteEntry(entry)
-      }
+      await runPool(entries, 3, (entry) => webdav.deleteEntry(entry))
       set({ selected: new Set() })
       await get().refresh()
       useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» удалён` : `Удалено объектов: ${entries.length}`)
@@ -393,9 +390,7 @@ export const useFileStore = create<FileStore>((set, get) => {
 
   moveEntries: async (entries, destDir) => {
     try {
-      for (const entry of entries) {
-        await webdav.moveEntry(entry, destDir)
-      }
+      await runPool(entries, 3, (entry) => webdav.moveEntry(entry, destDir))
       await get().refresh()
       useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`)
       set({ searchIndex: null })
