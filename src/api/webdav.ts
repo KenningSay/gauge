@@ -203,7 +203,15 @@ async function moveFileRaw(from: string, to: string): Promise<void> {
 }
 
 async function copyDirRecursive(entry: FileEntry, destPath: string): Promise<void> {
-  await mkdir(destPath.substring(0, destPath.lastIndexOf('/')) || '/', entry.name)
+  // Must derive the new directory's name from destPath, not entry.name — on
+  // a rename that actually changes the folder's own name (not just its
+  // parent), destPath's last segment differs from entry.name. Using
+  // entry.name here silently recreated/confirmed the *old*-named directory
+  // instead of the new one, so the new directory never actually existed on
+  // disk and every file COPY into it failed with a 500 (nginx's open()
+  // ENOENT on the missing target dir).
+  const destSlash = destPath.lastIndexOf('/')
+  await mkdir(destSlash === -1 ? '/' : destPath.slice(0, destSlash), destPath.slice(destSlash + 1))
   const children = await list(entry.path)
   for (const child of children) {
     const childDest = joinPath(destPath, child.name)
