@@ -37,6 +37,7 @@ interface FileStore {
 
   navigate: (path: string) => Promise<void>
   refresh: () => Promise<void>
+  silentRefresh: () => Promise<void>
   setSort: (key: SortKey) => void
   setViewMode: (mode: ViewMode) => void
 
@@ -99,6 +100,16 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
+// Cheap fingerprint good enough to detect additions/removals/renames/edits
+// without a deep compare — order-independent since the two sides may come
+// from separately-sorted listings.
+function entriesFingerprint(entries: FileEntry[]): string {
+  return entries
+    .map((e) => `${e.path}|${e.size}|${e.modified}`)
+    .sort()
+    .join('\n')
+}
+
 export const useFileStore = create<FileStore>((set, get) => ({
   currentPath: '/',
   entries: [],
@@ -134,6 +145,24 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   refresh: async () => {
     await get().navigate(get().currentPath)
+  },
+
+  // Background poll for live updates from other sessions/devices — unlike
+  // refresh()/navigate(), doesn't touch loading/selection/scroll state, and
+  // only triggers a re-render when the listing actually changed, so it can
+  // run silently every few seconds without disrupting whatever the user is
+  // doing (renaming, dragging, viewing a file, etc).
+  silentRefresh: async () => {
+    const { currentPath, entries: prevEntries, sortKey, sortDir } = get()
+    try {
+      const fresh = await webdav.list(currentPath)
+      if (entriesFingerprint(fresh) !== entriesFingerprint(prevEntries)) {
+        set({ entries: sortEntries(fresh, sortKey, sortDir), searchIndex: null })
+      }
+    } catch {
+      // Transient poll failure (e.g. a momentary network blip) shouldn't
+      // surface as a UI error — the next tick will retry.
+    }
   },
 
   setSort: (key) => {
