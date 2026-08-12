@@ -5,6 +5,7 @@ import { detectViewerKind, type FileEntry } from '../api/types'
 import { authorizedFetchUrl } from '../api/webdav'
 import { formatSize, formatDate, extensionOf } from '../utils/format'
 import { isCoarsePointer } from '../utils/device'
+import { collectDroppedEntries } from '../utils/dropFolder'
 import styles from './FileList.module.css'
 
 const CODE_EXT = new Set(['js', 'jsx', 'ts', 'tsx', 'py', 'sh', 'json', 'html', 'css', 'yml', 'yaml'])
@@ -45,6 +46,7 @@ export function FileList() {
   const openContextMenu = useFileStore((s) => s.openContextMenu)
   const currentPath = useFileStore((s) => s.currentPath)
   const uploadFiles = useFileStore((s) => s.uploadFiles)
+  const uploadEntries = useFileStore((s) => s.uploadEntries)
   const moveEntries = useFileStore((s) => s.moveEntries)
   const renamingPath = useFileStore((s) => s.renamingPath)
   const commitRename = useFileStore((s) => s.commitRename)
@@ -102,6 +104,21 @@ export function FileList() {
     e.dataTransfer.effectAllowed = 'move'
   }
 
+  // Dropped folders can't be read via plain `dataTransfer.files` (browsers
+  // don't recurse into them) — try the File System Entries API first, which
+  // walks subfolders and preserves each file's real path; fall back to the
+  // flat file list only if that API isn't available.
+  const uploadDropped = async (e: React.DragEvent, targetDir?: string) => {
+    const dropped = await collectDroppedEntries(e.dataTransfer)
+    if (dropped && dropped.length) {
+      await uploadEntries(dropped, targetDir)
+      return
+    }
+    if (e.dataTransfer.files.length) {
+      await uploadFiles(e.dataTransfer.files, targetDir)
+    }
+  }
+
   const handleRowDrop = async (e: React.DragEvent, targetDir: FileEntry) => {
     e.preventDefault()
     setDragOverPath(null)
@@ -112,17 +129,13 @@ export function FileList() {
       if (moving.length) await moveEntries(moving, targetDir.path)
       return
     }
-    if (e.dataTransfer.files.length) {
-      await uploadFiles(e.dataTransfer.files)
-    }
+    await uploadDropped(e, targetDir.path)
   }
 
   const handleZoneDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     setDropZoneActive(false)
-    if (e.dataTransfer.files.length) {
-      await uploadFiles(e.dataTransfer.files)
-    }
+    await uploadDropped(e)
   }
 
   if (error) {

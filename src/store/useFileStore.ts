@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { FileEntry } from '../api/types'
 import * as webdav from '../api/webdav'
 import { useUiStore } from './useUiStore'
+import type { DroppedFile } from '../utils/dropFolder'
 
 export type SortKey = 'name' | 'size' | 'modified' | 'type'
 export type ViewMode = 'list' | 'grid'
@@ -66,7 +67,8 @@ interface FileStore {
   commitRename: (entry: FileEntry, newName: string) => Promise<void>
 
   createFolder: (name: string) => Promise<void>
-  uploadFiles: (files: FileList | File[]) => Promise<void>
+  uploadFiles: (files: FileList | File[], targetDir?: string) => Promise<void>
+  uploadEntries: (dropped: DroppedFile[], targetDir?: string) => Promise<void>
   deleteEntries: (entries: FileEntry[]) => Promise<void>
   moveEntries: (entries: FileEntry[], destDir: string) => Promise<void>
 }
@@ -282,14 +284,52 @@ export const useFileStore = create<FileStore>((set, get) => ({
     }
   },
 
-  uploadFiles: async (files) => {
+  uploadFiles: async (files, targetDir) => {
     const list = Array.from(files)
+    const base = targetDir ?? get().currentPath
     try {
       for (const f of list) {
-        await webdav.uploadFile(get().currentPath, f)
+        await webdav.uploadFile(base, f)
       }
       await get().refresh()
       useUiStore.getState().pushToast(list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`)
+      set({ searchIndex: null })
+    } catch (e) {
+      useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')
+    }
+  },
+
+  // Handles drag-and-drop of whole folders (see src/utils/dropFolder.ts):
+  // dropped[].relPath includes every intermediate folder name, so first
+  // create each distinct ancestor directory (shallowest first) before
+  // uploading any file into it.
+  uploadEntries: async (dropped, targetDir) => {
+    const base = targetDir ?? get().currentPath
+    try {
+      const dirPaths = new Set<string>()
+      for (const { relPath } of dropped) {
+        for (let i = 1; i < relPath.length; i++) {
+          dirPaths.add(relPath.slice(0, i).join('/'))
+        }
+      }
+      const sortedDirs = Array.from(dirPaths).sort(
+        (a, b) => a.split('/').length - b.split('/').length,
+      )
+      for (const dir of sortedDirs) {
+        const slash = dir.lastIndexOf('/')
+        const parent = slash === -1 ? base : `${base}/${dir.slice(0, slash)}`
+        const name = slash === -1 ? dir : dir.slice(slash + 1)
+        await webdav.mkdir(parent, name)
+      }
+      for (const { relPath, file } of dropped) {
+        const dirPart = relPath.slice(0, -1).join('/')
+        const targetDir = dirPart ? `${base}/${dirPart}` : base
+        await webdav.uploadFile(targetDir, file)
+      }
+      await get().refresh()
+      useUiStore.getState().pushToast(
+        dropped.length === 1 ? `Загружен «${dropped[0].file.name}»` : `Загружено файлов: ${dropped.length}`,
+      )
       set({ searchIndex: null })
     } catch (e) {
       useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')

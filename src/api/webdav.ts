@@ -22,6 +22,14 @@ export function clearCredentials() {
 
 export class UnauthorizedError extends Error {}
 
+export class WebDavError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
 function joinPath(dir: string, name: string): string {
   return (dir.endsWith('/') ? dir : dir + '/') + name
 }
@@ -56,7 +64,7 @@ async function request(path: string, init: RequestInit & { headers?: Record<stri
     throw new UnauthorizedError(`WebDAV ${init.method ?? 'GET'} ${path} -> 401`)
   }
   if (!res.ok && res.status !== 207 && res.status !== 404) {
-    throw new Error(`WebDAV ${init.method ?? 'GET'} ${path} -> ${res.status} ${res.statusText}`)
+    throw new WebDavError(`WebDAV ${init.method ?? 'GET'} ${path} -> ${res.status} ${res.statusText}`, res.status)
   }
   return res
 }
@@ -144,7 +152,15 @@ export async function uploadFile(dirPath: string, file: File): Promise<void> {
 }
 
 export async function mkdir(dirPath: string, name: string): Promise<void> {
-  await request(joinPath(dirPath, name) + '/', { method: 'MKCOL' })
+  try {
+    await request(joinPath(dirPath, name) + '/', { method: 'MKCOL' })
+  } catch (e) {
+    // 405 = MKCOL on a path that already has something there (nginx dav
+    // module's way of saying "exists") — fine when creating the same parent
+    // folder for several dropped files/nested entries.
+    if (e instanceof WebDavError && e.status === 405) return
+    throw e
+  }
 }
 
 export async function deleteFile(path: string): Promise<void> {
