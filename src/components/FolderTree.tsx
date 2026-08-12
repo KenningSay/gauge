@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { ChevronRight, Folder, FolderOpen, HardDrive } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
@@ -23,8 +23,14 @@ function TreeNode({ path, name, depth }: NodeProps) {
 
   const active = currentPath === path
 
+  // Guards against load() being called again (open/close toggle, an entries
+  // change elsewhere) before a prior call has resolved — a slow, superseded
+  // response would otherwise land after the fresh one and show stale children.
+  const loadGen = useRef(0)
   const load = useCallback(async () => {
+    const gen = ++loadGen.current
     const list = await webdav.list(path)
+    if (gen !== loadGen.current) return
     setChildren(list.filter((e) => e.isDir))
   }, [path])
 
