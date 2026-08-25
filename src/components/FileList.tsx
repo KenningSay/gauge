@@ -6,7 +6,10 @@ import { useAuthorizedUrl } from '../hooks/useAuthorizedUrl'
 import { formatSize, formatDate, extensionOf } from '../utils/format'
 import { isCoarsePointer } from '../utils/device'
 import { collectDroppedEntries } from '../utils/dropFolder'
+import { useVirtualRows } from '../hooks/useVirtualRows'
 import styles from './FileList.module.css'
+
+const COLUMN_COUNT = 5 // name, modified, size, type, kebab — kept in sync with the <th>s below
 
 const CODE_EXT = new Set(['js', 'jsx', 'ts', 'tsx', 'py', 'sh', 'json', 'html', 'css', 'yml', 'yaml'])
 
@@ -67,6 +70,30 @@ export function FileList() {
   const [dropZoneActive, setDropZoneActive] = useState(false)
   const pressTimer = useRef<number | null>(null)
   const longPressFired = useRef(false)
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const tbodyRef = useRef<HTMLTableSectionElement>(null)
+  const theadRef = useRef<HTMLTableSectionElement>(null)
+  const lastSelectedIndex = useFileStore((s) => s.lastSelectedIndex)
+  const virtual = useVirtualRows(scrollerRef, tbodyRef, viewMode === 'list' ? entries.length : 0)
+
+  // Keyboard nav (arrow keys, see useFileStore's moveCursor) moves
+  // lastSelectedIndex without any scrolling of its own — previously harmless
+  // since the row was always in the DOM even off-screen, but with
+  // virtualization a row outside the current window doesn't exist at all
+  // until this scrolls it into range.
+  useEffect(() => {
+    if (lastSelectedIndex === null || viewMode !== 'list' || !virtual.rowHeight) return
+    const scroller = scrollerRef.current
+    const thead = theadRef.current
+    if (!scroller || !thead) return
+    const headerHeight = thead.getBoundingClientRect().height
+    const rowTop = headerHeight + lastSelectedIndex * virtual.rowHeight
+    const rowBottom = rowTop + virtual.rowHeight
+    const viewTop = scroller.scrollTop + headerHeight
+    const viewBottom = scroller.scrollTop + scroller.clientHeight
+    if (rowTop < viewTop) scroller.scrollTop = rowTop - headerHeight
+    else if (rowBottom > viewBottom) scroller.scrollTop = rowBottom - scroller.clientHeight
+  }, [lastSelectedIndex, viewMode, virtual.rowHeight])
   // Unmounting the focused rename <input> (on commit or cancel) fires a
   // native blur, which would otherwise re-run commitRename a second time via
   // onBlur below. Set right before the deliberate commit/cancel, consumed by
@@ -214,6 +241,7 @@ export function FileList() {
 
   return (
     <div
+      ref={scrollerRef}
       className={styles.scroller}
       onClick={clearSelection}
       onDragOver={(e) => { e.preventDefault(); setDropZoneActive(true) }}
@@ -224,7 +252,7 @@ export function FileList() {
 
       {viewMode === 'list' ? (
         <table className={styles.table}>
-          <thead>
+          <thead ref={theadRef}>
             <tr className={styles.headRow}>
               <th onClick={(e) => { e.stopPropagation(); setSort('name') }}>Имя<SortArrow col="name" /></th>
               <th className={styles.dateCol} onClick={(e) => { e.stopPropagation(); setSort('modified') }}>Изменён<SortArrow col="modified" /></th>
@@ -233,8 +261,11 @@ export function FileList() {
               <th className={styles.kebabCol} />
             </tr>
           </thead>
-          <tbody>
-            {entries.map((entry) => (
+          <tbody ref={tbodyRef}>
+            {virtual.topSpacer > 0 && (
+              <tr aria-hidden style={{ height: virtual.topSpacer }}><td colSpan={COLUMN_COUNT} style={{ padding: 0, border: 'none' }} /></tr>
+            )}
+            {entries.slice(virtual.start, virtual.end).map((entry) => (
               <tr
                 key={entry.path}
                 className={`${styles.row} ${selected.has(entry.path) ? styles.selected : ''} ${dragOverPath === entry.path ? styles.dragOver : ''}`}
@@ -286,6 +317,9 @@ export function FileList() {
                 </td>
               </tr>
             ))}
+            {virtual.bottomSpacer > 0 && (
+              <tr aria-hidden style={{ height: virtual.bottomSpacer }}><td colSpan={COLUMN_COUNT} style={{ padding: 0, border: 'none' }} /></tr>
+            )}
           </tbody>
         </table>
       ) : (
