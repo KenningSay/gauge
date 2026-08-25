@@ -56,6 +56,24 @@
   transition: width 120ms ease;
 }
 
+.progressCancel {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm, 6px);
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.progressCancel:hover {
+  background: var(--bg-elevated-2);
+  color: var(--danger);
+}
+
 @keyframes gauge-toast-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

@@ -3,7 +3,7 @@ import type { FileEntry } from '../api/types'
 import * as webdav from '../api/webdav'
 import { useUiStore } from './useUiStore'
 import type { DroppedFile } from '../utils/dropFolder'
-import { runPool } from '../utils/pool'
+import { runPool, CancelledError } from '../utils/pool'
 
 export type SortKey = 'name' | 'size' | 'modified' | 'type'
 export type ViewMode = 'list' | 'grid'
@@ -53,6 +53,7 @@ interface FileStore {
   indexBuilding: boolean
 
   uploadProgress: UploadProgress | null
+  uploadAbortController: AbortController | null
 
   clipboard: ClipboardState | null
 
@@ -91,6 +92,7 @@ interface FileStore {
   createFolder: (name: string) => Promise<void>
   uploadFiles: (files: FileList | File[], targetDir?: string) => Promise<void>
   uploadEntries: (dropped: DroppedFile[], targetDir?: string) => Promise<void>
+  cancelUpload: () => void
   deleteEntries: (entries: FileEntry[]) => Promise<void>
   moveEntries: (entries: FileEntry[], destDir: string) => Promise<void>
 
@@ -128,7 +130,7 @@ function errMsg(e: unknown): string {
 
 // "file.txt" + 1 -> "file (копия).txt", +2 -> "file (копия 2).txt", ... —
 // same convention as every desktop file manager's paste-into-same-folder.
-function withCopySuffix(name: string, n: number): string {
+export function withCopySuffix(name: string, n: number): string {
   const dot = name.lastIndexOf('.')
   const hasExt = dot > 0 && dot < name.length - 1
   const stem = hasExt ? name.slice(0, dot) : name
@@ -140,7 +142,7 @@ function withCopySuffix(name: string, n: number): string {
 // Tries the original name first, then "(копия)", "(копия 2)", ... until one
 // doesn't collide (AlreadyExistsError, see webdav.ts). Shared by
 // pasteClipboard's copy mode and duplicateEntry.
-async function copyWithAutoRename(entry: FileEntry, destDir: string): Promise<void> {
+export async function copyWithAutoRename(entry: FileEntry, destDir: string): Promise<void> {
   for (let n = 0; n <= 50; n++) {
     const name = n === 0 ? entry.name : withCopySuffix(entry.name, n)
     try {
@@ -205,7 +207,15 @@ async function runBulkOp(
   try {
     useUiStore.getState().pushToast(await run())
   } catch (e) {
-    useUiStore.getState().pushToast(`${errorPrefix}: ${errMsg(e)}`, 'error')
+    if (e instanceof CancelledError) {
+      const p = get().uploadProgress
+      useUiStore.getState().pushToast(
+        p ? `Загрузка отменена — успели загрузить ${p.filesDone} из ${p.filesTotal}` : 'Отменено',
+        'info',
+      )
+    } else {
+      useUiStore.getState().pushToast(`${errorPrefix}: ${errMsg(e)}`, 'error')
+    }
   } finally {
     extraCleanup?.()
     await get().refresh()
@@ -253,6 +263,7 @@ export const useFileStore = create<FileStore>((set, get) => {
   indexBuilding: false,
 
   uploadProgress: null,
+  uploadAbortController: null,
 
   clipboard: null,
 
@@ -455,12 +466,15 @@ export const useFileStore = create<FileStore>((set, get) => {
     const list = Array.from(files)
     const base = targetDir ?? get().currentPath
     const tracker = makeUploadTracker(set, list.map((f) => f.size))
+    const controller = new AbortController()
+    set({ uploadAbortController: controller })
     await runBulkOp(set, get, async () => {
       await runPool(list, 3, (f) =>
-        webdav.uploadFile(base, f, (loaded) => tracker.onProgress(f, loaded)).then(() => tracker.onDone(f)),
+        webdav.uploadFile(base, f, (loaded) => tracker.onProgress(f, loaded), controller.signal).then(() => tracker.onDone(f)),
+        controller.signal,
       )
       return list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`
-    }, 'Ошибка загрузки', () => tracker.clear())
+    }, 'Ошибка загрузки', () => { tracker.clear(); set({ uploadAbortController: null }) })
   },
 
   // Handles drag-and-drop of whole folders (see src/utils/dropFolder.ts):
@@ -470,6 +484,8 @@ export const useFileStore = create<FileStore>((set, get) => {
   uploadEntries: async (dropped, targetDir) => {
     const base = targetDir ?? get().currentPath
     const tracker = makeUploadTracker(set, dropped.map((d) => d.file.size))
+    const controller = new AbortController()
+    set({ uploadAbortController: controller })
     await runBulkOp(set, get, async () => {
       const dirPaths = new Set<string>()
       for (const { relPath } of dropped) {
@@ -481,6 +497,7 @@ export const useFileStore = create<FileStore>((set, get) => {
         (a, b) => a.split('/').length - b.split('/').length,
       )
       for (const dir of sortedDirs) {
+        if (controller.signal.aborted) throw new CancelledError()
         const slash = dir.lastIndexOf('/')
         const parent = slash === -1 ? base : `${base}/${dir.slice(0, slash)}`
         const name = slash === -1 ? dir : dir.slice(slash + 1)
@@ -489,10 +506,14 @@ export const useFileStore = create<FileStore>((set, get) => {
       await runPool(dropped, 3, ({ relPath, file }) => {
         const dirPart = relPath.slice(0, -1).join('/')
         const targetDir = dirPart ? `${base}/${dirPart}` : base
-        return webdav.uploadFile(targetDir, file, (loaded) => tracker.onProgress(file, loaded)).then(() => tracker.onDone(file))
-      })
+        return webdav.uploadFile(targetDir, file, (loaded) => tracker.onProgress(file, loaded), controller.signal).then(() => tracker.onDone(file))
+      }, controller.signal)
       return dropped.length === 1 ? `Загружен «${dropped[0].file.name}»` : `Загружено файлов: ${dropped.length}`
-    }, 'Ошибка загрузки', () => tracker.clear())
+    }, 'Ошибка загрузки', () => { tracker.clear(); set({ uploadAbortController: null }) })
+  },
+
+  cancelUpload: () => {
+    get().uploadAbortController?.abort()
   },
 
   deleteEntries: async (entries) => {
