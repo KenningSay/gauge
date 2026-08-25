@@ -276,21 +276,32 @@ export const useFileStore = create<FileStore>((set, get) => {
   buildSearchIndex: async () => {
     set({ indexBuilding: true })
     const all: FileEntry[] = []
-    const crawl = async (path: string, depth: number) => {
-      if (depth > 8) return
-      let children: FileEntry[]
-      try {
-        children = await webdav.list(path)
-      } catch {
-        return
-      }
-      for (const child of children) {
-        all.push(child)
-        if (child.isDir) await crawl(child.path, depth + 1)
-      }
+    // One folder at a time (plain recursive await) meant N folders in the
+    // vault cost N sequential PROPFIND round trips before ⌘K search worked
+    // at all — for a real vault (this one included) that's a very visible
+    // wait on first open. Same fix shape as runPool elsewhere: list each
+    // depth level with bounded concurrency, then recurse into the next
+    // level. Pushing into the shared `all` array from concurrent workers is
+    // safe — JS has no true parallelism, `.push()` between awaits can't race.
+    const crawlLevel = async (dirs: string[], depth: number) => {
+      if (depth > 8 || !dirs.length) return
+      const nextDirs: string[] = []
+      await runPool(dirs, 4, async (dir) => {
+        let children: FileEntry[]
+        try {
+          children = await webdav.list(dir)
+        } catch {
+          return
+        }
+        for (const child of children) {
+          all.push(child)
+          if (child.isDir) nextDirs.push(child.path)
+        }
+      })
+      await crawlLevel(nextDirs, depth + 1)
     }
     try {
-      await crawl('/', 0)
+      await crawlLevel(['/'], 0)
       set({ searchIndex: all, indexBuilding: false })
     } catch {
       set({ indexBuilding: false })
@@ -331,11 +342,16 @@ export const useFileStore = create<FileStore>((set, get) => {
     const base = targetDir ?? get().currentPath
     try {
       await runPool(list, 3, (f) => webdav.uploadFile(base, f))
-      await get().refresh()
       useUiStore.getState().pushToast(list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`)
-      set({ searchIndex: null })
     } catch (e) {
+      // Даже на частичном провале часть файлов могла реально загрузиться
+      // (runPool теперь всегда доводит все элементы до конца, см. его
+      // комментарий) — refresh() в finally ниже подтянет то, что правда есть
+      // на сервере, вместо того чтобы список молча остался устаревшим.
       useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')
+    } finally {
+      await get().refresh()
+      set({ searchIndex: null })
     }
   },
 
@@ -366,36 +382,39 @@ export const useFileStore = create<FileStore>((set, get) => {
         const targetDir = dirPart ? `${base}/${dirPart}` : base
         return webdav.uploadFile(targetDir, file)
       })
-      await get().refresh()
       useUiStore.getState().pushToast(
         dropped.length === 1 ? `Загружен «${dropped[0].file.name}»` : `Загружено файлов: ${dropped.length}`,
       )
-      set({ searchIndex: null })
     } catch (e) {
       useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')
+    } finally {
+      await get().refresh()
+      set({ searchIndex: null })
     }
   },
 
   deleteEntries: async (entries) => {
     try {
       await runPool(entries, 3, (entry) => webdav.deleteEntry(entry))
-      set({ selected: new Set() })
-      await get().refresh()
       useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» удалён` : `Удалено объектов: ${entries.length}`)
-      set({ searchIndex: null })
     } catch (e) {
       useUiStore.getState().pushToast(`Ошибка удаления: ${errMsg(e)}`, 'error')
+    } finally {
+      set({ selected: new Set() })
+      await get().refresh()
+      set({ searchIndex: null })
     }
   },
 
   moveEntries: async (entries, destDir) => {
     try {
       await runPool(entries, 3, (entry) => webdav.moveEntry(entry, destDir))
-      await get().refresh()
       useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`)
-      set({ searchIndex: null })
     } catch (e) {
       useUiStore.getState().pushToast(`Ошибка перемещения: ${errMsg(e)}`, 'error')
+    } finally {
+      await get().refresh()
+      set({ searchIndex: null })
     }
   },
   }
