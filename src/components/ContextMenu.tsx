@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Eye, Pencil, Download, Trash2, FolderOpen } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
@@ -14,6 +14,14 @@ export function ContextMenu() {
   const deleteEntries = useFileStore((s) => s.deleteEntries)
   const confirmDialog = useUiStore((s) => s.confirmDialog)
   const ref = useRef<HTMLDivElement>(null)
+  // Menu was positioned straight from the click/kebab coordinates with no
+  // bounds check — right-clicking (or tapping the kebab, which sits at the
+  // row's right edge) near the bottom-right of the screen rendered the menu
+  // partly or fully off-screen and unusable, worst on the mobile kebab menu
+  // this project specifically added. Measured post-render and clamped into
+  // the viewport instead; useLayoutEffect runs before paint so there's no
+  // visible flash at the wrong position first. Found + fixed 2026-08-25.
+  const [adjusted, setAdjusted] = useState<{ left: number; top: number } | null>(null)
 
   useEffect(() => {
     if (!contextMenu) return
@@ -26,10 +34,19 @@ export function ContextMenu() {
     }
   }, [contextMenu, closeContextMenu])
 
+  useLayoutEffect(() => {
+    if (!contextMenu || !ref.current) { setAdjusted(null); return }
+    const rect = ref.current.getBoundingClientRect()
+    const margin = 8
+    const left = Math.min(Math.max(margin, contextMenu.x), window.innerWidth - rect.width - margin)
+    const top = Math.min(Math.max(margin, contextMenu.y), window.innerHeight - rect.height - margin)
+    setAdjusted({ left, top })
+  }, [contextMenu])
+
   if (!contextMenu || !contextMenu.entry) return null
   const entry = contextMenu.entry
 
-  const style: React.CSSProperties = { left: contextMenu.x, top: contextMenu.y }
+  const style: React.CSSProperties = adjusted ?? { left: contextMenu.x, top: contextMenu.y }
 
   return (
     <div className={styles.menu} style={style} ref={ref} onClick={(e) => e.stopPropagation()}>

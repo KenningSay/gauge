@@ -57,6 +57,17 @@ export function FileList() {
   const [dropZoneActive, setDropZoneActive] = useState(false)
   const pressTimer = useRef<number | null>(null)
   const longPressFired = useRef(false)
+  // Committing OR cancelling a rename sets renamingPath to null, which
+  // unmounts the still-focused <input> — and removing a focused element
+  // fires a native blur on it as part of that removal. Without this guard,
+  // that blur's onBlur handler (below) re-runs commitRename a SECOND time:
+  // on Escape this silently un-cancels the rename (renames the file anyway
+  // to whatever was typed); on Enter it double-fires renameEntry with the
+  // now-stale entry/path, and the second call 404s against the already-moved
+  // file, popping a scary "не удалось переименовать" error toast right after
+  // a rename that actually succeeded. Set before the deliberate commit/cancel,
+  // consumed (and reset) by the very next blur. Found + fixed 2026-08-25.
+  const skipRenameBlur = useRef(false)
 
   // Live updates: WebDAV/nginx has no push mechanism, so this polls the
   // current folder every few seconds — silentRefresh() is a no-op re-render
@@ -229,7 +240,7 @@ export function FileList() {
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selected.has(entry.path)) selectOnly(entry.path); openContextMenu(e.clientX, e.clientY, entry) }}
                 onDragStart={(e) => handleDragStart(e, entry)}
                 onDragOver={(e) => { if (entry.isDir) { e.preventDefault(); e.stopPropagation(); setDragOverPath(entry.path) } }}
-                onDragLeave={() => setDragOverPath(null)}
+                onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOverPath(null) }}
                 onDrop={(e) => entry.isDir && handleRowDrop(e, entry)}
                 onTouchStart={() => handleTouchStart(entry)}
                 onTouchEnd={cancelLongPress}
@@ -245,10 +256,13 @@ export function FileList() {
                         defaultValue={entry.name}
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') commitRename(entry, (e.target as HTMLInputElement).value)
-                          if (e.key === 'Escape') cancelRename()
+                          if (e.key === 'Enter') { skipRenameBlur.current = true; commitRename(entry, (e.target as HTMLInputElement).value) }
+                          if (e.key === 'Escape') { skipRenameBlur.current = true; cancelRename() }
                         }}
-                        onBlur={(e) => commitRename(entry, e.target.value)}
+                        onBlur={(e) => {
+                          if (skipRenameBlur.current) { skipRenameBlur.current = false; return }
+                          commitRename(entry, e.target.value)
+                        }}
                       />
                     ) : (
                       <span>{entry.name}</span>
