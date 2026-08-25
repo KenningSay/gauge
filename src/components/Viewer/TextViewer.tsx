@@ -66,12 +66,14 @@ export function TextViewer({ entry }: { entry: FileEntry }) {
           <div className={styles.toggleGroup}>
             <button
               className={`${styles.toggleBtn} ${mode === 'preview' ? styles.toggleActive : ''}`}
+              aria-pressed={mode === 'preview'}
               onClick={() => setMode('preview')}
             >
               <Eye size={14} /> Превью
             </button>
             <button
               className={`${styles.toggleBtn} ${mode === 'edit' ? styles.toggleActive : ''}`}
+              aria-pressed={mode === 'edit'}
               onClick={() => setMode('edit')}
             >
               <Pencil size={14} /> Правка

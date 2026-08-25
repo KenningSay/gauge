@@ -11,6 +11,23 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Gauge is a single self-contained bundle with no CDN scripts and no
+    # inline <script> tags, so script-src can stay 'self'-only. The one
+    # legitimate external dependency is the Google Fonts stylesheet imported
+    # in theme.css — allowlisted narrowly instead of relaxed generally.
+    # style-src needs 'unsafe-inline' because React's `style={{...}}` prop
+    # renders as inline style attributes throughout the app; that's a CSS
+    # injection surface, not a script one, so it's an acceptable trade-off
+    # rather than rewriting every inline style into a class.
+    # frame-src needs blob: too — the PDF viewer renders into an <iframe
+    # src="blob:...">; without it, frame-src falls back to default-src
+    # ('self' only) and every PDF silently fails to load.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; frame-src 'self' blob:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+
     location / {
         try_files $uri $uri/ /index.html;
     }

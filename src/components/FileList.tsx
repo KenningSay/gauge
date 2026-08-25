@@ -256,6 +256,7 @@ export function FileList() {
                     {renamingPath === entry.path ? (
                       <input
                         autoFocus
+                        aria-label={`Новое имя для «${entry.name}»`}
                         className={styles.renameInput}
                         defaultValue={entry.name}
                         onClick={(e) => e.stopPropagation()}
@@ -278,7 +279,7 @@ export function FileList() {
                 <td className={`${styles.dimCell} ${styles.typeCol}`}>{entry.isDir ? 'Папка' : extensionOf(entry.name) || '—'}</td>
                 <td className={styles.kebabCol}>
                   {!multiSelected && (
-                    <button className={styles.kebabBtn} onClick={(e) => handleKebab(e, entry)}>
+                    <button className={styles.kebabBtn} onClick={(e) => handleKebab(e, entry)} aria-label={`Действия для «${entry.name}»`}>
                       <MoreVertical size={16} />
                     </button>
                   )}
@@ -306,7 +307,7 @@ export function FileList() {
               onTouchMove={cancelLongPress}
             >
               {!multiSelected && (
-                <button className={styles.gridKebab} onClick={(e) => handleKebab(e, entry)}>
+                <button className={styles.gridKebab} onClick={(e) => handleKebab(e, entry)} aria-label={`Действия для «${entry.name}»`}>
                   <MoreVertical size={15} />
                 </button>
               )}

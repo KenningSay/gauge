@@ -19,6 +19,7 @@ export function Breadcrumbs() {
           {i > 0 && <span className={styles.sep}>/</span>}
           <button
             className={`${styles.segment} ${i === crumbs.length - 1 ? styles.current : ''}`}
+            aria-current={i === crumbs.length - 1 ? 'page' : undefined}
             onClick={() => navigate(crumb.path)}
           >
             {crumb.name}

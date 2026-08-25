@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useUiStore } from '../store/useUiStore'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import styles from './Dialog.module.css'
 
 export function Dialog() {
   const dialog = useUiStore((s) => s.dialog)
   const resolveDialog = useUiStore((s) => s.resolveDialog)
   const [value, setValue] = useState('')
+  const trapRef = useFocusTrap<HTMLDivElement>(!!dialog)
 
   if (!dialog) return null
 
@@ -14,7 +16,12 @@ export function Dialog() {
   return (
     <div className={styles.overlay} onClick={() => resolveDialog(isPrompt ? null : false)}>
       <div
+        ref={trapRef}
         className={styles.box}
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={dialog.message}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === 'Enter') resolveDialog(isPrompt ? (value || dialog.defaultValue || '') : true)
@@ -25,6 +32,7 @@ export function Dialog() {
         {isPrompt && (
           <input
             autoFocus
+            aria-label={dialog.message}
             className={styles.input}
             defaultValue={dialog.defaultValue}
             onChange={(e) => setValue(e.target.value)}

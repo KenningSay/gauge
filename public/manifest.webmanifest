@@ -1,0 +1,13 @@
+{
+  "name": "Gauge",
+  "short_name": "Gauge",
+  "description": "A fast, keyboard-first file manager for your own WebDAV server.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#1B1A18",
+  "theme_color": "#1B1A18",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

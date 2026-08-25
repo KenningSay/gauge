@@ -61,7 +61,7 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
 
   return (
     <div className={styles.wrap}>
-      <button className={`${styles.iconBtn} ${styles.hamburger}`} title="Папки" onClick={toggleSidebar}>
+      <button className={`${styles.iconBtn} ${styles.hamburger}`} title="Папки" aria-label="Папки" onClick={toggleSidebar}>
         <Menu size={18} />
       </button>
       <div className={styles.brand}>
@@ -69,10 +69,10 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
         Gauge
       </div>
 
-      <button className={styles.iconBtn} title="Новая папка" onClick={handleNewFolder}>
+      <button className={styles.iconBtn} title="Новая папка" aria-label="Новая папка" onClick={handleNewFolder}>
         <FolderPlus size={18} />
       </button>
-      <button className={styles.iconBtn} title="Загрузить файлы" onClick={handleUploadClick}>
+      <button className={styles.iconBtn} title="Загрузить файлы" aria-label="Загрузить файлы" onClick={handleUploadClick}>
         <Upload size={18} />
       </button>
       <input ref={fileInput} type="file" multiple hidden onChange={handleFileChange} />
@@ -80,6 +80,8 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       <button
         className={`${styles.iconBtn} ${entries.length > 0 && selected.size === entries.length ? styles.active : ''}`}
         title="Выбрать всё (Ctrl A)"
+        aria-label="Выбрать всё"
+        aria-pressed={entries.length > 0 && selected.size === entries.length}
         onClick={handleSelectAllToggle}
         disabled={entries.length === 0}
       >
@@ -89,7 +91,7 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       {selected.size > 0 && (
         <div className={styles.selectionPill}>
           <span>{selected.size} выбрано</span>
-          <button className={styles.selectionClear} title="Отменить выбор" onClick={clearSelection}>
+          <button className={styles.selectionClear} title="Отменить выбор" aria-label="Отменить выбор" onClick={clearSelection}>
             <X size={14} />
           </button>
         </div>
@@ -97,13 +99,13 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
 
       {selected.size > 0 && (
         <>
-          <button className={styles.iconBtn} title="Копировать выбранное" onClick={() => copyToClipboard(selectedEntries)}>
+          <button className={styles.iconBtn} title="Копировать выбранное" aria-label="Копировать выбранное" onClick={() => copyToClipboard(selectedEntries)}>
             <Copy size={18} />
           </button>
-          <button className={styles.iconBtn} title="Вырезать выбранное" onClick={() => cutToClipboard(selectedEntries)}>
+          <button className={styles.iconBtn} title="Вырезать выбранное" aria-label="Вырезать выбранное" onClick={() => cutToClipboard(selectedEntries)}>
             <Scissors size={18} />
           </button>
-          <button className={styles.iconBtn} title="Удалить выбранное" onClick={handleDelete}>
+          <button className={styles.iconBtn} title="Удалить выбранное" aria-label="Удалить выбранное" onClick={handleDelete}>
             <Trash2 size={18} color="var(--danger)" />
           </button>
         </>
@@ -111,7 +113,7 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
 
       <div className={styles.spacer} />
 
-      <button className={styles.paletteHint} onClick={openCommandPalette}>
+      <button className={styles.paletteHint} onClick={openCommandPalette} aria-label="Команды и поиск, Ctrl K">
         <Search size={15} />
         <span className={styles.hideOnMobile}>Команды и поиск</span>
         <kbd className={styles.hideOnMobile}>Ctrl K</kbd>
@@ -120,6 +122,8 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       <button
         className={`${styles.iconBtn} ${viewMode === 'list' ? styles.active : ''}`}
         title="Список"
+        aria-label="Список"
+        aria-pressed={viewMode === 'list'}
         onClick={() => setViewMode('list')}
       >
         <List size={18} />
@@ -127,6 +131,8 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       <button
         className={`${styles.iconBtn} ${viewMode === 'grid' ? styles.active : ''}`}
         title="Сетка"
+        aria-label="Сетка"
+        aria-pressed={viewMode === 'grid'}
         onClick={() => setViewMode('grid')}
       >
         <LayoutGrid size={18} />
@@ -134,14 +140,16 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       <button
         className={`${styles.iconBtn} ${propertiesOpen ? styles.active : ''}`}
         title="Свойства (Ctrl I)"
+        aria-label="Свойства"
+        aria-pressed={propertiesOpen}
         onClick={toggleProperties}
       >
         <Info size={18} />
       </button>
-      <button className={styles.iconBtn} title="Тема" onClick={onToggleTheme}>
+      <button className={styles.iconBtn} title="Тема" aria-label="Переключить тему" onClick={onToggleTheme}>
         {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
       </button>
-      <button className={styles.iconBtn} title="Выйти" onClick={logout}>
+      <button className={styles.iconBtn} title="Выйти" aria-label="Выйти" onClick={logout}>
         <LogOut size={18} />
       </button>
     </div>
