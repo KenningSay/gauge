@@ -9,47 +9,38 @@
 // otherwise untouched — streaming and seeking work exactly like a normal
 // video URL would, and the credential still never appears in a URL, `src`
 // attribute, or anywhere else visible in the DOM.
-
-const DB_NAME = 'gauge-sw-auth'
-const STORE = 'kv'
-const KEY = 'authHeader'
-
-// The credential is read from IndexedDB, not a module-scope variable set via
-// postMessage: Chrome kills an idle service worker and respawns it fresh on
-// the next 'fetch' event, which wipes any in-memory state — a real bug seen
-// live where a video opened a while after login hung forever on an
-// unauthenticated request. IndexedDB survives that respawn.
 //
-// The connection itself is cached (opened once, reused) rather than
-// reopened per request, since a <video> element can fire several concurrent
-// Range requests for one resource and there's no reason to pay
-// indexedDB.open()'s cost more than once per worker lifetime.
-let dbPromise = null
+// The credential is never stored anywhere in this worker — not in a module
+// variable (Chrome discards those when it kills an idle worker and respawns
+// it fresh for the next 'fetch' event) and deliberately not in IndexedDB
+// either: that would outlive the tab closing, quietly contradicting the
+// app's own "credentials live in sessionStorage only, gone the moment the
+// tab closes" security note, and would auto-authenticate a bare browser
+// navigation to a /dav/ URL with no login screen involved at all. Instead,
+// every matching request asks the exact client that made it for the header
+// it's currently holding in memory, live, over a MessageChannel — nothing
+// to clean up on logout or tab close, because nothing is ever written down.
+const AUTH_TIMEOUT_MS = 2000
 
-function openDB() {
-  if (!dbPromise) {
-    dbPromise = new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1)
-      req.onupgradeneeded = () => req.result.createObjectStore(STORE)
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
-  }
-  return dbPromise
-}
-
-async function getAuthHeader() {
-  try {
-    const db = await openDB()
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly')
-      const req = tx.objectStore(STORE).get(KEY)
-      req.onsuccess = () => resolve(req.result ?? null)
-      req.onerror = () => reject(req.error)
-    })
-  } catch {
-    return null
-  }
+function requestAuthHeader(clientId) {
+  return new Promise((resolve) => {
+    let settled = false
+    const settle = (value) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    const timer = setTimeout(() => settle(null), AUTH_TIMEOUT_MS)
+    self.clients.get(clientId).then((client) => {
+      if (!client) { clearTimeout(timer); settle(null); return }
+      const channel = new MessageChannel()
+      channel.port1.onmessage = (e) => {
+        clearTimeout(timer)
+        settle(e.data && e.data.authHeader ? e.data.authHeader : null)
+      }
+      client.postMessage({ type: 'GAUGE_GET_AUTH' }, [channel.port2])
+    }).catch(() => { clearTimeout(timer); settle(null) })
+  })
 }
 
 self.addEventListener('install', () => {
@@ -69,11 +60,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url)
   if (url.origin !== self.location.origin || !url.pathname.startsWith('/dav/')) return
+  if (!event.clientId) return
 
   event.respondWith((async () => {
-    const authHeader = await getAuthHeader()
-    // Not logged in (or IndexedDB unavailable) — pass the request through
-    // unmodified rather than leaving it half-handled.
+    const authHeader = await requestAuthHeader(event.clientId)
+    // Not logged in, or the page didn't answer in time — pass the request
+    // through unmodified rather than leaving it half-handled.
     if (!authHeader) return fetch(req)
 
     const headers = new Headers(req.headers)

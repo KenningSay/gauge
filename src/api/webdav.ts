@@ -1,20 +1,49 @@
 import type { FileEntry } from './types'
-import { syncAuthToSW } from '../swAuth'
 
 const ROOT = '/dav/'
 
+// btoa() only accepts Latin1 (code points 0-255) and throws
+// InvalidCharacterError on anything else — a real problem for a login form
+// where username/password can be Cyrillic or any other non-ASCII text.
+// Basic Auth (RFC 7617) allows a UTF-8 credential charset, so this encodes
+// the UTF-8 bytes rather than the raw JS string.
+function toBase64Utf8(str: string): string {
+  const bytes = new TextEncoder().encode(str)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
 // Credentials are provided at runtime by the login screen (see useAuthStore),
-// never hardcoded — nothing secret ships in this bundle.
+// never hardcoded — nothing secret ships in this bundle. Never written to
+// IndexedDB/localStorage either — see swAuth.ts for how the service worker
+// gets at this without the credential ever leaving memory.
 let authHeader: string | null = null
 
 export function setCredentials(username: string, password: string) {
-  authHeader = 'Basic ' + btoa(`${username}:${password}`)
-  syncAuthToSW(authHeader)
+  authHeader = 'Basic ' + toBase64Utf8(`${username}:${password}`)
 }
 
 export function clearCredentials() {
   authHeader = null
-  syncAuthToSW(null)
+}
+
+export function getAuthHeader(): string | null {
+  return authHeader
+}
+
+// Fires only when a 401 arrives mid-session (credentials revoked/changed
+// server-side, or a stale session) — not on an explicit logout or a failed
+// login attempt, both of which already update useAuthStore themselves with
+// their own, more specific message. Without this, a mid-session 401 cleared
+// this module's own authHeader but left useAuthStore.authenticated (and the
+// session in sessionStorage) untouched, so the UI stayed stuck showing a
+// broken file manager instead of returning to the login screen.
+type UnauthorizedListener = () => void
+const unauthorizedListeners: UnauthorizedListener[] = []
+
+export function onUnauthorized(listener: UnauthorizedListener): void {
+  unauthorizedListeners.push(listener)
 }
 
 export class UnauthorizedError extends Error {}
@@ -38,15 +67,42 @@ export function parentPath(path: string): string {
 // Exported for video/audio playback: a real, credential-free same-origin
 // URL that the service worker (public/gauge-sw.js) authenticates in-flight,
 // as opposed to fetching the whole file into a blob: URL. See ViewerModal.tsx.
+export class InvalidPathError extends Error {}
+
+// A single path segment (a folder/file name) coming straight from user
+// input — not a full path, which legitimately contains '/'. Rejects
+// anything that could act as a path-traversal segment or otherwise isn't a
+// real name. davUrl() below independently rejects '.'/'..' in ANY path
+// passed to it too, as the last line of defense regardless of where a bad
+// segment came from — this one exists to reject it earlier, right where the
+// user typed it, with a clearer message than davUrl()'s exception would give.
+export function isValidName(name: string): boolean {
+  const trimmed = name.trim()
+  if (!trimmed || trimmed === '.' || trimmed === '..') return false
+  if (/[/\\]/.test(trimmed)) return false
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(trimmed)) return false
+  return true
+}
+
 export function davUrl(path: string): string {
   const clean = path.replace(/^\/+/, '')
+  const segments = clean.split('/')
+  // '.'/'..' segments survive encodeURIComponent unchanged (neither
+  // character needs escaping), and the browser's own URL resolution then
+  // collapses them BEFORE the request is sent — a folder or rename named
+  // e.g. "../../etc" could walk the resulting request straight out of
+  // /dav/ and onto a completely different path on the same origin.
+  if (segments.some((s) => s === '.' || s === '..')) {
+    throw new InvalidPathError(`Недопустимый путь: «${path}»`)
+  }
   // Percent-encode each segment (preserving '/' as separators). Needed for
   // more than just correctness: the Destination header on MOVE/COPY must be
   // a plain ByteString per the Fetch spec, and a raw non-Latin1 character
   // (e.g. Cyrillic) there throws a TypeError before the request is even
   // sent — this crashed every rename/move once the destination path had a
   // Cyrillic segment, which in this vault is nearly always.
-  const encoded = clean.split('/').map(encodeURIComponent).join('/')
+  const encoded = segments.map(encodeURIComponent).join('/')
   return ROOT + encoded
 }
 
@@ -70,9 +126,19 @@ async function request(path: string, init: RequestInit & { headers?: Record<stri
   })
   if (res.status === 401) {
     clearCredentials()
+    // Only for a 401 arriving mid-session — see onUnauthorized's own
+    // comment for why an explicit logout or a failed login must not also
+    // go through this path.
+    unauthorizedListeners.forEach((fn) => fn())
     throw new UnauthorizedError(`WebDAV ${init.method ?? 'GET'} ${path} -> 401`)
   }
-  if (!res.ok && res.status !== 207 && res.status !== 404) {
+  // 404 used to be tolerated here for every method — meant a MOVE off a
+  // clipboard entry that no longer exists, or a DELETE on an already-gone
+  // file, silently reported success instead of the no-op it actually was;
+  // worse, a GET of a missing file would hand the caller a 404 error page's
+  // body as if it were the real file content. Nothing in this codebase
+  // actually depends on 404 being treated as OK.
+  if (!res.ok && res.status !== 207) {
     throw new WebDavError(`WebDAV ${init.method ?? 'GET'} ${path} -> ${res.status} ${res.statusText}`, res.status)
   }
   return res
@@ -88,10 +154,24 @@ export async function list(path: string): Promise<FileEntry[]> {
     method: 'PROPFIND',
     headers: { Depth: '1' },
   })
+  if (res.status !== 207) {
+    throw new WebDavError(`WebDAV PROPFIND ${path} -> ${res.status} (expected 207 Multi-Status)`, res.status)
+  }
   const xml = await res.text()
   const doc = new DOMParser().parseFromString(xml, 'text/xml')
+  if (doc.querySelector('parsererror')) {
+    throw new WebDavError(`WebDAV PROPFIND ${path} -> response body is not valid XML`, res.status)
+  }
   const responses = Array.from(doc.getElementsByTagNameNS('DAV:', 'response'))
     .concat(Array.from(doc.getElementsByTagName('response')))
+  // Even an empty folder's PROPFIND still returns its own self-entry — zero
+  // <response> elements at all means something upstream (a captive portal,
+  // a misconfigured proxy, an auth gateway) served something that merely
+  // *looks* like a 207 without being one, which would otherwise render as a
+  // silently empty folder instead of the real problem.
+  if (responses.length === 0) {
+    throw new WebDavError(`WebDAV PROPFIND ${path} -> 207 response had no <response> elements`, res.status)
+  }
 
   const seen = new Set<string>()
   const entries: FileEntry[] = []

@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { runPool, CancelledError } from './pool'
+import { runPool, throwIfAnyFailed, CancelledError } from './pool'
 
 describe('runPool', () => {
-  it('runs every item to completion', async () => {
+  it('runs every item to completion and reports them all as succeeded', async () => {
     const seen: number[] = []
-    await runPool([1, 2, 3, 4, 5], 2, async (n) => {
+    const result = await runPool([1, 2, 3, 4, 5], 2, async (n) => {
       seen.push(n)
     })
     expect(seen.sort()).toEqual([1, 2, 3, 4, 5])
+    expect(result.succeeded.sort()).toEqual([1, 2, 3, 4, 5])
+    expect(result.failed).toEqual([])
   })
 
   it('never exceeds the concurrency limit', async () => {
@@ -22,27 +24,28 @@ describe('runPool', () => {
     expect(maxActive).toBeLessThanOrEqual(3)
   })
 
-  it('completes every item even when some fail, then throws a summary', async () => {
+  it('completes every item even when some fail, reporting succeeded/failed separately', async () => {
     const attempted: number[] = []
-    await expect(
-      runPool([1, 2, 3, 4], 2, async (n) => {
-        attempted.push(n)
-        if (n % 2 === 0) throw new Error(`boom ${n}`)
-      }),
-    ).rejects.toThrow(/2 из 4/)
+    const result = await runPool([1, 2, 3, 4], 2, async (n) => {
+      attempted.push(n)
+      if (n % 2 === 0) throw new Error(`boom ${n}`)
+    })
     expect(attempted.sort()).toEqual([1, 2, 3, 4])
+    expect(result.succeeded.sort()).toEqual([1, 3])
+    expect(result.failed.map((f) => f.item).sort()).toEqual([2, 4])
   })
 
-  it('throws the real error directly when every item fails', async () => {
-    await expect(
-      runPool([1, 2], 2, async () => {
-        throw new Error('all dead')
-      }),
-    ).rejects.toThrow('all dead')
+  it('resolves (does not throw) even when every item fails', async () => {
+    const result = await runPool([1, 2], 2, async () => {
+      throw new Error('all dead')
+    })
+    expect(result.succeeded).toEqual([])
+    expect(result.failed).toHaveLength(2)
   })
 
   it('resolves cleanly on an empty list', async () => {
-    await expect(runPool([], 3, async () => {})).resolves.toBeUndefined()
+    const result = await runPool([], 3, async () => {})
+    expect(result).toEqual({ succeeded: [], failed: [] })
   })
 
   it('stops picking up new items once the signal aborts, and throws CancelledError', async () => {
@@ -67,5 +70,23 @@ describe('runPool', () => {
       runPool([1, 2, 3], 2, async (n) => { seen.push(n) }, controller.signal),
     ).rejects.toBeInstanceOf(CancelledError)
     expect(seen).toEqual([])
+  })
+})
+
+describe('throwIfAnyFailed', () => {
+  it('does not throw when nothing failed', () => {
+    expect(() => throwIfAnyFailed({ succeeded: [1, 2], failed: [] }, 2)).not.toThrow()
+  })
+
+  it('throws the real error directly when every item failed', () => {
+    const boom = new Error('all dead')
+    expect(() => throwIfAnyFailed({ succeeded: [], failed: [{ item: 1, error: boom }] }, 1)).toThrow(boom)
+  })
+
+  it('throws a summary naming how many of how many failed on a partial failure', () => {
+    const boom = new Error('boom 2')
+    expect(() =>
+      throwIfAnyFailed({ succeeded: [1, 3], failed: [{ item: 2, error: boom }] }, 3),
+    ).toThrow(/1 из 3.*boom 2/)
   })
 })

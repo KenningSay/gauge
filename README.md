@@ -2,7 +2,7 @@
 
 **A fast, keyboard-first file manager for your own WebDAV server.**
 
-Nextcloud, ownCloud, a raw nginx `dav` module — anything that speaks WebDAV. No backend of its own, no database, no account with a third party: Gauge is a static web app that talks straight from your browser to your own server. Your files never touch anyone else's infrastructure.
+Built and actually run against a raw nginx `dav` module; Nextcloud/ownCloud/Synology should work for browsing and file ops but have a known gap on rename/move/copy specifically (see [Pointing it at your WebDAV server](#pointing-it-at-your-webdav-server)) until someone tests against one for real. No backend of its own, no database, no account with a third party: Gauge is a static web app that talks straight from your browser to your own server. Your files never touch anyone else's infrastructure.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-2dd4bf.svg)](LICENSE)
 ![React](https://img.shields.io/badge/react-19-149eca?logo=react&logoColor=white)
@@ -70,6 +70,8 @@ docker compose up -d
 
 Open `http://localhost:8080`, log in with your WebDAV username and password — that's the whole setup.
 
+**Put this behind HTTPS before exposing it to anything but `localhost`.** The container itself serves plain HTTP — your WebDAV password goes over Basic Auth, which is only as safe as the connection it travels on. Terminate TLS with whatever you already use in front of self-hosted containers (Caddy, Traefik, nginx-proxy, a cloud load balancer, …); this image doesn't bundle a certificate itself, the same way most single-purpose containers don't.
+
 ## Pointing it at your WebDAV server
 
 `WEBDAV_TARGET` must be the **full URL** your server actually serves WebDAV at, including its real path — not just the bare domain. Gauge's own requests always go to `/dav/...` on whatever domain it's served from; nginx rewrites that prefix to your real target, so the app itself never needs to know what your server's path looks like.
@@ -80,6 +82,8 @@ Open `http://localhost:8080`, log in with your WebDAV username and password — 
 | Nextcloud | `https://host/remote.php/dav/files/<username>/` |
 | ownCloud | `https://host/remote.php/webdav/` |
 | Synology DSM (WebDAV Server package) | `https://host:5006/` |
+
+**Known gap for anything other than a raw nginx `dav` module:** rename, move, and copy send a WebDAV `Destination` header built as `/dav/<path>` — correct for the one backend this project has actually been developed and tested against, where `/dav/` genuinely is nginx's own WebDAV root. `proxy_pass` rewrites the *request URI's* `/dav/` prefix to your real `WEBDAV_TARGET`, but it does not rewrite header *values* — so on Nextcloud/ownCloud/Synology, that `Destination` header still says `/dav/...` once it reaches your real server, which has no idea what `/dav/` is supposed to mean. Expect rename/move/copy specifically to fail against those backends until this gets a proper fix (translating `Destination` server-side, most likely). Browsing, upload, download, and delete don't use `Destination` and aren't affected. If you hit this and want to help nail down the fix, open an issue — it needs testing against a real Nextcloud/ownCloud/Synology instance, which this project doesn't have access to.
 
 ## Keyboard shortcuts
 
@@ -115,9 +119,9 @@ Markdown files get a rendered preview by default, with a toggle to edit the raw 
 
 Gauge is a static single-page app with **no backend of its own**. Every file operation — list, upload, download, rename, move, copy, delete — is a real WebDAV request (`PROPFIND` / `PUT` / `GET` / `MOVE` / `COPY` / `DELETE` / `MKCOL`) sent straight from your browser. The bundled nginx only serves the static files and reverse-proxies `/dav/` to your real server, so the browser doesn't have to deal with CORS or a second TLS certificate.
 
-Directory rename/move/copy/delete use native WebDAV `MOVE`/`COPY`/`DELETE` on the whole collection in a single request — not a recursive per-file walk — so they're atomic and fast regardless of how many files are inside. Media previews and downloads fetch the actual bytes with a real `Authorization` header and hand the browser a `blob:` URL; credentials never end up sitting in a URL, a `src` attribute, or anywhere else in the DOM.
+Directory rename/move/copy/delete use native WebDAV `MOVE`/`COPY`/`DELETE` on the whole collection in a single request — not a recursive per-file walk — so they're atomic and fast regardless of how many files are inside. Image/PDF previews and downloads fetch the actual bytes with a real `Authorization` header and hand the browser a `blob:` URL; credentials never end up sitting in a URL, a `src` attribute, or anywhere else in the DOM. Video/audio playback goes through a small service worker (`public/gauge-sw.js`) instead, so `<video>`/`<audio>` get a real streamable URL with working seek (HTTP Range) rather than downloading the whole file into memory first — the worker injects the `Authorization` header on the fly, asking the page for it fresh on every request rather than storing it anywhere, so there's nothing sitting on disk for it to leak.
 
-Your username and password are entered once on Gauge's own login screen and kept only in `sessionStorage` — cleared the moment the tab closes, never written into the build, never sent anywhere but your own WebDAV server.
+Your username and password are entered once on Gauge's own login screen and kept only in `sessionStorage` — cleared the moment the tab closes, never written into the build, never sent anywhere but your own WebDAV server. Nothing durable (IndexedDB, `localStorage`, cookies) ever holds a copy, including on the service worker's side of things — verified directly (`indexedDB.databases()` stays empty for the whole session).
 
 ## Development
 
@@ -139,9 +143,11 @@ npm run dev
 ## Security notes
 
 - No credentials are ever hardcoded into the bundle — verified by grepping the built `dist/` output.
-- Login validates against your real WebDAV server (a live `PROPFIND`), then keeps credentials in `sessionStorage` only — not `localStorage`, not a cookie.
-- All programmatic requests use a real `Authorization` header. Media/downloads that historically needed a credentialed URL (because `<img>`/`<video>`/`<audio>` tags can't carry a custom header) now fetch through a real header into a `blob:` URL instead — nothing credential-shaped ever touches a URL.
+- Login validates against your real WebDAV server (a live `PROPFIND`), then keeps credentials in `sessionStorage` only — not `localStorage`, not a cookie, not IndexedDB (see the service worker note above — it asks the page for the header live rather than caching it anywhere).
+- All programmatic requests use a real `Authorization` header. Media/downloads that historically needed a credentialed URL (because `<img>`/`<video>`/`<audio>` tags can't carry a custom header) now fetch through a real header into a `blob:` URL (or the service worker, for video/audio) instead — nothing credential-shaped ever touches a URL.
 - `Overwrite: F` is set on every `MOVE`/`COPY`, so renaming or pasting onto an existing name fails loudly instead of silently clobbering it.
+- Folder/file names are validated against path-traversal segments (`.`, `..`) before ever reaching a request — both at the input point and, independently, inside the one function that turns any path into a request URL, so a stray `..` can't be encoded/normalized into escaping `/dav/` onto another path on the same origin.
+- A 401 from the server (revoked credentials, expired session) drops the app back to the login screen immediately, instead of leaving a half-authenticated UI up with every subsequent request failing silently.
 
 Found something that looks like a real security issue? Open an issue — this is a young project and a second pair of eyes is always welcome.
 

@@ -3,7 +3,7 @@ import type { FileEntry } from '../api/types'
 import * as webdav from '../api/webdav'
 import { useUiStore } from './useUiStore'
 import type { DroppedFile } from '../utils/dropFolder'
-import { runPool, CancelledError } from '../utils/pool'
+import { runPool, throwIfAnyFailed, CancelledError } from '../utils/pool'
 
 export type SortKey = 'name' | 'size' | 'modified' | 'type'
 export type ViewMode = 'list' | 'grid'
@@ -441,6 +441,10 @@ export const useFileStore = create<FileStore>((set, get) => {
   commitRename: async (entry, newName) => {
     set({ renamingPath: null })
     if (!newName || newName === entry.name) return
+    if (!webdav.isValidName(newName)) {
+      useUiStore.getState().pushToast(`Недопустимое имя: «${newName}»`, 'error')
+      return
+    }
     try {
       await webdav.renameEntry(entry, newName)
       await get().refresh()
@@ -452,6 +456,10 @@ export const useFileStore = create<FileStore>((set, get) => {
   },
 
   createFolder: async (name) => {
+    if (!webdav.isValidName(name)) {
+      useUiStore.getState().pushToast(`Недопустимое имя: «${name}»`, 'error')
+      return
+    }
     try {
       await webdav.mkdir(get().currentPath, name)
       await get().refresh()
@@ -469,10 +477,11 @@ export const useFileStore = create<FileStore>((set, get) => {
     const controller = new AbortController()
     set({ uploadAbortController: controller })
     await runBulkOp(set, get, async () => {
-      await runPool(list, 3, (f) =>
+      const result = await runPool(list, 3, (f) =>
         webdav.uploadFile(base, f, (loaded) => tracker.onProgress(f, loaded), controller.signal).then(() => tracker.onDone(f)),
         controller.signal,
       )
+      throwIfAnyFailed(result, list.length)
       return list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`
     }, 'Ошибка загрузки', () => { tracker.clear(); set({ uploadAbortController: null }) })
   },
@@ -503,11 +512,12 @@ export const useFileStore = create<FileStore>((set, get) => {
         const name = slash === -1 ? dir : dir.slice(slash + 1)
         await webdav.mkdir(parent, name)
       }
-      await runPool(dropped, 3, ({ relPath, file }) => {
+      const result = await runPool(dropped, 3, ({ relPath, file }) => {
         const dirPart = relPath.slice(0, -1).join('/')
         const targetDir = dirPart ? `${base}/${dirPart}` : base
         return webdav.uploadFile(targetDir, file, (loaded) => tracker.onProgress(file, loaded), controller.signal).then(() => tracker.onDone(file))
       }, controller.signal)
+      throwIfAnyFailed(result, dropped.length)
       return dropped.length === 1 ? `Загружен «${dropped[0].file.name}»` : `Загружено файлов: ${dropped.length}`
     }, 'Ошибка загрузки', () => { tracker.clear(); set({ uploadAbortController: null }) })
   },
@@ -518,14 +528,16 @@ export const useFileStore = create<FileStore>((set, get) => {
 
   deleteEntries: async (entries) => {
     await runBulkOp(set, get, async () => {
-      await runPool(entries, 3, (entry) => webdav.deleteEntry(entry))
+      const result = await runPool(entries, 3, (entry) => webdav.deleteEntry(entry))
+      throwIfAnyFailed(result, entries.length)
       return entries.length === 1 ? `«${entries[0].name}» удалён` : `Удалено объектов: ${entries.length}`
     }, 'Ошибка удаления', () => set({ selected: new Set() }))
   },
 
   moveEntries: async (entries, destDir) => {
     await runBulkOp(set, get, async () => {
-      await runPool(entries, 3, (entry) => webdav.moveEntry(entry, destDir))
+      const result = await runPool(entries, 3, (entry) => webdav.moveEntry(entry, destDir))
+      throwIfAnyFailed(result, entries.length)
       return entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`
     }, 'Ошибка перемещения')
   },
@@ -555,12 +567,21 @@ export const useFileStore = create<FileStore>((set, get) => {
     const { entries, mode } = clip
     try {
       if (mode === 'copy') {
-        await runPool(entries, 3, (entry) => copyWithAutoRename(entry, destDir))
+        const result = await runPool(entries, 3, (entry) => copyWithAutoRename(entry, destDir))
+        throwIfAnyFailed(result, entries.length)
         useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» вставлен` : `Вставлено объектов: ${entries.length}`)
       } else {
-        await runPool(entries, 3, (entry) => webdav.moveEntry(entry, destDir))
+        const result = await runPool(entries, 3, (entry) => webdav.moveEntry(entry, destDir))
+        // Only drop what actually moved — a naive "cut is one-shot, always
+        // clear" left the WHOLE original selection in the clipboard after a
+        // partial failure, so a retry re-attempted entries that had already
+        // moved (failing on their now-gone source) right alongside the ones
+        // that genuinely still needed moving.
+        const succeededPaths = new Set(result.succeeded.map((e) => e.path))
+        const remaining = entries.filter((e) => !succeededPaths.has(e.path))
+        set({ clipboard: remaining.length ? { entries: remaining, mode: 'cut' } : null })
+        throwIfAnyFailed(result, entries.length)
         useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`)
-        set({ clipboard: null }) // cut is one-shot — a second Ctrl+V shouldn't try to move the same (now-gone) entries again
       }
     } catch (e) {
       const msg = e instanceof webdav.AlreadyExistsError
