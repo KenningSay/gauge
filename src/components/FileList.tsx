@@ -58,6 +58,10 @@ export function FileList() {
   const commitRename = useFileStore((s) => s.commitRename)
   const cancelRename = useFileStore((s) => s.cancelRename)
   const silentRefresh = useFileStore((s) => s.silentRefresh)
+  // With several items selected, a per-row kebab acting on just that one row
+  // is misleading — the toolbar's bulk actions (copy/cut/delete) are what
+  // apply to the actual selection once there's more than one.
+  const multiSelected = selected.size > 1
 
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [dropZoneActive, setDropZoneActive] = useState(false)
@@ -273,9 +277,11 @@ export function FileList() {
                 <td className={styles.dimCell}>{formatSize(entry.size, entry.isDir)}</td>
                 <td className={`${styles.dimCell} ${styles.typeCol}`}>{entry.isDir ? 'Папка' : extensionOf(entry.name) || '—'}</td>
                 <td className={styles.kebabCol}>
-                  <button className={styles.kebabBtn} onClick={(e) => handleKebab(e, entry)}>
-                    <MoreVertical size={16} />
-                  </button>
+                  {!multiSelected && (
+                    <button className={styles.kebabBtn} onClick={(e) => handleKebab(e, entry)}>
+                      <MoreVertical size={16} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -299,9 +305,11 @@ export function FileList() {
               onTouchEnd={cancelLongPress}
               onTouchMove={cancelLongPress}
             >
-              <button className={styles.gridKebab} onClick={(e) => handleKebab(e, entry)}>
-                <MoreVertical size={15} />
-              </button>
+              {!multiSelected && (
+                <button className={styles.gridKebab} onClick={(e) => handleKebab(e, entry)}>
+                  <MoreVertical size={15} />
+                </button>
+              )}
               <div className={styles.gridThumb}>
                 {isImage(entry) ? <GridThumb entry={entry} /> : <EntryIcon entry={entry} size={30} />}
               </div>

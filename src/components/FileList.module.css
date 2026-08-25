@@ -34,6 +34,14 @@
 .table {
   width: 100%;
   border-collapse: collapse;
+  /* Default (auto) table layout sizes each column to fit its content, which
+     means a long filename just widens the whole table instead of the name
+     cell's ellipsis CSS ever kicking in — the table silently overflows the
+     scroller instead of truncating, pushing later columns (including the
+     mobile kebab button) out past the visible edge. Fixed layout + explicit
+     widths on every other column lets the name column's ellipsis do its job
+     and keeps the row width bounded to the container. */
+  table-layout: fixed;
 }
 
 .headRow th {
@@ -76,6 +84,18 @@
   padding: 8px 16px;
   font-size: 16px;
   color: var(--text);
+}
+
+.dateCol {
+  width: 130px;
+}
+
+.sizeCol {
+  width: 90px;
+}
+
+.typeCol {
+  width: 80px;
 }
 
 .kebabCol {

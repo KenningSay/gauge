@@ -37,8 +37,12 @@ export function ContextMenu() {
     if (!contextMenu || !ref.current) { setAdjusted(null); return }
     const rect = ref.current.getBoundingClientRect()
     const margin = 8
-    const left = Math.min(Math.max(margin, contextMenu.x), window.innerWidth - rect.width - margin)
-    const top = Math.min(Math.max(margin, contextMenu.y), window.innerHeight - rect.height - margin)
+    // Clamp to the right/bottom edge first, THEN re-clamp to the margin —
+    // doing it the other order around, if rect is wider/taller than the
+    // viewport minus margins, produces a negative value and pushes the menu
+    // off the opposite (left/top) edge instead of just fitting as best it can.
+    const left = Math.max(margin, Math.min(contextMenu.x, window.innerWidth - rect.width - margin))
+    const top = Math.max(margin, Math.min(contextMenu.y, window.innerHeight - rect.height - margin))
     setAdjusted({ left, top })
   }, [contextMenu])
 

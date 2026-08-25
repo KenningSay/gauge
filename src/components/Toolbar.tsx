@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Menu, LogOut, X, CheckSquare, Gauge as GaugeIcon } from 'lucide-react'
+import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Menu, LogOut, X, CheckSquare, Copy, Scissors, Gauge as GaugeIcon } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
 import { useAuthStore } from '../store/useAuthStore'
@@ -21,6 +21,8 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
   const deleteEntries = useFileStore((s) => s.deleteEntries)
   const clearSelection = useFileStore((s) => s.clearSelection)
   const selectAll = useFileStore((s) => s.selectAll)
+  const copyToClipboard = useFileStore((s) => s.copyToClipboard)
+  const cutToClipboard = useFileStore((s) => s.cutToClipboard)
   const promptDialog = useUiStore((s) => s.promptDialog)
   const confirmDialog = useUiStore((s) => s.confirmDialog)
   const propertiesOpen = useUiStore((s) => s.propertiesOpen)
@@ -48,12 +50,13 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
     else selectAll()
   }
 
+  const selectedEntries = entries.filter((en) => selected.has(en.path))
+
   const handleDelete = async () => {
     if (selected.size === 0) return
     const ok = await confirmDialog(`Удалить ${selected.size} объект(ов)? Это необратимо.`)
     if (!ok) return
-    const toDelete = entries.filter((en) => selected.has(en.path))
-    await deleteEntries(toDelete)
+    await deleteEntries(selectedEntries)
   }
 
   return (
@@ -93,9 +96,17 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       )}
 
       {selected.size > 0 && (
-        <button className={styles.iconBtn} title="Удалить выбранное" onClick={handleDelete}>
-          <Trash2 size={18} color="var(--danger)" />
-        </button>
+        <>
+          <button className={styles.iconBtn} title="Копировать выбранное" onClick={() => copyToClipboard(selectedEntries)}>
+            <Copy size={18} />
+          </button>
+          <button className={styles.iconBtn} title="Вырезать выбранное" onClick={() => cutToClipboard(selectedEntries)}>
+            <Scissors size={18} />
+          </button>
+          <button className={styles.iconBtn} title="Удалить выбранное" onClick={handleDelete}>
+            <Trash2 size={18} color="var(--danger)" />
+          </button>
+        </>
       )}
 
       <div className={styles.spacer} />
