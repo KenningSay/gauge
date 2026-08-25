@@ -1,4 +1,5 @@
 import type { FileEntry } from './types'
+import { syncAuthToSW } from '../swAuth'
 
 const ROOT = '/dav/'
 
@@ -8,10 +9,12 @@ let authHeader: string | null = null
 
 export function setCredentials(username: string, password: string) {
   authHeader = 'Basic ' + btoa(`${username}:${password}`)
+  syncAuthToSW(authHeader)
 }
 
 export function clearCredentials() {
   authHeader = null
+  syncAuthToSW(null)
 }
 
 export class UnauthorizedError extends Error {}
@@ -32,7 +35,10 @@ export function parentPath(path: string): string {
   return path.substring(0, path.lastIndexOf('/')) || '/'
 }
 
-function davUrl(path: string): string {
+// Exported for video/audio playback: a real, credential-free same-origin
+// URL that the service worker (public/gauge-sw.js) authenticates in-flight,
+// as opposed to fetching the whole file into a blob: URL. See ViewerModal.tsx.
+export function davUrl(path: string): string {
   const clean = path.replace(/^\/+/, '')
   // Percent-encode each segment (preserving '/' as separators). Needed for
   // more than just correctness: the Destination header on MOVE/COPY must be
