@@ -10,6 +10,8 @@ Nextcloud, ownCloud, a raw nginx `dav` module — anything that speaks WebDAV. N
 ![Vite](https://img.shields.io/badge/vite-8-646cff?logo=vite&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ed?logo=docker&logoColor=white)
 
+🇷🇺 **По-русски:** быстрый файловый менеджер для своего WebDAV-сервера (Nextcloud, ownCloud, nginx `dav`) — работает прямо из браузера, без стороннего бэкенда и без чужого аккаунта поверх. Логин/пароль вводятся только на экране входа и никогда никуда не пишутся. Ставится в один `docker run`, см. [Quick start](#quick-start-docker).
+
 ---
 
 ## Contents
