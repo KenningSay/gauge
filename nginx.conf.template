@@ -1,0 +1,45 @@
+server {
+    listen 80;
+    server_name _;
+
+    # Default nginx client_max_body_size is 1MB — Gauge's whole purpose is
+    # uploading files, so the default would reject nearly everything with a
+    # 413 before it ever reached WEBDAV_TARGET. 0 = unlimited; the real cap
+    # is whatever your actual WebDAV server enforces.
+    client_max_body_size 0;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Reverse-proxies the app's /dav/ calls to your real WebDAV server.
+    # WEBDAV_TARGET (substituted from the container's environment at start,
+    # see Dockerfile) should be the FULL target URL, including whatever path
+    # your server actually serves WebDAV at — e.g. Nextcloud is typically
+    # something like https://cloud.example.com/remote.php/dav/files/you/,
+    # not just the bare domain. nginx replaces this location's /dav/ prefix
+    # with that path, so Gauge's own client code (hardcoded to always call
+    # /dav/...) never needs to know or care what your server's real WebDAV
+    # path looks like.
+    location /dav/ {
+        proxy_pass ${WEBDAV_TARGET};
+        proxy_http_version 1.1;
+        # Host must match the upstream WebDAV server's own hostname, not
+        # whatever domain Gauge itself is served from — many WebDAV/cloud
+        # backends validate or route on Host and will reject/misroute an
+        # unrelated one.
+        proxy_set_header Host $proxy_host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_pass_header Authorization;
+        # Stream the request body straight through instead of buffering the
+        # whole upload in nginx first — matters for anything beyond small
+        # files, and removes an up-front delay before a big PUT even starts
+        # reaching the backend.
+        proxy_request_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}

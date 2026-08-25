@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Folder, File as FileIcon, FolderPlus, Home, LayoutGrid, List, Loader2 } from 'lucide-react'
+import { Search, Folder, File as FileIcon, FolderPlus, Home, LayoutGrid, List, Loader2, ClipboardPaste } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
 import styles from './CommandPalette.module.css'
@@ -28,6 +28,8 @@ export function CommandPalette() {
   const entries = useFileStore((s) => s.entries)
   const searchIndex = useFileStore((s) => s.searchIndex)
   const indexBuilding = useFileStore((s) => s.indexBuilding)
+  const clipboard = useFileStore((s) => s.clipboard)
+  const pasteClipboard = useFileStore((s) => s.pasteClipboard)
   const promptDialog = useUiStore((s) => s.promptDialog)
 
   const [query, setQuery] = useState('')
@@ -49,6 +51,17 @@ export function CommandPalette() {
       { id: 'view-list', label: 'Вид: список', icon: <List size={16} />, run: () => setViewMode('list') },
       { id: 'view-grid', label: 'Вид: сетка', icon: <LayoutGrid size={16} />, run: () => setViewMode('grid') },
     ]
+    if (clipboard) {
+      staticCmds.push({
+        id: 'paste',
+        label: clipboard.entries.length === 1
+          ? `Вставить «${clipboard.entries[0].name}»`
+          : `Вставить объектов: ${clipboard.entries.length}`,
+        icon: <ClipboardPaste size={16} />,
+        hint: clipboard.mode === 'cut' ? 'перемещение' : 'копия',
+        run: () => pasteClipboard(),
+      })
+    }
 
     const q = query.trim().toLowerCase()
 
@@ -76,7 +89,7 @@ export function CommandPalette() {
       }))
     const matchedStatic = staticCmds.filter((c) => c.label.toLowerCase().includes(q))
     return [...matchedStatic, ...matchCmds]
-  }, [entries, searchIndex, query, navigate, openViewer, createFolder, setViewMode, promptDialog])
+  }, [entries, searchIndex, query, navigate, openViewer, createFolder, setViewMode, promptDialog, clipboard, pasteClipboard])
 
   useEffect(() => {
     if (!open) return

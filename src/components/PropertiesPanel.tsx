@@ -2,9 +2,19 @@ import { Info, X } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
 import { detectViewerKind } from '../api/types'
-import { authorizedFetchUrl } from '../api/webdav'
+import { useAuthorizedUrl } from '../hooks/useAuthorizedUrl'
 import { formatSize, formatDate, extensionOf } from '../utils/format'
 import styles from './PropertiesPanel.module.css'
+
+function PropertiesThumb({ path, name }: { path: string; name: string }) {
+  const { url } = useAuthorizedUrl(path)
+  if (!url) return <div className={styles.thumb} />
+  return (
+    <div className={styles.thumb}>
+      <img src={url} alt={name} />
+    </div>
+  )
+}
 
 export function PropertiesPanel() {
   const open = useUiStore((s) => s.propertiesOpen)
@@ -57,11 +67,7 @@ export function PropertiesPanel() {
 
         {entry && (
           <>
-            {isImage && (
-              <div className={styles.thumb}>
-                <img src={authorizedFetchUrl(entry.path)} alt={entry.name} />
-              </div>
-            )}
+            {isImage && <PropertiesThumb path={entry.path} name={entry.name} />}
             <div className={styles.name}>{entry.name}</div>
             <div className={styles.row}>
               <span className={styles.rowLabel}>Тип</span>

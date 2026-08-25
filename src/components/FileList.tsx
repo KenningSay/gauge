@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Folder, Image, Video, Music, FileText, FileCode, File as FileIcon, Inbox, MoreVertical } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { detectViewerKind, type FileEntry } from '../api/types'
-import { authorizedFetchUrl } from '../api/webdav'
+import { useAuthorizedUrl } from '../hooks/useAuthorizedUrl'
 import { formatSize, formatDate, extensionOf } from '../utils/format'
 import { isCoarsePointer } from '../utils/device'
 import { collectDroppedEntries } from '../utils/dropFolder'
@@ -24,6 +24,12 @@ function EntryIcon({ entry, size = 20 }: { entry: FileEntry; size?: number }) {
 
 function isImage(entry: FileEntry) {
   return detectViewerKind(entry) === 'image'
+}
+
+function GridThumb({ entry }: { entry: FileEntry }) {
+  const { url } = useAuthorizedUrl(entry.path)
+  if (!url) return <EntryIcon entry={entry} size={30} />
+  return <img src={url} loading="lazy" alt={entry.name} />
 }
 
 export function FileList() {
@@ -303,11 +309,7 @@ export function FileList() {
                 <MoreVertical size={15} />
               </button>
               <div className={styles.gridThumb}>
-                {isImage(entry) ? (
-                  <img src={authorizedFetchUrl(entry.path)} loading="lazy" alt={entry.name} />
-                ) : (
-                  <EntryIcon entry={entry} size={30} />
-                )}
+                {isImage(entry) ? <GridThumb entry={entry} /> : <EntryIcon entry={entry} size={30} />}
               </div>
               <div className={styles.gridName}>{entry.name}</div>
             </div>
