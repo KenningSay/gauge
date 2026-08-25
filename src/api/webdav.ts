@@ -28,6 +28,10 @@ function joinPath(dir: string, name: string): string {
   return (dir.endsWith('/') ? dir : dir + '/') + name
 }
 
+export function parentPath(path: string): string {
+  return path.substring(0, path.lastIndexOf('/')) || '/'
+}
+
 function davUrl(path: string): string {
   const clean = path.replace(/^\/+/, '')
   // Percent-encode each segment (preserving '/' as separators). Needed for
@@ -40,21 +44,10 @@ function davUrl(path: string): string {
   return ROOT + encoded
 }
 
-// Historically <img>/<video>/<audio>/<iframe> src used credentials embedded
-// straight in the URL (`authorizedFetchUrl`, now removed) since those tags
-// can't carry a custom Authorization header — but that meant every visible
-// thumbnail/preview had the real WebDAV username and password sitting in
-// plaintext in a DOM attribute for as long as it was on screen: visible in
-// devtools, scrapeable by any extension with DOM access, and logged in
-// plaintext by anything that logs request URLs. Fetching the bytes with a
-// real Authorization header (same as every other call in this file) and
-// handing the browser a local `blob:` URL instead gets the same visual
-// result with the credentials never touching a URL at all. See
-// `src/hooks/useAuthorizedUrl.ts` (display) and `src/utils/download.ts`
-// (downloads) for the two ways this gets used. Fixed 2026-08-25, ahead of
-// this project going public — this mattered a lot less as a same-origin,
-// single-user, never-published tool than it does the moment strangers with
-// their own WebDAV logins start using it.
+// <img>/<video>/<audio> can't carry a custom Authorization header, so
+// display/download fetch the bytes with a real header here and hand the
+// browser a blob: URL instead of embedding creds in a plain URL. See
+// src/hooks/useAuthorizedUrl.ts and src/utils/download.ts.
 export async function fetchBlob(path: string): Promise<Blob> {
   const res = await request(path, { method: 'GET' })
   return res.blob()
@@ -112,7 +105,7 @@ export async function list(path: string): Promise<FileEntry[]> {
     if (seen.has(href)) continue
     seen.add(href)
 
-    const relative = href.replace(/^.*\/dav\//, '').replace(/\/$/, '')
+    const relative = (href.startsWith(ROOT) ? href.slice(ROOT.length) : href).replace(/\/$/, '')
     const normalizedCurrent = path.replace(/^\/+|\/+$/g, '')
     if (relative === normalizedCurrent) continue // skip self entry
 
@@ -153,13 +146,9 @@ export async function putTextContent(path: string, content: string): Promise<voi
   })
 }
 
-// XHR, not fetch(): `fetch()` has no upload-progress event at all (only
-// download/response progress via a readable response body) — the only
-// standard browser API that reports PUT/POST body upload progress is
-// `XMLHttpRequest.upload.onprogress`. Everything else in this file can stay
-// on fetch/request() because nothing else uploads a body large enough for
-// progress to matter. Duplicates request()'s 401/error handling locally
-// since that helper is fetch-based and can't be reused here.
+// XHR, not fetch(): fetch() has no upload-progress event, only
+// XMLHttpRequest.upload.onprogress does. Duplicates request()'s 401/error
+// handling since that helper is fetch-based.
 export function uploadFile(
   dirPath: string,
   file: File,
@@ -210,33 +199,25 @@ export async function deleteFile(path: string): Promise<void> {
 }
 
 // nginx's dav module requires a trailing slash to address a path as a
-// collection (directory) — without it, MOVE/COPY/DELETE on a directory 400s
-// outright (verified live 2026-08-25: identical MOVE request, only
-// difference the trailing slash, 400 vs 201). Matters for BOTH sides of a
-// MOVE/COPY, not just the source: a destination missing the slash 400s too.
+// collection — missing it 400s a MOVE/COPY/DELETE on a directory, on either
+// side of the request.
 function asDavPath(path: string, isDir: boolean): string {
   if (!isDir) return path
   return path.endsWith('/') ? path : path + '/'
 }
 
-// Old comment here claimed "DELETE on a non-empty directory fails" and drove
-// a recursive list-then-delete-every-child implementation (one WebDAV round
-// trip per file, sequential). Verified live against the real backend
-// 2026-08-25 — that claim was simply wrong (or true of some older config):
 // nginx's dav module deletes a non-empty collection recursively server-side
-// in one request, same as a filesystem `rm -rf`.
+// in one request, same as `rm -rf` — no need to list-and-delete children.
 export async function deleteEntry(entry: FileEntry): Promise<void> {
   await deleteFile(asDavPath(entry.path, entry.isDir))
 }
 
 export class AlreadyExistsError extends Error {}
 
-// `Overwrite: F` (RFC 4918 §10.6) — without it, MOVE/COPY default to
-// Overwrite: T and would SILENTLY replace whatever's already sitting at the
-// destination with no confirmation. Verified live: nginx respects it and
-// returns 412 Precondition Failed without touching the existing item, which
-// is remapped here to a specific, catchable error instead of a generic
-// WebDavError so the UI can show "already exists" instead of a raw HTTP code.
+// Overwrite: F (RFC 4918 §10.6) — MOVE/COPY default to Overwrite: T, which
+// would silently replace whatever's at the destination. nginx returns 412
+// without touching the existing item; remapped to a specific error so the
+// UI can show "already exists" instead of a raw HTTP code.
 async function moveOrCopy(method: 'MOVE' | 'COPY', from: string, to: string, isDir: boolean): Promise<void> {
   try {
     await request(asDavPath(from, isDir), {
@@ -251,30 +232,18 @@ async function moveOrCopy(method: 'MOVE' | 'COPY', from: string, to: string, isD
   }
 }
 
-// Old comment here claimed "MOVE/COPY only work on files", which drove a
-// recursive copy-then-delete implementation for directories: one COPY/MKCOL
-// request per file/subfolder (sequential), then a second full recursive
-// delete pass on the original — slow, and NOT atomic (a failure partway
-// through a big folder could leave a partial duplicate at the destination
-// with the original only partly deleted). Verified live against the real
-// backend 2026-08-25 — that claim was also wrong: nginx's dav module handles
-// MOVE/COPY on a whole collection recursively, server-side, in one request,
-// same as every other WebDAV server. Files and directories now take the
-// exact same one-request path (mind the trailing-slash requirement above,
-// though — a real, live-caught bug on the first pass at this rewrite).
+// nginx's dav module handles MOVE/COPY on a whole collection recursively,
+// server-side, in one request — files and directories take the same path.
 export async function renameEntry(entry: FileEntry, newName: string): Promise<void> {
-  const parent = entry.path.substring(0, entry.path.lastIndexOf('/')) || '/'
-  await moveOrCopy('MOVE', entry.path, joinPath(parent, newName), entry.isDir)
+  await moveOrCopy('MOVE', entry.path, joinPath(parentPath(entry.path), newName), entry.isDir)
 }
 
 export async function moveEntry(entry: FileEntry, destDir: string): Promise<void> {
   await moveOrCopy('MOVE', entry.path, joinPath(destDir, entry.name), entry.isDir)
 }
 
-// Native COPY, same one-request deal as MOVE above — powers the "Duplicate"
-// command. `destName` lets the caller pick the new name directly (e.g.
-// "file (копия).ext") instead of copying in place under the same name, which
-// would just 412 against itself.
+// destName lets the caller pick the copy's name (e.g. "file (копия).ext")
+// instead of colliding with the original.
 export async function copyEntry(entry: FileEntry, destDir: string, destName: string): Promise<void> {
   await moveOrCopy('COPY', entry.path, joinPath(destDir, destName), entry.isDir)
 }

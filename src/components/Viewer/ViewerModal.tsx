@@ -18,13 +18,10 @@ export function ViewerModal() {
   const close = useFileStore((s) => s.closeViewer)
   const viewNext = useFileStore((s) => s.viewNext)
 
-  // Hooks run every render regardless of `entry` — compute kind/path up
-  // front (both null-safe) so the hook call stays unconditional, and only
-  // bail out via `if (!entry) return null` further down. Text/none kinds
-  // don't need the raw bytes (TextViewer fetches its own editable content;
-  // GenericViewer just offers a download button), so pass null for those to
-  // skip the fetch entirely rather than pulling a whole file just to throw
-  // the blob away unused.
+  // kind/path computed null-safe so the hook call below stays unconditional
+  // (rules of hooks) ahead of the `if (!entry) return null` below. Text/none
+  // kinds fetch their own content elsewhere, so pass null to skip the blob
+  // fetch for those.
   const kind = entry ? detectViewerKind(entry) : null
   const needsBlob = kind !== null && BLOB_KINDS.has(kind)
   const { url: src, loading } = useAuthorizedUrl(needsBlob && entry ? entry.path : null)

@@ -3,10 +3,7 @@
 // the older, unstandardized-but-universally-supported File System Entries
 // API (`webkitGetAsEntry`/`createReader`). This walks it into a flat list of
 // {relPath, file}, where relPath is the segment chain including the dropped
-// folder's own name, e.g. ["Проекты", "sub", "note.md"]. File/folder names
-// come straight from the OS via the browser (already correct Unicode), never
-// touched by a shell, so this can't reproduce the encoding-corruption bug —
-// see gauge_file_manager_project memory, incident 2026-08-12.
+// folder's own name, e.g. ["Проекты", "sub", "note.md"].
 
 export interface DroppedFile {
   relPath: string[]
