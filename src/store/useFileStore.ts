@@ -14,6 +14,13 @@ interface ContextMenuState {
   entry: FileEntry | null
 }
 
+export interface UploadProgress {
+  filesTotal: number
+  filesDone: number
+  bytesTotal: number
+  bytesLoaded: number
+}
+
 interface FileStore {
   currentPath: string
   entries: FileEntry[]
@@ -35,6 +42,8 @@ interface FileStore {
 
   searchIndex: FileEntry[] | null
   indexBuilding: boolean
+
+  uploadProgress: UploadProgress | null
 
   navigate: (path: string) => Promise<void>
   refresh: () => Promise<void>
@@ -101,6 +110,45 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
+// Aggregates per-file XHR upload progress (webdav.ts's uploadFile callback
+// reports CUMULATIVE bytes for that one file) into one combined figure for
+// however many files are uploading concurrently (runPool caps it at 3) —
+// keyed by the File object itself rather than by array index, since
+// runPool's `fn` only ever receives the item, never its position. Pushes to
+// the store are throttled to ~12/sec: XHR can fire progress many times a
+// second per file, and three files doing that concurrently was enough
+// re-renders to visibly jank the row list mid-upload.
+function makeUploadTracker(set: (p: Partial<FileStore>) => void, fileSizes: number[]) {
+  const filesTotal = fileSizes.length
+  const bytesTotal = fileSizes.reduce((a, b) => a + b, 0)
+  const loadedByFile = new Map<File, number>()
+  let bytesLoaded = 0
+  let filesDone = 0
+  let lastPush = 0
+  const push = (force = false) => {
+    const now = performance.now()
+    if (!force && now - lastPush < 80) return
+    lastPush = now
+    set({ uploadProgress: { filesTotal, filesDone, bytesTotal, bytesLoaded } })
+  }
+  push(true)
+  return {
+    onProgress: (file: File, loaded: number) => {
+      bytesLoaded += loaded - (loadedByFile.get(file) ?? 0)
+      loadedByFile.set(file, loaded)
+      push()
+    },
+    onDone: (file: File) => {
+      const size = file.size
+      bytesLoaded += size - (loadedByFile.get(file) ?? 0)
+      loadedByFile.set(file, size)
+      filesDone++
+      push(true)
+    },
+    clear: () => set({ uploadProgress: null }),
+  }
+}
+
 // Cheap fingerprint good enough to detect additions/removals/renames/edits
 // without a deep compare — order-independent since the two sides may come
 // from separately-sorted listings.
@@ -139,6 +187,8 @@ export const useFileStore = create<FileStore>((set, get) => {
 
   searchIndex: null,
   indexBuilding: false,
+
+  uploadProgress: null,
 
   navigate: async (path) => {
     const gen = ++requestGen
@@ -340,8 +390,11 @@ export const useFileStore = create<FileStore>((set, get) => {
   uploadFiles: async (files, targetDir) => {
     const list = Array.from(files)
     const base = targetDir ?? get().currentPath
+    const tracker = makeUploadTracker(set, list.map((f) => f.size))
     try {
-      await runPool(list, 3, (f) => webdav.uploadFile(base, f))
+      await runPool(list, 3, (f) =>
+        webdav.uploadFile(base, f, (loaded) => tracker.onProgress(f, loaded)).then(() => tracker.onDone(f)),
+      )
       useUiStore.getState().pushToast(list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`)
     } catch (e) {
       // Даже на частичном провале часть файлов могла реально загрузиться
@@ -350,6 +403,7 @@ export const useFileStore = create<FileStore>((set, get) => {
       // на сервере, вместо того чтобы список молча остался устаревшим.
       useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')
     } finally {
+      tracker.clear()
       await get().refresh()
       set({ searchIndex: null })
     }
@@ -361,6 +415,7 @@ export const useFileStore = create<FileStore>((set, get) => {
   // uploading any file into it.
   uploadEntries: async (dropped, targetDir) => {
     const base = targetDir ?? get().currentPath
+    const tracker = makeUploadTracker(set, dropped.map((d) => d.file.size))
     try {
       const dirPaths = new Set<string>()
       for (const { relPath } of dropped) {
@@ -380,7 +435,7 @@ export const useFileStore = create<FileStore>((set, get) => {
       await runPool(dropped, 3, ({ relPath, file }) => {
         const dirPart = relPath.slice(0, -1).join('/')
         const targetDir = dirPart ? `${base}/${dirPart}` : base
-        return webdav.uploadFile(targetDir, file)
+        return webdav.uploadFile(targetDir, file, (loaded) => tracker.onProgress(file, loaded)).then(() => tracker.onDone(file))
       })
       useUiStore.getState().pushToast(
         dropped.length === 1 ? `Загружен «${dropped[0].file.name}»` : `Загружено файлов: ${dropped.length}`,
@@ -388,6 +443,7 @@ export const useFileStore = create<FileStore>((set, get) => {
     } catch (e) {
       useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')
     } finally {
+      tracker.clear()
       await get().refresh()
       set({ searchIndex: null })
     }
