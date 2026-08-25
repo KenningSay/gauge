@@ -3,7 +3,7 @@
 // Nothing about the credential is written anywhere on this side either —
 // the worker asks, this just reads webdav.ts's in-memory value and replies.
 
-import { getAuthHeader } from './api/webdav'
+import { getAuthHeader, reportUnauthorized } from './api/webdav'
 
 let registered: Promise<ServiceWorkerRegistration | null> | null = null
 
@@ -28,9 +28,19 @@ registerSW()
 
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
-    if (!event.data || event.data.type !== 'GAUGE_GET_AUTH') return
-    const port = event.ports[0]
-    port?.postMessage({ authHeader: getAuthHeader() })
+    if (!event.data) return
+    if (event.data.type === 'GAUGE_GET_AUTH') {
+      const port = event.ports[0]
+      port?.postMessage({ authHeader: getAuthHeader() })
+      return
+    }
+    // A video/audio element's own request got a 401 through the worker —
+    // without this, a rejected credential there never reached webdav.ts at
+    // all, so the app stayed on the file manager as if nothing had happened
+    // instead of returning to the login screen like every other 401 does.
+    if (event.data.type === 'GAUGE_AUTH_REJECTED' && typeof event.data.authHeader === 'string') {
+      reportUnauthorized(event.data.authHeader)
+    }
   })
 }
 

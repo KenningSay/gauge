@@ -15,6 +15,7 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
   const setViewMode = useFileStore((s) => s.setViewMode)
   const createFolder = useFileStore((s) => s.createFolder)
   const uploadFiles = useFileStore((s) => s.uploadFiles)
+  const uploading = useFileStore((s) => !!s.uploadAbortController)
   const openCommandPalette = useFileStore((s) => s.openCommandPalette)
   const selected = useFileStore((s) => s.selected)
   const entries = useFileStore((s) => s.entries)
@@ -72,7 +73,13 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
       <button className={styles.iconBtn} title="Новая папка" aria-label="Новая папка" onClick={handleNewFolder}>
         <FolderPlus size={18} />
       </button>
-      <button className={styles.iconBtn} title="Загрузить файлы" aria-label="Загрузить файлы" onClick={handleUploadClick}>
+      <button
+        className={styles.iconBtn}
+        title={uploading ? 'Дождитесь завершения текущей загрузки' : 'Загрузить файлы'}
+        aria-label="Загрузить файлы"
+        onClick={handleUploadClick}
+        disabled={uploading}
+      >
         <Upload size={18} />
       </button>
       <input ref={fileInput} type="file" multiple hidden onChange={handleFileChange} />

@@ -70,12 +70,23 @@ self.addEventListener('fetch', (event) => {
 
     const headers = new Headers(req.headers)
     headers.set('Authorization', authHeader)
-    return fetch(new Request(req.url, {
+    const res = await fetch(new Request(req.url, {
       method: 'GET',
       headers,
       mode: 'same-origin',
       credentials: 'omit',
       cache: req.cache,
     }))
+    // A video/audio element failing with 401 previously just failed
+    // silently from the app's point of view — the credential this worker
+    // used got rejected, but nothing told webdav.ts, so the UI stayed on
+    // the file manager as if the session were still fine. Tell the client
+    // which header got rejected; it only actually logs out if that's still
+    // the currently active one (see webdav.ts's reportUnauthorized).
+    if (res.status === 401) {
+      const client = await self.clients.get(event.clientId)
+      client?.postMessage({ type: 'GAUGE_AUTH_REJECTED', authHeader })
+    }
+    return res
   })())
 })
