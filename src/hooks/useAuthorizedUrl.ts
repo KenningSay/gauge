@@ -7,14 +7,10 @@ interface State {
   error: boolean
 }
 
-// <img>/<video>/<audio>/<iframe> src can't carry a custom Authorization
-// header, so displaying WebDAV-protected media means fetching the bytes with
-// a real header (see webdav.ts's fetchBlob comment for why this replaced
-// credential-in-URL) and handing the browser a local blob: URL instead.
-// Fetches once per `path`, revokes the previous object URL on unmount or
-// when `path` changes so blobs don't pile up in memory as the user browses.
-// Pass null to skip fetching entirely (e.g. a viewer kind that doesn't need
-// the raw bytes, like text — that path reads content a different way).
+// Fetches `path` with a real Authorization header and exposes it as a
+// blob: URL for <img>/<video>/<audio>, which can't carry a custom header
+// themselves. Refetches on path change, revoking the previous object URL on
+// unmount/change so blobs don't pile up. Pass null to skip fetching.
 export function useAuthorizedUrl(path: string | null): State {
   const [state, setState] = useState<State>({ url: null, loading: !!path, error: false })
 

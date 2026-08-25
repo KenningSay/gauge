@@ -10,12 +10,8 @@ const ICONS = {
   info: <Info size={18} color="var(--tick)" />,
 }
 
-// Lives in the same notification stack as the toasts (not a separate
-// component/position) because it's the same visual slot conceptually — one
-// persistent card instead of an auto-dismissing one, shown while an upload
-// is in flight. Before this there was no upload feedback at all beyond the
-// eventual success/error toast — for anything bigger than a tiny file there
-// was no way to tell it was actually doing something. Complaint 2026-08-25.
+// Renders in the same stack as the toasts, but as a persistent card instead
+// of an auto-dismissing one, for as long as an upload is in flight.
 function UploadProgressCard() {
   const progress = useFileStore((s) => s.uploadProgress)
   if (!progress) return null

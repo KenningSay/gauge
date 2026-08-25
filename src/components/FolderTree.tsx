@@ -55,8 +55,8 @@ function TreeNode({ path, name, depth }: NodeProps) {
     setDragOver(false)
     const internal = e.dataTransfer.getData('application/x-gauge-paths')
     if (!internal) return
-    const paths: string[] = JSON.parse(internal)
-    const moving = entries.filter((en) => paths.includes(en.path) && en.path !== path)
+    const paths = new Set<string>(JSON.parse(internal))
+    const moving = entries.filter((en) => paths.has(en.path) && en.path !== path)
     if (moving.length) {
       await moveEntries(moving, path)
       setChildren(null)

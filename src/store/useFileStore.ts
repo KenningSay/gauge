@@ -137,15 +137,12 @@ function withCopySuffix(name: string, n: number): string {
   return `${stem}${suffix}${ext}`
 }
 
-// Copies `entry` into `destDir`, retrying under an auto-incremented
-// "(копия N)" name if the target already exists (webdav.copyEntry's
-// Overwrite:F throws AlreadyExistsError instead of silently clobbering —
-// see webdav.ts). Shared by pasteClipboard's copy mode and duplicateEntry.
+// Tries the original name first, then "(копия)", "(копия 2)", ... until one
+// doesn't collide (AlreadyExistsError, see webdav.ts). Shared by
+// pasteClipboard's copy mode and duplicateEntry.
 async function copyWithAutoRename(entry: FileEntry, destDir: string): Promise<void> {
-  for (let n = 1; n <= 50; n++) {
-    const name = n === 1 && destDir !== (entry.path.substring(0, entry.path.lastIndexOf('/')) || '/')
-      ? entry.name // pasting into a DIFFERENT folder — keep the original name unless it collides
-      : withCopySuffix(entry.name, n)
+  for (let n = 0; n <= 50; n++) {
+    const name = n === 0 ? entry.name : withCopySuffix(entry.name, n)
     try {
       await webdav.copyEntry(entry, destDir, name)
       return
@@ -157,14 +154,11 @@ async function copyWithAutoRename(entry: FileEntry, destDir: string): Promise<vo
   throw new Error(`Не удалось подобрать свободное имя для «${entry.name}»`)
 }
 
-// Aggregates per-file XHR upload progress (webdav.ts's uploadFile callback
-// reports CUMULATIVE bytes for that one file) into one combined figure for
-// however many files are uploading concurrently (runPool caps it at 3) —
-// keyed by the File object itself rather than by array index, since
-// runPool's `fn` only ever receives the item, never its position. Pushes to
-// the store are throttled to ~12/sec: XHR can fire progress many times a
-// second per file, and three files doing that concurrently was enough
-// re-renders to visibly jank the row list mid-upload.
+// Aggregates per-file upload progress (each callback reports cumulative
+// bytes for that one file) into one combined figure, keyed by File object
+// since runPool's workers only ever see the item, not its index. Store
+// updates are throttled to ~12/sec — unthrottled XHR progress events from
+// several concurrent uploads were enough re-renders to jank the row list.
 function makeUploadTracker(set: (p: Partial<FileStore>) => void, fileSizes: number[]) {
   const filesTotal = fileSizes.length
   const bytesTotal = fileSizes.reduce((a, b) => a + b, 0)
@@ -193,6 +187,29 @@ function makeUploadTracker(set: (p: Partial<FileStore>) => void, fileSizes: numb
       push(true)
     },
     clear: () => set({ uploadProgress: null }),
+  }
+}
+
+// Shared shape behind uploadFiles/uploadEntries/deleteEntries/moveEntries:
+// run the op, toast success or failure, then always refresh + invalidate the
+// search index regardless of outcome. `extraCleanup` covers the one-off bits
+// each caller still needs in `finally` (clearing an upload tracker, clearing
+// selection after a delete).
+async function runBulkOp(
+  set: (p: Partial<FileStore>) => void,
+  get: () => FileStore,
+  run: () => Promise<string>,
+  errorPrefix: string,
+  extraCleanup?: () => void,
+): Promise<void> {
+  try {
+    useUiStore.getState().pushToast(await run())
+  } catch (e) {
+    useUiStore.getState().pushToast(`${errorPrefix}: ${errMsg(e)}`, 'error')
+  } finally {
+    extraCleanup?.()
+    await get().refresh()
+    set({ searchIndex: null })
   }
 }
 
@@ -375,13 +392,11 @@ export const useFileStore = create<FileStore>((set, get) => {
   buildSearchIndex: async () => {
     set({ indexBuilding: true })
     const all: FileEntry[] = []
-    // One folder at a time (plain recursive await) meant N folders in the
-    // vault cost N sequential PROPFIND round trips before ⌘K search worked
-    // at all — for a real vault (this one included) that's a very visible
-    // wait on first open. Same fix shape as runPool elsewhere: list each
-    // depth level with bounded concurrency, then recurse into the next
-    // level. Pushing into the shared `all` array from concurrent workers is
-    // safe — JS has no true parallelism, `.push()` between awaits can't race.
+    // Lists each depth level with bounded concurrency, then recurses into
+    // the next — N sequential PROPFIND round trips for N folders made ⌘K
+    // search noticeably slow to open on a real vault. Pushing into the
+    // shared `all` array from concurrent workers is safe: JS has no true
+    // parallelism, so `.push()` between awaits can't race.
     const crawlLevel = async (dirs: string[], depth: number) => {
       if (depth > 8 || !dirs.length) return
       const nextDirs: string[] = []
@@ -440,22 +455,12 @@ export const useFileStore = create<FileStore>((set, get) => {
     const list = Array.from(files)
     const base = targetDir ?? get().currentPath
     const tracker = makeUploadTracker(set, list.map((f) => f.size))
-    try {
+    await runBulkOp(set, get, async () => {
       await runPool(list, 3, (f) =>
         webdav.uploadFile(base, f, (loaded) => tracker.onProgress(f, loaded)).then(() => tracker.onDone(f)),
       )
-      useUiStore.getState().pushToast(list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`)
-    } catch (e) {
-      // Даже на частичном провале часть файлов могла реально загрузиться
-      // (runPool теперь всегда доводит все элементы до конца, см. его
-      // комментарий) — refresh() в finally ниже подтянет то, что правда есть
-      // на сервере, вместо того чтобы список молча остался устаревшим.
-      useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')
-    } finally {
-      tracker.clear()
-      await get().refresh()
-      set({ searchIndex: null })
-    }
+      return list.length === 1 ? `Загружен «${list[0].name}»` : `Загружено файлов: ${list.length}`
+    }, 'Ошибка загрузки', () => tracker.clear())
   },
 
   // Handles drag-and-drop of whole folders (see src/utils/dropFolder.ts):
@@ -465,7 +470,7 @@ export const useFileStore = create<FileStore>((set, get) => {
   uploadEntries: async (dropped, targetDir) => {
     const base = targetDir ?? get().currentPath
     const tracker = makeUploadTracker(set, dropped.map((d) => d.file.size))
-    try {
+    await runBulkOp(set, get, async () => {
       const dirPaths = new Set<string>()
       for (const { relPath } of dropped) {
         for (let i = 1; i < relPath.length; i++) {
@@ -486,41 +491,22 @@ export const useFileStore = create<FileStore>((set, get) => {
         const targetDir = dirPart ? `${base}/${dirPart}` : base
         return webdav.uploadFile(targetDir, file, (loaded) => tracker.onProgress(file, loaded)).then(() => tracker.onDone(file))
       })
-      useUiStore.getState().pushToast(
-        dropped.length === 1 ? `Загружен «${dropped[0].file.name}»` : `Загружено файлов: ${dropped.length}`,
-      )
-    } catch (e) {
-      useUiStore.getState().pushToast(`Ошибка загрузки: ${errMsg(e)}`, 'error')
-    } finally {
-      tracker.clear()
-      await get().refresh()
-      set({ searchIndex: null })
-    }
+      return dropped.length === 1 ? `Загружен «${dropped[0].file.name}»` : `Загружено файлов: ${dropped.length}`
+    }, 'Ошибка загрузки', () => tracker.clear())
   },
 
   deleteEntries: async (entries) => {
-    try {
+    await runBulkOp(set, get, async () => {
       await runPool(entries, 3, (entry) => webdav.deleteEntry(entry))
-      useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» удалён` : `Удалено объектов: ${entries.length}`)
-    } catch (e) {
-      useUiStore.getState().pushToast(`Ошибка удаления: ${errMsg(e)}`, 'error')
-    } finally {
-      set({ selected: new Set() })
-      await get().refresh()
-      set({ searchIndex: null })
-    }
+      return entries.length === 1 ? `«${entries[0].name}» удалён` : `Удалено объектов: ${entries.length}`
+    }, 'Ошибка удаления', () => set({ selected: new Set() }))
   },
 
   moveEntries: async (entries, destDir) => {
-    try {
+    await runBulkOp(set, get, async () => {
       await runPool(entries, 3, (entry) => webdav.moveEntry(entry, destDir))
-      useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`)
-    } catch (e) {
-      useUiStore.getState().pushToast(`Ошибка перемещения: ${errMsg(e)}`, 'error')
-    } finally {
-      await get().refresh()
-      set({ searchIndex: null })
-    }
+      return entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`
+    }, 'Ошибка перемещения')
   },
 
   copyToClipboard: (entries) => {
@@ -567,7 +553,7 @@ export const useFileStore = create<FileStore>((set, get) => {
   },
 
   duplicateEntry: async (entry) => {
-    const destDir = entry.path.substring(0, entry.path.lastIndexOf('/')) || '/'
+    const destDir = webdav.parentPath(entry.path)
     try {
       await copyWithAutoRename(entry, destDir)
       useUiStore.getState().pushToast(`«${entry.name}» продублирован`)

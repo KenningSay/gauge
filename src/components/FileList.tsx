@@ -63,16 +63,10 @@ export function FileList() {
   const [dropZoneActive, setDropZoneActive] = useState(false)
   const pressTimer = useRef<number | null>(null)
   const longPressFired = useRef(false)
-  // Committing OR cancelling a rename sets renamingPath to null, which
-  // unmounts the still-focused <input> — and removing a focused element
-  // fires a native blur on it as part of that removal. Without this guard,
-  // that blur's onBlur handler (below) re-runs commitRename a SECOND time:
-  // on Escape this silently un-cancels the rename (renames the file anyway
-  // to whatever was typed); on Enter it double-fires renameEntry with the
-  // now-stale entry/path, and the second call 404s against the already-moved
-  // file, popping a scary "не удалось переименовать" error toast right after
-  // a rename that actually succeeded. Set before the deliberate commit/cancel,
-  // consumed (and reset) by the very next blur. Found + fixed 2026-08-25.
+  // Unmounting the focused rename <input> (on commit or cancel) fires a
+  // native blur, which would otherwise re-run commitRename a second time via
+  // onBlur below. Set right before the deliberate commit/cancel, consumed by
+  // that resulting blur.
   const skipRenameBlur = useRef(false)
 
   // Live updates: WebDAV/nginx has no push mechanism, so this polls the
@@ -171,8 +165,8 @@ export function FileList() {
     setDragOverPath(null)
     const internal = e.dataTransfer.getData('application/x-gauge-paths')
     if (internal) {
-      const paths: string[] = JSON.parse(internal)
-      const moving = entries.filter((en) => paths.includes(en.path) && en.path !== targetDir.path)
+      const paths = new Set<string>(JSON.parse(internal))
+      const moving = entries.filter((en) => paths.has(en.path) && en.path !== targetDir.path)
       if (moving.length) await moveEntries(moving, targetDir.path)
       return
     }
