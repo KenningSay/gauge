@@ -28,8 +28,9 @@ export function LoginScreen() {
 
         <form onSubmit={handleSubmit}>
           <div className={styles.field}>
-            <label className={styles.label}>Логин</label>
+            <label className={styles.label} htmlFor="gauge-login-username">Логин</label>
             <input
+              id="gauge-login-username"
               autoFocus
               className={styles.input}
               value={username}
@@ -38,8 +39,9 @@ export function LoginScreen() {
             />
           </div>
           <div className={styles.field}>
-            <label className={styles.label}>Пароль</label>
+            <label className={styles.label} htmlFor="gauge-login-password">Пароль</label>
             <input
+              id="gauge-login-password"
               type="password"
               className={styles.input}
               value={password}

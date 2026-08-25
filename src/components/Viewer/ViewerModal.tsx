@@ -6,6 +6,7 @@ import { useAuthorizedUrl } from '../../hooks/useAuthorizedUrl'
 import { downloadEntry } from '../../utils/download'
 import { davUrl } from '../../api/webdav'
 import { isSWControlling } from '../../swAuth'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
 import { ImageViewer } from './ImageViewer'
 import { VideoViewer } from './VideoViewer'
 import { AudioViewer } from './AudioViewer'
@@ -39,6 +40,7 @@ export function ViewerModal() {
   const close = useFileStore((s) => s.closeViewer)
   const viewNext = useFileStore((s) => s.viewNext)
   const swControlling = useSWControlling()
+  const trapRef = useFocusTrap<HTMLDivElement>(!!entry)
 
   // kind/path computed null-safe so the hook call below stays unconditional
   // (rules of hooks) ahead of the `if (!entry) return null` below. Text/none
@@ -66,21 +68,21 @@ export function ViewerModal() {
   const isText = kind === 'text'
 
   return (
-    <div className={styles.overlay} onClick={close}>
+    <div ref={trapRef} className={styles.overlay} role="dialog" aria-modal="true" aria-label={entry.name} tabIndex={-1} onClick={close}>
       <div className={styles.header} onClick={(e) => e.stopPropagation()}>
         <span className={styles.title}>{entry.name}</span>
         <div className={styles.spacer} />
-        <button className={styles.iconBtn} onClick={() => downloadEntry(entry.path, entry.name)} title="Скачать">
+        <button className={styles.iconBtn} onClick={() => downloadEntry(entry.path, entry.name)} title="Скачать" aria-label="Скачать">
           <Download size={17} />
         </button>
-        <button className={styles.iconBtn} onClick={close} title="Закрыть (Esc)">
+        <button className={styles.iconBtn} onClick={close} title="Закрыть (Esc)" aria-label="Закрыть">
           <X size={18} />
         </button>
       </div>
 
       <div className={styles.body} onClick={(e) => isText && e.stopPropagation()}>
         {!isText && (
-          <button className={`${styles.navBtn} ${styles.navPrev}`} onClick={(e) => { e.stopPropagation(); viewNext(-1) }}>
+          <button className={`${styles.navBtn} ${styles.navPrev}`} onClick={(e) => { e.stopPropagation(); viewNext(-1) }} aria-label="Предыдущий файл">
             <ChevronLeft size={22} />
           </button>
         )}
@@ -98,7 +100,7 @@ export function ViewerModal() {
         {kind === 'none' && <GenericViewer entry={entry} />}
 
         {!isText && (
-          <button className={`${styles.navBtn} ${styles.navNext}`} onClick={(e) => { e.stopPropagation(); viewNext(1) }}>
+          <button className={`${styles.navBtn} ${styles.navNext}`} onClick={(e) => { e.stopPropagation(); viewNext(1) }} aria-label="Следующий файл">
             <ChevronRight size={22} />
           </button>
         )}

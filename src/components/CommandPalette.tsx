@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, Folder, File as FileIcon, FolderPlus, Home, LayoutGrid, List, Loader2, ClipboardPaste } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import styles from './CommandPalette.module.css'
 
 interface Cmd {
@@ -34,6 +35,7 @@ export function CommandPalette() {
 
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
+  const trapRef = useFocusTrap<HTMLDivElement>(open)
 
   useEffect(() => {
     if (open) { setQuery(''); setActiveIdx(0) }
@@ -107,21 +109,30 @@ export function CommandPalette() {
 
   return (
     <div className={styles.overlay} onClick={close}>
-      <div className={styles.box} onClick={(e) => e.stopPropagation()}>
+      <div ref={trapRef} className={styles.box} role="dialog" aria-modal="true" aria-label="Команды и поиск" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className={styles.inputRow}>
           <Search size={18} color="var(--text-faint)" />
           <input
             autoFocus
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="cmd-listbox"
+            aria-autocomplete="list"
+            aria-activedescendant={commands[activeIdx] ? `cmd-item-${activeIdx}` : undefined}
+            aria-label="Команда или поиск по всему vault'у"
             placeholder="Команда или поиск по всему vault'у…"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setActiveIdx(0) }}
           />
           {indexBuilding && <Loader2 size={16} className="spin" color="var(--text-faint)" />}
         </div>
-        <div className={styles.list}>
+        <div className={styles.list} id="cmd-listbox" role="listbox">
           {commands.map((c, i) => (
             <button
               key={c.id}
+              id={`cmd-item-${i}`}
+              role="option"
+              aria-selected={i === activeIdx}
               className={`${styles.item} ${i === activeIdx ? styles.active : ''}`}
               onMouseEnter={() => setActiveIdx(i)}
               onClick={() => { c.run(); close() }}

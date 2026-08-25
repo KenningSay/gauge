@@ -35,7 +35,7 @@ export function PropertiesPanel() {
       <div className={styles.panel}>
         <div className={styles.header}>
           <div className={styles.title} style={{ marginBottom: 0 }}>Свойства</div>
-          <button className={styles.closeBtn} onClick={toggleProperties}>
+          <button className={styles.closeBtn} onClick={toggleProperties} aria-label="Закрыть свойства">
             <X size={16} />
           </button>
         </div>
