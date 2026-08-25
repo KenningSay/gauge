@@ -46,6 +46,21 @@ export function onUnauthorized(listener: UnauthorizedListener): void {
   unauthorizedListeners.push(listener)
 }
 
+// The one place that actually decides "this 401 means the current session
+// is dead" — used by every code path that can hit a 401 (fetch-based
+// request(), uploadFile()'s XHR, and the service worker via a postMessage,
+// see swAuth.ts). Takes the auth header the FAILED request was actually
+// sent with, not just "clear whatever's current": a slow request queued
+// under an old session can resolve as 401 well after the user has already
+// logged out and back in (or in as someone else) — clearing the CURRENT
+// (new, valid) credential in that case would kick out a session that was
+// never actually rejected by the server at all.
+export function reportUnauthorized(headerUsedForRequest: string): void {
+  if (authHeader !== headerUsedForRequest) return
+  clearCredentials()
+  unauthorizedListeners.forEach((fn) => fn())
+}
+
 export class UnauthorizedError extends Error {}
 
 export class WebDavError extends Error {
@@ -64,9 +79,6 @@ export function parentPath(path: string): string {
   return path.substring(0, path.lastIndexOf('/')) || '/'
 }
 
-// Exported for video/audio playback: a real, credential-free same-origin
-// URL that the service worker (public/gauge-sw.js) authenticates in-flight,
-// as opposed to fetching the whole file into a blob: URL. See ViewerModal.tsx.
 export class InvalidPathError extends Error {}
 
 // A single path segment (a folder/file name) coming straight from user
@@ -85,6 +97,9 @@ export function isValidName(name: string): boolean {
   return true
 }
 
+// Exported for video/audio playback: a real, credential-free same-origin
+// URL that the service worker (public/gauge-sw.js) authenticates in-flight,
+// as opposed to fetching the whole file into a blob: URL. See ViewerModal.tsx.
 export function davUrl(path: string): string {
   const clean = path.replace(/^\/+/, '')
   const segments = clean.split('/')
@@ -116,20 +131,17 @@ export async function fetchBlob(path: string): Promise<Blob> {
 }
 
 async function request(path: string, init: RequestInit & { headers?: Record<string, string> } = {}) {
-  if (!authHeader) throw new UnauthorizedError('Not authenticated')
+  const headerUsed = authHeader
+  if (!headerUsed) throw new UnauthorizedError('Not authenticated')
   const res = await fetch(davUrl(path), {
     ...init,
     headers: {
-      Authorization: authHeader,
+      Authorization: headerUsed,
       ...(init.headers ?? {}),
     },
   })
   if (res.status === 401) {
-    clearCredentials()
-    // Only for a 401 arriving mid-session — see onUnauthorized's own
-    // comment for why an explicit logout or a failed login must not also
-    // go through this path.
-    unauthorizedListeners.forEach((fn) => fn())
+    reportUnauthorized(headerUsed)
     throw new UnauthorizedError(`WebDAV ${init.method ?? 'GET'} ${path} -> 401`)
   }
   // 404 used to be tolerated here for every method — meant a MOVE off a
@@ -256,7 +268,7 @@ export function uploadFile(
     }
     xhr.onload = () => {
       if (xhr.status === 401) {
-        clearCredentials()
+        reportUnauthorized(auth)
         reject(new UnauthorizedError(`WebDAV PUT ${target} -> 401`))
         return
       }
@@ -274,15 +286,31 @@ export function uploadFile(
   })
 }
 
+export class NotADirectoryError extends Error {}
+
 export async function mkdir(dirPath: string, name: string): Promise<void> {
+  const target = joinPath(dirPath, name)
   try {
-    await request(joinPath(dirPath, name) + '/', { method: 'MKCOL' })
+    await request(target + '/', { method: 'MKCOL' })
   } catch (e) {
+    if (!(e instanceof WebDavError) || e.status !== 405) throw e
     // 405 = MKCOL on a path that already has something there (nginx dav
     // module's way of saying "exists") — fine when creating the same parent
-    // folder for several dropped files/nested entries.
-    if (e instanceof WebDavError && e.status === 405) return
-    throw e
+    // folder for several dropped files/nested entries, since that
+    // something is the very directory we were about to create. But 405
+    // fires the exact same way if a plain FILE already occupies that name,
+    // which used to get silently reported as a successful folder creation
+    // — the user would see "papka created" and then every upload into it
+    // fail with a much more confusing error. A Depth:0 PROPFIND settles
+    // which case this actually is.
+    const res = await request(target, { method: 'PROPFIND', headers: { Depth: '0' } })
+    const xml = await res.text()
+    const doc = new DOMParser().parseFromString(xml, 'text/xml')
+    const isDir = doc.getElementsByTagNameNS('DAV:', 'collection').length > 0
+      || doc.getElementsByTagName('collection').length > 0
+    if (!isDir) {
+      throw new NotADirectoryError(`«${name}» уже существует как файл, не папка`)
+    }
   }
 }
 

@@ -5,7 +5,7 @@ import type { FileEntry } from '../api/types'
 
 vi.mock('../api/webdav', async () => {
   const actual = await vi.importActual<typeof webdav>('../api/webdav')
-  return { ...actual, copyEntry: vi.fn(), moveEntry: vi.fn(), list: vi.fn().mockResolvedValue([]) }
+  return { ...actual, copyEntry: vi.fn(), moveEntry: vi.fn(), list: vi.fn().mockResolvedValue([]), uploadFile: vi.fn() }
 })
 
 const entry: FileEntry = { name: 'photo.jpg', path: '/Vault/photo.jpg', isDir: false, size: 0, modified: '', contentType: '' }
@@ -78,5 +78,58 @@ describe('pasteClipboard (cut mode, partial failure)', () => {
     vi.mocked(webdav.moveEntry).mockResolvedValue(undefined)
     await useFileStore.getState().pasteClipboard()
     expect(useFileStore.getState().clipboard).toBeNull()
+  })
+})
+
+describe('pasteClipboard (copy mode, partial failure)', () => {
+  const a: FileEntry = { name: 'a.txt', path: '/Vault/a.txt', isDir: false, size: 0, modified: '', contentType: '' }
+  const b: FileEntry = { name: 'b.txt', path: '/Vault/b.txt', isDir: false, size: 0, modified: '', contentType: '' }
+
+  beforeEach(() => {
+    vi.mocked(webdav.copyEntry).mockReset()
+    useFileStore.setState({ currentPath: '/Dest', clipboard: { entries: [a, b], mode: 'copy' } })
+  })
+
+  it('prunes the clipboard to only the entries that failed, instead of leaving the full list to duplicate on retry', async () => {
+    vi.mocked(webdav.copyEntry).mockImplementation(async (entry) => {
+      if (entry.path === b.path) throw new webdav.WebDavError('boom', 500)
+    })
+    await useFileStore.getState().pasteClipboard()
+    const clip = useFileStore.getState().clipboard
+    expect(clip?.mode).toBe('copy')
+    expect(clip?.entries.map((e) => e.path)).toEqual([b.path])
+  })
+
+  it('leaves the full clipboard alone (repeatable paste) on full success', async () => {
+    vi.mocked(webdav.copyEntry).mockResolvedValue(undefined)
+    await useFileStore.getState().pasteClipboard()
+    const clip = useFileStore.getState().clipboard
+    expect(clip?.entries.map((e) => e.path)).toEqual([a.path, b.path])
+  })
+})
+
+describe('uploadFiles (overlapping batches)', () => {
+  beforeEach(() => {
+    vi.mocked(webdav.uploadFile).mockReset()
+    useFileStore.setState({ currentPath: '/Dest', uploadAbortController: null, uploadProgress: null })
+  })
+
+  it('refuses a second batch while the first is still running, without touching its controller', async () => {
+    let resolveFirst!: () => void
+    vi.mocked(webdav.uploadFile).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveFirst = resolve }),
+    )
+    const first = useFileStore.getState().uploadFiles([new File(['x'], 'first.txt')])
+    await Promise.resolve() // let the first batch's synchronous setup (set uploadAbortController) run
+    const controllerDuringFirst = useFileStore.getState().uploadAbortController
+    expect(controllerDuringFirst).not.toBeNull()
+
+    await useFileStore.getState().uploadFiles([new File(['y'], 'second.txt')])
+    expect(useFileStore.getState().uploadAbortController).toBe(controllerDuringFirst)
+    expect(webdav.uploadFile).toHaveBeenCalledTimes(1) // only the first batch's file was ever sent
+
+    resolveFirst()
+    await first
+    expect(useFileStore.getState().uploadAbortController).toBeNull()
   })
 })

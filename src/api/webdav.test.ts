@@ -14,9 +14,11 @@ import {
   uploadFile,
   UploadCancelledError,
   mkdir,
+  NotADirectoryError,
   WebDavError,
   renameEntry,
   deleteFile,
+  reportUnauthorized,
 } from './webdav'
 import type { FileEntry } from './types'
 
@@ -198,15 +200,38 @@ describe('request() error handling', () => {
     await expect(deleteFile('/Test/x.txt')).rejects.toBeInstanceOf(UnauthorizedError)
     expect(listener).toHaveBeenCalledTimes(1)
   })
+
+  it('a stale request\'s 401 does not clear credentials or notify if a newer login already replaced them', async () => {
+    // Simulates a slow request sent under an old session resolving as 401
+    // only after the user has already logged back in with a different one.
+    setCredentials('newuser', 'newpw')
+    const listener = vi.fn()
+    onUnauthorized(listener)
+    reportUnauthorized('Basic totally-different-stale-header')
+    expect(getAuthHeader()).not.toBeNull() // current (new) session untouched
+    expect(listener).not.toHaveBeenCalled()
+  })
 })
 
 describe('mkdir', () => {
   beforeEach(() => setCredentials('alex', 'pw'))
   afterEach(() => clearCredentials())
 
-  it('tolerates a 405 (already exists) as success', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => mockResponse({ status: 405, ok: false })))
+  it('tolerates a 405 (already exists) as success when the existing resource is a directory', async () => {
+    const dirPropfind = '<D:multistatus xmlns:D="DAV:"><D:response><D:href>/dav/Test/existing/</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat></D:response></D:multistatus>'
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(mockResponse({ status: 405, ok: false })) // MKCOL
+      .mockResolvedValueOnce(mockResponse({ status: 207, body: dirPropfind }))) // follow-up PROPFIND
     await expect(mkdir('/Test', 'existing')).resolves.toBeUndefined()
+    vi.unstubAllGlobals()
+  })
+
+  it('throws NotADirectoryError when a 405 turns out to be an existing FILE, not a directory', async () => {
+    const filePropfind = '<D:multistatus xmlns:D="DAV:"><D:response><D:href>/dav/Test/existing</D:href><D:propstat><D:prop><D:resourcetype/></D:prop></D:propstat></D:response></D:multistatus>'
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(mockResponse({ status: 405, ok: false }))
+      .mockResolvedValueOnce(mockResponse({ status: 207, body: filePropfind })))
+    await expect(mkdir('/Test', 'existing')).rejects.toBeInstanceOf(NotADirectoryError)
     vi.unstubAllGlobals()
   })
 
@@ -254,5 +279,30 @@ describe('uploadFile', () => {
     clearCredentials()
     const file = new File(['x'], 'a.txt')
     await expect(uploadFile('/Test', file)).rejects.toBeInstanceOf(UnauthorizedError)
+  })
+
+  it('notifies onUnauthorized on a 401, same as the fetch-based path', async () => {
+    class MockXHR {
+      status = 401
+      statusText = 'Unauthorized'
+      upload: { onprogress: (() => void) | null } = { onprogress: null }
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      onabort: (() => void) | null = null
+      open() {}
+      setRequestHeader() {}
+      send() { this.onload?.() }
+      abort() { this.onabort?.() }
+    }
+    vi.stubGlobal('XMLHttpRequest', MockXHR)
+    setCredentials('alex', 'pw')
+    const listener = vi.fn()
+    onUnauthorized(listener)
+    const file = new File(['x'], 'a.txt')
+    await expect(uploadFile('/Test', file)).rejects.toBeInstanceOf(UnauthorizedError)
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(getAuthHeader()).toBeNull()
+    clearCredentials()
+    vi.unstubAllGlobals()
   })
 })

@@ -471,6 +471,15 @@ export const useFileStore = create<FileStore>((set, get) => {
   },
 
   uploadFiles: async (files, targetDir) => {
+    // The store only tracks one batch's controller/progress at a time — a
+    // second concurrent call would silently overwrite the first's
+    // controller (making it uncancellable) and, worse, whichever batch's
+    // runBulkOp finishes first would clear uploadAbortController/progress
+    // out from under the other, still-running one.
+    if (get().uploadAbortController) {
+      useUiStore.getState().pushToast('Дождитесь завершения текущей загрузки', 'info')
+      return
+    }
     const list = Array.from(files)
     const base = targetDir ?? get().currentPath
     const tracker = makeUploadTracker(set, list.map((f) => f.size))
@@ -491,6 +500,10 @@ export const useFileStore = create<FileStore>((set, get) => {
   // create each distinct ancestor directory (shallowest first) before
   // uploading any file into it.
   uploadEntries: async (dropped, targetDir) => {
+    if (get().uploadAbortController) {
+      useUiStore.getState().pushToast('Дождитесь завершения текущей загрузки', 'info')
+      return
+    }
     const base = targetDir ?? get().currentPath
     const tracker = makeUploadTracker(set, dropped.map((d) => d.file.size))
     const controller = new AbortController()
@@ -568,6 +581,16 @@ export const useFileStore = create<FileStore>((set, get) => {
     try {
       if (mode === 'copy') {
         const result = await runPool(entries, 3, (entry) => copyWithAutoRename(entry, destDir))
+        // A full success leaves the clipboard untouched — repeatable paste
+        // (paste again for another copy) is the whole point of copy mode.
+        // But on a PARTIAL failure, keeping the full list meant retrying
+        // re-copied the entries that had already succeeded too — auto-
+        // rename doesn't fail on those, so it silently created unwanted
+        // "(копия)" duplicates of files the user never asked to duplicate.
+        if (result.failed.length > 0) {
+          const failedEntries = result.failed.map((f) => f.item)
+          set({ clipboard: { entries: failedEntries, mode: 'copy' } })
+        }
         throwIfAnyFailed(result, entries.length)
         useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» вставлен` : `Вставлено объектов: ${entries.length}`)
       } else {
