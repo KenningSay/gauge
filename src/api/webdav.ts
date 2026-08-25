@@ -150,11 +150,43 @@ export async function putTextContent(path: string, content: string): Promise<voi
   })
 }
 
-export async function uploadFile(dirPath: string, file: File): Promise<void> {
+// XHR, not fetch(): `fetch()` has no upload-progress event at all (only
+// download/response progress via a readable response body) — the only
+// standard browser API that reports PUT/POST body upload progress is
+// `XMLHttpRequest.upload.onprogress`. Everything else in this file can stay
+// on fetch/request() because nothing else uploads a body large enough for
+// progress to matter. Duplicates request()'s 401/error handling locally
+// since that helper is fetch-based and can't be reused here.
+export function uploadFile(
+  dirPath: string,
+  file: File,
+  onProgress?: (loadedBytes: number) => void,
+): Promise<void> {
+  if (!authHeader) return Promise.reject(new UnauthorizedError('Not authenticated'))
   const target = joinPath(dirPath, file.name)
-  await request(target, {
-    method: 'PUT',
-    body: file,
+  const auth = authHeader
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', davUrl(target))
+    xhr.setRequestHeader('Authorization', auth)
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded)
+    }
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        clearCredentials()
+        reject(new UnauthorizedError(`WebDAV PUT ${target} -> 401`))
+        return
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(file.size)
+        resolve()
+        return
+      }
+      reject(new WebDavError(`WebDAV PUT ${target} -> ${xhr.status} ${xhr.statusText}`, xhr.status))
+    }
+    xhr.onerror = () => reject(new WebDavError(`WebDAV PUT ${target} -> network error`, 0))
+    xhr.send(file)
   })
 }
 
