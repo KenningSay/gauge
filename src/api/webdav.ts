@@ -152,6 +152,8 @@ export async function putTextContent(path: string, content: string): Promise<voi
   })
 }
 
+export class UploadCancelledError extends Error {}
+
 // XHR, not fetch(): fetch() has no upload-progress event, only
 // XMLHttpRequest.upload.onprogress does. Duplicates request()'s 401/error
 // handling since that helper is fetch-based.
@@ -159,8 +161,10 @@ export function uploadFile(
   dirPath: string,
   file: File,
   onProgress?: (loadedBytes: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (!authHeader) return Promise.reject(new UnauthorizedError('Not authenticated'))
+  if (signal?.aborted) return Promise.reject(new UploadCancelledError())
   const target = joinPath(dirPath, file.name)
   const auth = authHeader
   return new Promise((resolve, reject) => {
@@ -184,6 +188,8 @@ export function uploadFile(
       reject(new WebDavError(`WebDAV PUT ${target} -> ${xhr.status} ${xhr.statusText}`, xhr.status))
     }
     xhr.onerror = () => reject(new WebDavError(`WebDAV PUT ${target} -> network error`, 0))
+    xhr.onabort = () => reject(new UploadCancelledError())
+    signal?.addEventListener('abort', () => xhr.abort())
     xhr.send(file)
   })
 }

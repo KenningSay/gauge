@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, Info, UploadCloud } from 'lucide-react'
+import { CheckCircle2, XCircle, Info, UploadCloud, X } from 'lucide-react'
 import { useUiStore } from '../store/useUiStore'
 import { useFileStore } from '../store/useFileStore'
 import { formatSize } from '../utils/format'
@@ -14,6 +14,7 @@ const ICONS = {
 // of an auto-dismissing one, for as long as an upload is in flight.
 function UploadProgressCard() {
   const progress = useFileStore((s) => s.uploadProgress)
+  const cancelUpload = useFileStore((s) => s.cancelUpload)
   if (!progress) return null
   const { filesTotal, filesDone, bytesTotal, bytesLoaded } = progress
   const pct = bytesTotal > 0
@@ -31,6 +32,9 @@ function UploadProgressCard() {
           <div className={styles.progressFill} style={{ width: `${pct}%` }} />
         </div>
       </div>
+      <button className={styles.progressCancel} onClick={cancelUpload} title="Отменить загрузку" aria-label="Отменить загрузку">
+        <X size={16} />
+      </button>
     </div>
   )
 }
