@@ -1,9 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { X, ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react'
 import { useFileStore } from '../../store/useFileStore'
 import { detectViewerKind } from '../../api/types'
 import { useAuthorizedUrl } from '../../hooks/useAuthorizedUrl'
 import { downloadEntry } from '../../utils/download'
+import { davUrl } from '../../api/webdav'
+import { isSWControlling } from '../../swAuth'
 import { ImageViewer } from './ImageViewer'
 import { VideoViewer } from './VideoViewer'
 import { AudioViewer } from './AudioViewer'
@@ -12,19 +14,41 @@ import { GenericViewer } from './GenericViewer'
 import styles from './ViewerModal.module.css'
 
 const BLOB_KINDS = new Set(['image', 'video', 'audio', 'pdf'])
+// Video/audio play through the service worker's authenticated passthrough
+// instead (see public/gauge-sw.js) whenever it's actually controlling the
+// page, for real HTTP Range streaming/seeking instead of a whole-file blob.
+const STREAMED_KINDS = new Set(['video', 'audio'])
+
+// Tracks SW control reactively: false on the tab's very first load ever
+// (the worker doesn't control the page that registered it until the next
+// navigation), flips to true via the 'controllerchange' event once it does,
+// with no reload required.
+function useSWControlling(): boolean {
+  const [controlling, setControlling] = useState(isSWControlling)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const handler = () => setControlling(isSWControlling())
+    navigator.serviceWorker.addEventListener('controllerchange', handler)
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', handler)
+  }, [])
+  return controlling
+}
 
 export function ViewerModal() {
   const entry = useFileStore((s) => s.viewerEntry)
   const close = useFileStore((s) => s.closeViewer)
   const viewNext = useFileStore((s) => s.viewNext)
+  const swControlling = useSWControlling()
 
   // kind/path computed null-safe so the hook call below stays unconditional
   // (rules of hooks) ahead of the `if (!entry) return null` below. Text/none
   // kinds fetch their own content elsewhere, so pass null to skip the blob
   // fetch for those.
   const kind = entry ? detectViewerKind(entry) : null
-  const needsBlob = kind !== null && BLOB_KINDS.has(kind)
-  const { url: src, loading } = useAuthorizedUrl(needsBlob && entry ? entry.path : null)
+  const streamed = kind !== null && STREAMED_KINDS.has(kind) && swControlling
+  const needsBlob = kind !== null && BLOB_KINDS.has(kind) && !streamed
+  const { url: blobSrc, loading } = useAuthorizedUrl(needsBlob && entry ? entry.path : null)
+  const src = streamed && entry ? davUrl(entry.path) : blobSrc
 
   useEffect(() => {
     if (!entry) return
