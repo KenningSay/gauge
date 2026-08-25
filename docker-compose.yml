@@ -1,0 +1,11 @@
+services:
+  gauge:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      # Full target URL of your WebDAV server, including its real path (see
+      # nginx.conf.template for why). Basic Auth creds are entered in
+      # Gauge's own login screen at runtime, never here.
+      WEBDAV_TARGET: "https://your-webdav-server.example.com/dav/"
+    restart: unless-stopped

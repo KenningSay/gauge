@@ -41,6 +41,10 @@ function MainApp() {
   const activateCursor = useFileStore((s) => s.activateCursor)
   const goUp = useFileStore((s) => s.goUp)
   const selectAll = useFileStore((s) => s.selectAll)
+  const copyToClipboard = useFileStore((s) => s.copyToClipboard)
+  const cutToClipboard = useFileStore((s) => s.cutToClipboard)
+  const pasteClipboard = useFileStore((s) => s.pasteClipboard)
+  const duplicateEntry = useFileStore((s) => s.duplicateEntry)
   const confirmDialog = useUiStore((s) => s.confirmDialog)
   const toggleProperties = useUiStore((s) => s.toggleProperties)
 
@@ -83,6 +87,27 @@ function MainApp() {
       if (typing) return
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); selectAll(); return }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selected.size > 0) {
+        e.preventDefault()
+        copyToClipboard(entries.filter((en) => selected.has(en.path)))
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x' && selected.size > 0) {
+        e.preventDefault()
+        cutToClipboard(entries.filter((en) => selected.has(en.path)))
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault()
+        pasteClipboard()
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && selected.size === 1) {
+        e.preventDefault()
+        const target = entries.find((en) => selected.has(en.path))
+        if (target) duplicateEntry(target)
+        return
+      }
       if (e.key === 'ArrowDown') { e.preventDefault(); moveCursor(1) }
       if (e.key === 'ArrowUp') { e.preventDefault(); moveCursor(-1) }
       if (e.key === 'Enter') { e.preventDefault(); activateCursor() }
@@ -95,6 +120,7 @@ function MainApp() {
     commandPaletteOpen, openCommandPalette, closeCommandPalette, viewerEntry, renamingPath,
     selected, entries, deleteEntries, startRename, clearSelection,
     moveCursor, activateCursor, goUp, confirmDialog, toggleProperties, selectAll,
+    copyToClipboard, cutToClipboard, pasteClipboard, duplicateEntry,
   ])
 
   return (

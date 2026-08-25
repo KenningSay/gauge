@@ -1,6 +1,6 @@
 import { File as FileIcon, Download } from 'lucide-react'
 import type { FileEntry } from '../../api/types'
-import { authorizedFetchUrl } from '../../api/webdav'
+import { downloadEntry } from '../../utils/download'
 import { formatSize } from '../../utils/format'
 import styles from './MediaViewer.module.css'
 
@@ -14,17 +14,16 @@ export function GenericViewer({ entry }: { entry: FileEntry }) {
         <div className="mono" style={{ fontSize: 16 }}>{entry.name}</div>
         <div style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 4 }}>{formatSize(entry.size, false)}</div>
       </div>
-      <a
-        href={authorizedFetchUrl(entry.path)}
-        download={entry.name}
+      <button
+        onClick={() => downloadEntry(entry.path, entry.name)}
         style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px',
           borderRadius: 999, border: '1px solid rgba(255,255,255,0.14)',
-          background: 'rgba(255,255,255,0.08)', color: '#e8eae6', textDecoration: 'none',
+          background: 'rgba(255,255,255,0.08)', color: '#e8eae6', cursor: 'pointer',
         }}
       >
         <Download size={16} /> Скачать файл
-      </a>
+      </button>
     </div>
   )
 }

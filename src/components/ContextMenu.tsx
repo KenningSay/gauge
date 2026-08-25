@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Eye, Pencil, Download, Trash2, FolderOpen } from 'lucide-react'
+import { Eye, Pencil, Download, Trash2, FolderOpen, Copy, Scissors, CopyPlus } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
-import { authorizedFetchUrl } from '../api/webdav'
+import { downloadEntry } from '../utils/download'
 import styles from './ContextMenu.module.css'
 
 export function ContextMenu() {
@@ -12,6 +12,9 @@ export function ContextMenu() {
   const navigate = useFileStore((s) => s.navigate)
   const startRename = useFileStore((s) => s.startRename)
   const deleteEntries = useFileStore((s) => s.deleteEntries)
+  const copyToClipboard = useFileStore((s) => s.copyToClipboard)
+  const cutToClipboard = useFileStore((s) => s.cutToClipboard)
+  const duplicateEntry = useFileStore((s) => s.duplicateEntry)
   const confirmDialog = useUiStore((s) => s.confirmDialog)
   const ref = useRef<HTMLDivElement>(null)
   // Menu was positioned straight from the click/kebab coordinates with no
@@ -62,16 +65,19 @@ export function ContextMenu() {
       <button className={styles.item} onClick={() => { startRename(entry.path); closeContextMenu() }}>
         <Pencil size={16} /> Переименовать
       </button>
+      <button className={styles.item} onClick={() => { copyToClipboard([entry]); closeContextMenu() }}>
+        <Copy size={16} /> Копировать
+      </button>
+      <button className={styles.item} onClick={() => { cutToClipboard([entry]); closeContextMenu() }}>
+        <Scissors size={16} /> Вырезать
+      </button>
+      <button className={styles.item} onClick={() => { duplicateEntry(entry); closeContextMenu() }}>
+        <CopyPlus size={16} /> Дублировать
+      </button>
       {!entry.isDir && (
-        <a
-          className={styles.item}
-          style={{ textDecoration: 'none' }}
-          href={authorizedFetchUrl(entry.path)}
-          download={entry.name}
-          onClick={() => closeContextMenu()}
-        >
+        <button className={styles.item} onClick={() => { downloadEntry(entry.path, entry.name); closeContextMenu() }}>
           <Download size={16} /> Скачать
-        </a>
+        </button>
       )}
       <div className={styles.sep} />
       <button

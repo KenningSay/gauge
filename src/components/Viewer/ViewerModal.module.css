@@ -84,6 +84,14 @@
   right: 16px;
 }
 
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e8eae6;
+  opacity: 0.7;
+}
+
 @media (max-width: 640px) {
   .header {
     padding: 10px 12px;

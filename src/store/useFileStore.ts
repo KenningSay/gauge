@@ -21,6 +21,15 @@ export interface UploadProgress {
   bytesLoaded: number
 }
 
+// An in-app clipboard, not the real OS one — there's no way to put "a
+// WebDAV file" on the system clipboard, so copy/cut/paste here means
+// remembering a set of entries and a mode, then acting on them against
+// whatever folder is open when paste happens.
+export interface ClipboardState {
+  entries: FileEntry[]
+  mode: 'copy' | 'cut'
+}
+
 interface FileStore {
   currentPath: string
   entries: FileEntry[]
@@ -44,6 +53,8 @@ interface FileStore {
   indexBuilding: boolean
 
   uploadProgress: UploadProgress | null
+
+  clipboard: ClipboardState | null
 
   navigate: (path: string) => Promise<void>
   refresh: () => Promise<void>
@@ -82,6 +93,11 @@ interface FileStore {
   uploadEntries: (dropped: DroppedFile[], targetDir?: string) => Promise<void>
   deleteEntries: (entries: FileEntry[]) => Promise<void>
   moveEntries: (entries: FileEntry[], destDir: string) => Promise<void>
+
+  copyToClipboard: (entries: FileEntry[]) => void
+  cutToClipboard: (entries: FileEntry[]) => void
+  pasteClipboard: () => Promise<void>
+  duplicateEntry: (entry: FileEntry) => Promise<void>
 }
 
 function typeKey(entry: FileEntry): string {
@@ -108,6 +124,37 @@ function sortEntries(entries: FileEntry[], key: SortKey, dir: 1 | -1): FileEntry
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
+}
+
+// "file.txt" + 1 -> "file (копия).txt", +2 -> "file (копия 2).txt", ... —
+// same convention as every desktop file manager's paste-into-same-folder.
+function withCopySuffix(name: string, n: number): string {
+  const dot = name.lastIndexOf('.')
+  const hasExt = dot > 0 && dot < name.length - 1
+  const stem = hasExt ? name.slice(0, dot) : name
+  const ext = hasExt ? name.slice(dot) : ''
+  const suffix = n === 1 ? ' (копия)' : ` (копия ${n})`
+  return `${stem}${suffix}${ext}`
+}
+
+// Copies `entry` into `destDir`, retrying under an auto-incremented
+// "(копия N)" name if the target already exists (webdav.copyEntry's
+// Overwrite:F throws AlreadyExistsError instead of silently clobbering —
+// see webdav.ts). Shared by pasteClipboard's copy mode and duplicateEntry.
+async function copyWithAutoRename(entry: FileEntry, destDir: string): Promise<void> {
+  for (let n = 1; n <= 50; n++) {
+    const name = n === 1 && destDir !== (entry.path.substring(0, entry.path.lastIndexOf('/')) || '/')
+      ? entry.name // pasting into a DIFFERENT folder — keep the original name unless it collides
+      : withCopySuffix(entry.name, n)
+    try {
+      await webdav.copyEntry(entry, destDir, name)
+      return
+    } catch (e) {
+      if (e instanceof webdav.AlreadyExistsError) continue
+      throw e
+    }
+  }
+  throw new Error(`Не удалось подобрать свободное имя для «${entry.name}»`)
 }
 
 // Aggregates per-file XHR upload progress (webdav.ts's uploadFile callback
@@ -189,6 +236,8 @@ export const useFileStore = create<FileStore>((set, get) => {
   indexBuilding: false,
 
   uploadProgress: null,
+
+  clipboard: null,
 
   navigate: async (path) => {
     const gen = ++requestGen
@@ -468,6 +517,62 @@ export const useFileStore = create<FileStore>((set, get) => {
       useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`)
     } catch (e) {
       useUiStore.getState().pushToast(`Ошибка перемещения: ${errMsg(e)}`, 'error')
+    } finally {
+      await get().refresh()
+      set({ searchIndex: null })
+    }
+  },
+
+  copyToClipboard: (entries) => {
+    if (!entries.length) return
+    set({ clipboard: { entries, mode: 'copy' } })
+    useUiStore.getState().pushToast(
+      entries.length === 1 ? `«${entries[0].name}» скопирован — Ctrl+V, чтобы вставить` : `Скопировано объектов: ${entries.length} — Ctrl+V, чтобы вставить`,
+      'info',
+    )
+  },
+
+  cutToClipboard: (entries) => {
+    if (!entries.length) return
+    set({ clipboard: { entries, mode: 'cut' } })
+    useUiStore.getState().pushToast(
+      entries.length === 1 ? `«${entries[0].name}» вырезан — Ctrl+V, чтобы переместить` : `Вырезано объектов: ${entries.length} — Ctrl+V, чтобы переместить`,
+      'info',
+    )
+  },
+
+  pasteClipboard: async () => {
+    const clip = get().clipboard
+    if (!clip || !clip.entries.length) return
+    const destDir = get().currentPath
+    const { entries, mode } = clip
+    try {
+      if (mode === 'copy') {
+        await runPool(entries, 3, (entry) => copyWithAutoRename(entry, destDir))
+        useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» вставлен` : `Вставлено объектов: ${entries.length}`)
+      } else {
+        await runPool(entries, 3, (entry) => webdav.moveEntry(entry, destDir))
+        useUiStore.getState().pushToast(entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`)
+        set({ clipboard: null }) // cut is one-shot — a second Ctrl+V shouldn't try to move the same (now-gone) entries again
+      }
+    } catch (e) {
+      const msg = e instanceof webdav.AlreadyExistsError
+        ? 'Объект с таким именем уже есть в этой папке'
+        : errMsg(e)
+      useUiStore.getState().pushToast(`Не удалось вставить: ${msg}`, 'error')
+    } finally {
+      await get().refresh()
+      set({ searchIndex: null })
+    }
+  },
+
+  duplicateEntry: async (entry) => {
+    const destDir = entry.path.substring(0, entry.path.lastIndexOf('/')) || '/'
+    try {
+      await copyWithAutoRename(entry, destDir)
+      useUiStore.getState().pushToast(`«${entry.name}» продублирован`)
+    } catch (e) {
+      useUiStore.getState().pushToast(`Не удалось продублировать: ${errMsg(e)}`, 'error')
     } finally {
       await get().refresh()
       set({ searchIndex: null })
