@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as webdav from '../api/webdav'
-import { withCopySuffix, copyWithAutoRename } from './useFileStore'
+import { withCopySuffix, copyWithAutoRename, useFileStore } from './useFileStore'
 import type { FileEntry } from '../api/types'
 
 vi.mock('../api/webdav', async () => {
   const actual = await vi.importActual<typeof webdav>('../api/webdav')
-  return { ...actual, copyEntry: vi.fn() }
+  return { ...actual, copyEntry: vi.fn(), moveEntry: vi.fn(), list: vi.fn().mockResolvedValue([]) }
 })
 
 const entry: FileEntry = { name: 'photo.jpg', path: '/Vault/photo.jpg', isDir: false, size: 0, modified: '', contentType: '' }
@@ -52,5 +52,31 @@ describe('copyWithAutoRename', () => {
     vi.mocked(webdav.copyEntry).mockRejectedValueOnce(new webdav.WebDavError('boom', 500))
     await expect(copyWithAutoRename(entry, '/Vault')).rejects.toBeInstanceOf(webdav.WebDavError)
     expect(webdav.copyEntry).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('pasteClipboard (cut mode, partial failure)', () => {
+  const a: FileEntry = { name: 'a.txt', path: '/Vault/a.txt', isDir: false, size: 0, modified: '', contentType: '' }
+  const b: FileEntry = { name: 'b.txt', path: '/Vault/b.txt', isDir: false, size: 0, modified: '', contentType: '' }
+
+  beforeEach(() => {
+    vi.mocked(webdav.moveEntry).mockReset()
+    useFileStore.setState({ currentPath: '/Dest', clipboard: { entries: [a, b], mode: 'cut' } })
+  })
+
+  it('keeps only the entries that failed to move, instead of clearing the whole clipboard', async () => {
+    vi.mocked(webdav.moveEntry).mockImplementation(async (entry) => {
+      if (entry.path === b.path) throw new webdav.WebDavError('boom', 500)
+    })
+    await useFileStore.getState().pasteClipboard()
+    const clip = useFileStore.getState().clipboard
+    expect(clip?.mode).toBe('cut')
+    expect(clip?.entries.map((e) => e.path)).toEqual([b.path])
+  })
+
+  it('clears the clipboard entirely once everything has moved', async () => {
+    vi.mocked(webdav.moveEntry).mockResolvedValue(undefined)
+    await useFileStore.getState().pasteClipboard()
+    expect(useFileStore.getState().clipboard).toBeNull()
   })
 })

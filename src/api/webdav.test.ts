@@ -5,13 +5,18 @@ import {
   list,
   setCredentials,
   clearCredentials,
+  getAuthHeader,
+  onUnauthorized,
   UnauthorizedError,
   AlreadyExistsError,
+  InvalidPathError,
+  isValidName,
   uploadFile,
   UploadCancelledError,
   mkdir,
   WebDavError,
   renameEntry,
+  deleteFile,
 } from './webdav'
 import type { FileEntry } from './types'
 
@@ -67,6 +72,30 @@ describe('davUrl', () => {
   it('strips leading slashes before prefixing the dav root', () => {
     expect(davUrl('///a/b')).toBe('/dav/a/b')
   })
+
+  it('rejects a "." or ".." segment anywhere in the path', () => {
+    expect(() => davUrl('/Vault/../../etc/passwd')).toThrow(InvalidPathError)
+    expect(() => davUrl('/Vault/./x')).toThrow(InvalidPathError)
+    expect(() => davUrl('..')).toThrow(InvalidPathError)
+  })
+})
+
+describe('isValidName', () => {
+  it('accepts an ordinary name, including Cyrillic', () => {
+    expect(isValidName('Фото 2026.jpg')).toBe(true)
+  })
+  it('rejects "." and ".."', () => {
+    expect(isValidName('.')).toBe(false)
+    expect(isValidName('..')).toBe(false)
+  })
+  it('rejects a name containing a path separator', () => {
+    expect(isValidName('a/b')).toBe(false)
+    expect(isValidName('a\\b')).toBe(false)
+  })
+  it('rejects empty or whitespace-only names', () => {
+    expect(isValidName('')).toBe(false)
+    expect(isValidName('   ')).toBe(false)
+  })
 })
 
 describe('list()', () => {
@@ -118,6 +147,56 @@ describe('list()', () => {
     vi.stubGlobal('fetch', fetchSpy)
     await expect(list('/Test')).rejects.toBeInstanceOf(UnauthorizedError)
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('throws instead of returning an empty listing when the body is not valid XML', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => mockResponse({ status: 207, body: '<html>not xml at all <broken' })))
+    await expect(list('/Test')).rejects.toBeInstanceOf(WebDavError)
+  })
+
+  it('throws instead of returning an empty listing on a 200 that is not really a 207', async () => {
+    // e.g. a captive portal or misconfigured proxy serving a 200 HTML page.
+    vi.stubGlobal('fetch', vi.fn(async () => mockResponse({ status: 200, ok: true, body: '<html>nope</html>' })))
+    await expect(list('/Test')).rejects.toBeInstanceOf(WebDavError)
+  })
+
+  it('throws on a well-formed but response-less XML body instead of a silent empty folder', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => mockResponse({ status: 207, body: '<D:multistatus xmlns:D="DAV:"></D:multistatus>' })))
+    await expect(list('/Test')).rejects.toBeInstanceOf(WebDavError)
+  })
+})
+
+describe('setCredentials', () => {
+  afterEach(() => clearCredentials())
+
+  it('does not throw on non-Latin1 (e.g. Cyrillic) username/password', () => {
+    expect(() => setCredentials('Александр', 'пароль123')).not.toThrow()
+    expect(getAuthHeader()).toMatch(/^Basic /)
+  })
+
+  it('produces a Basic header that round-trips back to the original UTF-8 credentials', () => {
+    setCredentials('Александр', 'пароль123')
+    const b64 = getAuthHeader()!.slice('Basic '.length)
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    expect(new TextDecoder().decode(bytes)).toBe('Александр:пароль123')
+  })
+})
+
+describe('request() error handling', () => {
+  beforeEach(() => setCredentials('alex', 'pw'))
+  afterEach(() => { clearCredentials(); vi.unstubAllGlobals() })
+
+  it('throws WebDavError on 404 instead of treating it as success', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => mockResponse({ status: 404, ok: false })))
+    await expect(deleteFile('/Test/gone.txt')).rejects.toBeInstanceOf(WebDavError)
+  })
+
+  it('notifies onUnauthorized listeners on a 401, exactly once per request', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => mockResponse({ status: 401, ok: false })))
+    const listener = vi.fn()
+    onUnauthorized(listener)
+    await expect(deleteFile('/Test/x.txt')).rejects.toBeInstanceOf(UnauthorizedError)
+    expect(listener).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { setCredentials, clearCredentials, list } from '../api/webdav'
+import { setCredentials, clearCredentials, list, onUnauthorized } from '../api/webdav'
 
 const STORAGE_KEY = 'gauge-auth'
 
@@ -35,8 +35,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
   login: async (username, password) => {
     set({ loading: true, error: null })
-    setCredentials(username, password)
     try {
+      setCredentials(username, password)
       await list('/')
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ username, password }))
       set({ authenticated: true, username, loading: false })
@@ -58,8 +58,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
     const stored = loadStored()
     if (!stored) return
     set({ loading: true })
-    setCredentials(stored.username, stored.password)
     try {
+      setCredentials(stored.username, stored.password)
       await list('/')
       set({ authenticated: true, username: stored.username, loading: false })
     } catch {
@@ -69,3 +69,15 @@ export const useAuthStore = create<AuthStore>((set) => ({
     }
   },
 }))
+
+// A 401 arriving mid-session (credentials revoked/changed server-side, a
+// stale session) previously cleared webdav.ts's own internal state but left
+// this store's `authenticated` flag — and the session sitting in
+// sessionStorage — untouched, so the UI stayed on the file manager with
+// every request now silently failing instead of returning to the login
+// screen. Registered here rather than inside webdav.ts to avoid a circular
+// import (this file already imports from webdav.ts).
+onUnauthorized(() => {
+  sessionStorage.removeItem(STORAGE_KEY)
+  useAuthStore.setState({ authenticated: false, username: null, error: 'Сессия истекла — войдите заново' })
+})

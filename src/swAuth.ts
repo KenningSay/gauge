@@ -1,10 +1,9 @@
 // Registers gauge-sw.js (see public/gauge-sw.js for what it actually does
-// and why) and keeps its IndexedDB-stored credential in sync with the
-// current WebDAV session.
+// and why) and answers its live "what's the current auth header" requests.
+// Nothing about the credential is written anywhere on this side either —
+// the worker asks, this just reads webdav.ts's in-memory value and replies.
 
-const DB_NAME = 'gauge-sw-auth'
-const STORE = 'kv'
-const KEY = 'authHeader'
+import { getAuthHeader } from './api/webdav'
 
 let registered: Promise<ServiceWorkerRegistration | null> | null = null
 
@@ -27,36 +26,12 @@ function registerSW(): Promise<ServiceWorkerRegistration | null> {
 // requested, the sooner a real, streamable video URL becomes available.
 registerSW()
 
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE)
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (!event.data || event.data.type !== 'GAUGE_GET_AUTH') return
+    const port = event.ports[0]
+    port?.postMessage({ authHeader: getAuthHeader() })
   })
-}
-
-// Written to IndexedDB rather than pushed via postMessage: a postMessage
-// only reaches whichever service worker instance is alive right now, and
-// Chrome discards an idle worker's in-memory state and respawns it fresh on
-// the next request — losing a postMessage'd credential with it. IndexedDB
-// is what the worker reads from on every request instead, so it survives.
-export async function syncAuthToSW(authHeader: string | null): Promise<void> {
-  await registerSW()
-  try {
-    const db = await openDB()
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite')
-      if (authHeader) tx.objectStore(STORE).put(authHeader, KEY)
-      else tx.objectStore(STORE).delete(KEY)
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-    db.close()
-  } catch {
-    // No IndexedDB (e.g. private browsing in some browsers) — video/audio
-    // just falls back to the blob: path via ViewerModal's needsBlob check.
-  }
 }
 
 // Whether the worker is actually intercepting THIS page's requests right
