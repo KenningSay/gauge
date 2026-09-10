@@ -64,6 +64,26 @@
   color: var(--text-dim);
 }
 
+/* Widths for modified/size/type are set inline (see useColumnWidths) —
+   dragging a handle updates them live. The name column intentionally has
+   none: table-layout:fixed hands it whatever space the others don't use.
+   .headRow th's own position:sticky above already establishes a positioning
+   context, so this handle just needs position:absolute. */
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.resizeHandle:hover,
+.resizeHandle:active {
+  background: var(--signal-dim, var(--signal));
+}
+
 .row {
   cursor: default;
   border-bottom: 1px solid var(--border);
@@ -86,17 +106,9 @@
   color: var(--text);
 }
 
-.dateCol {
-  width: 130px;
-}
-
-.sizeCol {
-  width: 90px;
-}
-
-.typeCol {
-  width: 80px;
-}
+/* .dateCol / .typeCol carry no width here anymore — that's set inline per
+   useColumnWidths, live-adjustable via .resizeHandle. These classes still
+   mark the columns hidden on narrow screens below. */
 
 .kebabCol {
   display: none;
@@ -237,6 +249,14 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.thumbInner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .gridName {
