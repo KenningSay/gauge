@@ -3,6 +3,8 @@ import { Folder, Image, Video, Music, FileText, FileCode, File as FileIcon, Inbo
 import { useFileStore } from '../store/useFileStore'
 import { detectViewerKind, type FileEntry } from '../api/types'
 import { useAuthorizedUrl } from '../hooks/useAuthorizedUrl'
+import { useInView } from '../hooks/useInView'
+import { useColumnWidths, type ColumnKey } from '../hooks/useColumnWidths'
 import { formatSize, formatDate, extensionOf } from '../utils/format'
 import { isCoarsePointer } from '../utils/device'
 import { collectDroppedEntries } from '../utils/dropFolder'
@@ -30,9 +32,45 @@ function isImage(entry: FileEntry) {
 }
 
 function GridThumb({ entry }: { entry: FileEntry }) {
-  const { url } = useAuthorizedUrl(entry.path)
-  if (!url) return <EntryIcon entry={entry} size={30} />
-  return <img src={url} loading="lazy" alt={entry.name} />
+  // The grid isn't virtualized (unlike the list view), so without this every
+  // image in a folder — however many, however big — got fetched in full the
+  // instant the folder opened. Only fetch once the tile has actually
+  // scrolled near the viewport; `inView` sticks true afterwards so it won't
+  // re-fetch on scrolling away.
+  const [ref, inView] = useInView<HTMLDivElement>()
+  const { url } = useAuthorizedUrl(inView ? entry.path : null)
+  return (
+    <div ref={ref} className={styles.thumbInner}>
+      {url ? <img src={url} loading="lazy" alt={entry.name} /> : <EntryIcon entry={entry} size={30} />}
+    </div>
+  )
+}
+
+function ColResizer({ col, onResize }: { col: ColumnKey; onResize: (col: ColumnKey, deltaPx: number) => void }) {
+  // Plain pointer events rather than native HTML5 drag — we need continuous
+  // deltas while the mouse moves, not a single drop payload. Pointer capture
+  // keeps receiving move events even once the cursor leaves the thin handle.
+  const lastX = useRef(0)
+  const handlePointerDown = (e: React.PointerEvent<HTMLSpanElement>) => {
+    e.preventDefault()
+    e.stopPropagation() // don't trigger the header's sort-click
+    lastX.current = e.clientX
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const handlePointerMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (e.buttons === 0) return
+    const delta = e.clientX - lastX.current
+    lastX.current = e.clientX
+    onResize(col, delta)
+  }
+  return (
+    <span
+      className={styles.resizeHandle}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onClick={(e) => e.stopPropagation()}
+    />
+  )
 }
 
 export function FileList() {
@@ -75,6 +113,7 @@ export function FileList() {
   const theadRef = useRef<HTMLTableSectionElement>(null)
   const lastSelectedIndex = useFileStore((s) => s.lastSelectedIndex)
   const virtual = useVirtualRows(scrollerRef, tbodyRef, viewMode === 'list' ? entries.length : 0)
+  const { widths: colWidths, resize: resizeCol } = useColumnWidths()
 
   // Keyboard nav (arrow keys, see useFileStore's moveCursor) moves
   // lastSelectedIndex without any scrolling of its own — previously harmless
@@ -255,9 +294,18 @@ export function FileList() {
           <thead ref={theadRef}>
             <tr className={styles.headRow}>
               <th onClick={(e) => { e.stopPropagation(); setSort('name') }}>Имя<SortArrow col="name" /></th>
-              <th className={styles.dateCol} onClick={(e) => { e.stopPropagation(); setSort('modified') }}>Изменён<SortArrow col="modified" /></th>
-              <th onClick={(e) => { e.stopPropagation(); setSort('size') }}>Размер<SortArrow col="size" /></th>
-              <th className={styles.typeCol} onClick={(e) => { e.stopPropagation(); setSort('type') }}>Тип<SortArrow col="type" /></th>
+              <th className={styles.dateCol} style={{ width: colWidths.modified }} onClick={(e) => { e.stopPropagation(); setSort('modified') }}>
+                Изменён<SortArrow col="modified" />
+                <ColResizer col="modified" onResize={resizeCol} />
+              </th>
+              <th style={{ width: colWidths.size }} onClick={(e) => { e.stopPropagation(); setSort('size') }}>
+                Размер<SortArrow col="size" />
+                <ColResizer col="size" onResize={resizeCol} />
+              </th>
+              <th className={styles.typeCol} style={{ width: colWidths.type }} onClick={(e) => { e.stopPropagation(); setSort('type') }}>
+                Тип<SortArrow col="type" />
+                <ColResizer col="type" onResize={resizeCol} />
+              </th>
               <th className={styles.kebabCol} />
             </tr>
           </thead>
