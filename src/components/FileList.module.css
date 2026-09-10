@@ -70,18 +70,39 @@
    .headRow th's own position:sticky above already establishes a positioning
    context, so this handle just needs position:absolute. */
 .resizeHandle {
+  /* Stays fully inside its OWN <th> (right: 0, not a negative offset that
+     creeps into the next column's box) — a later sibling <th> paints over
+     an earlier one's overflow in that shared border area, which made this
+     both invisible and unclickable, so dragging near a border ended up
+     grabbing/sorting the neighboring column instead of this one. */
   position: absolute;
   top: 0;
-  right: -4px;
+  right: 0;
   bottom: 0;
-  width: 8px;
+  width: 10px;
   cursor: col-resize;
   touch-action: none;
-  z-index: 1;
+  z-index: 2;
 }
-.resizeHandle:hover,
-.resizeHandle:active {
-  background: var(--signal-dim, var(--signal));
+.resizeHandle::after {
+  /* A faint grip line always present, not hover-only — the old hover-only
+     background gave no visual clue the handle was even there to find. */
+  content: '';
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  right: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border);
+}
+.headRow th:hover .resizeHandle::after {
+  background: var(--text-faint);
+}
+.resizeHandle:hover::after,
+.resizeHandle:active::after {
+  background: var(--signal);
+  width: 3px;
 }
 
 .row {

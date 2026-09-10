@@ -46,7 +46,7 @@ function GridThumb({ entry }: { entry: FileEntry }) {
   )
 }
 
-function ColResizer({ col, onResize }: { col: ColumnKey; onResize: (col: ColumnKey, deltaPx: number) => void }) {
+function ColResizer({ col, onResize, onReset }: { col: ColumnKey; onResize: (col: ColumnKey, deltaPx: number) => void; onReset: (col: ColumnKey) => void }) {
   // Plain pointer events rather than native HTML5 drag — we need continuous
   // deltas while the mouse moves, not a single drop payload. Pointer capture
   // keeps receiving move events even once the cursor leaves the thin handle.
@@ -69,6 +69,8 @@ function ColResizer({ col, onResize }: { col: ColumnKey; onResize: (col: ColumnK
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => { e.stopPropagation(); onReset(col) }}
+      title="Потяните, чтобы изменить ширину — двойной клик сбросит её"
     />
   )
 }
@@ -113,7 +115,7 @@ export function FileList() {
   const theadRef = useRef<HTMLTableSectionElement>(null)
   const lastSelectedIndex = useFileStore((s) => s.lastSelectedIndex)
   const virtual = useVirtualRows(scrollerRef, tbodyRef, viewMode === 'list' ? entries.length : 0)
-  const { widths: colWidths, resize: resizeCol } = useColumnWidths()
+  const { widths: colWidths, resize: resizeCol, reset: resetCol } = useColumnWidths()
 
   // Keyboard nav (arrow keys, see useFileStore's moveCursor) moves
   // lastSelectedIndex without any scrolling of its own — previously harmless
@@ -296,15 +298,15 @@ export function FileList() {
               <th onClick={(e) => { e.stopPropagation(); setSort('name') }}>Имя<SortArrow col="name" /></th>
               <th className={styles.dateCol} style={{ width: colWidths.modified }} onClick={(e) => { e.stopPropagation(); setSort('modified') }}>
                 Изменён<SortArrow col="modified" />
-                <ColResizer col="modified" onResize={resizeCol} />
+                <ColResizer col="modified" onResize={resizeCol} onReset={resetCol} />
               </th>
               <th style={{ width: colWidths.size }} onClick={(e) => { e.stopPropagation(); setSort('size') }}>
                 Размер<SortArrow col="size" />
-                <ColResizer col="size" onResize={resizeCol} />
+                <ColResizer col="size" onResize={resizeCol} onReset={resetCol} />
               </th>
               <th className={styles.typeCol} style={{ width: colWidths.type }} onClick={(e) => { e.stopPropagation(); setSort('type') }}>
                 Тип<SortArrow col="type" />
-                <ColResizer col="type" onResize={resizeCol} />
+                <ColResizer col="type" onResize={resizeCol} onReset={resetCol} />
               </th>
               <th className={styles.kebabCol} />
             </tr>
