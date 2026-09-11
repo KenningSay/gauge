@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { FolderPlus, Upload, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Menu, LogOut, X, CheckSquare, Copy, Scissors, Gauge as GaugeIcon } from 'lucide-react'
+import { FolderPlus, Upload, Download, LayoutGrid, List, Sun, Moon, Search, Trash2, Info, Menu, LogOut, X, CheckSquare, Copy, Scissors, Gauge as GaugeIcon } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
 import { useAuthStore } from '../store/useAuthStore'
@@ -20,6 +20,8 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
   const selected = useFileStore((s) => s.selected)
   const entries = useFileStore((s) => s.entries)
   const deleteEntries = useFileStore((s) => s.deleteEntries)
+  const downloadEntries = useFileStore((s) => s.downloadEntries)
+  const downloading = useFileStore((s) => !!s.downloadAbortController)
   const clearSelection = useFileStore((s) => s.clearSelection)
   const selectAll = useFileStore((s) => s.selectAll)
   const copyToClipboard = useFileStore((s) => s.copyToClipboard)
@@ -111,6 +113,15 @@ export function Toolbar({ theme, onToggleTheme }: Props) {
           </button>
           <button className={styles.iconBtn} title="Вырезать выбранное" aria-label="Вырезать выбранное" onClick={() => cutToClipboard(selectedEntries)}>
             <Scissors size={18} />
+          </button>
+          <button
+            className={styles.iconBtn}
+            title={selected.size === 1 ? 'Скачать выбранное' : `Скачать выбранное (${selected.size}) одним ZIP`}
+            aria-label="Скачать выбранное"
+            onClick={() => downloadEntries(selectedEntries)}
+            disabled={downloading}
+          >
+            <Download size={18} />
           </button>
           <button className={styles.iconBtn} title="Удалить выбранное" aria-label="Удалить выбранное" onClick={handleDelete}>
             <Trash2 size={18} color="var(--danger)" />

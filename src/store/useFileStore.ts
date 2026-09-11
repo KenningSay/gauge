@@ -4,6 +4,7 @@ import * as webdav from '../api/webdav'
 import { useUiStore } from './useUiStore'
 import type { DroppedFile } from '../utils/dropFolder'
 import { runPool, throwIfAnyFailed, CancelledError } from '../utils/pool'
+import { downloadSelection as runDownload, archiveNameFor } from '../utils/download'
 
 export type SortKey = 'name' | 'size' | 'modified' | 'type'
 export type ViewMode = 'list' | 'grid'
@@ -20,6 +21,11 @@ export interface UploadProgress {
   bytesTotal: number
   bytesLoaded: number
 }
+
+// Same four numbers as an upload, but a download's byte totals only become
+// known after the selection has been walked (folders need a PROPFIND each),
+// so `bytesTotal` starts at 0 and the card falls back to counting files.
+export type DownloadProgress = UploadProgress
 
 // An in-app clipboard, not the real OS one — there's no way to put "a
 // WebDAV file" on the system clipboard, so copy/cut/paste here means
@@ -54,6 +60,9 @@ interface FileStore {
 
   uploadProgress: UploadProgress | null
   uploadAbortController: AbortController | null
+
+  downloadProgress: DownloadProgress | null
+  downloadAbortController: AbortController | null
 
   clipboard: ClipboardState | null
 
@@ -95,6 +104,8 @@ interface FileStore {
   cancelUpload: () => void
   deleteEntries: (entries: FileEntry[]) => Promise<void>
   moveEntries: (entries: FileEntry[], destDir: string) => Promise<void>
+  downloadEntries: (entries: FileEntry[]) => Promise<void>
+  cancelDownload: () => void
 
   copyToClipboard: (entries: FileEntry[]) => void
   cutToClipboard: (entries: FileEntry[]) => void
@@ -264,6 +275,9 @@ export const useFileStore = create<FileStore>((set, get) => {
 
   uploadProgress: null,
   uploadAbortController: null,
+
+  downloadProgress: null,
+  downloadAbortController: null,
 
   clipboard: null,
 
@@ -553,6 +567,53 @@ export const useFileStore = create<FileStore>((set, get) => {
       throwIfAnyFailed(result, entries.length)
       return entries.length === 1 ? `«${entries[0].name}» перемещён` : `Перемещено объектов: ${entries.length}`
     }, 'Ошибка перемещения')
+  },
+
+  // Not routed through runBulkOp like its neighbours: nothing on the server
+  // changes, so the refresh + search-index invalidation that helper always
+  // does would be pure waste (and a visible flicker) after every download.
+  downloadEntries: async (entries) => {
+    if (entries.length === 0) return
+    if (get().downloadAbortController) {
+      useUiStore.getState().pushToast('Дождитесь завершения текущего скачивания', 'info')
+      return
+    }
+    const controller = new AbortController()
+    set({
+      downloadAbortController: controller,
+      // filesTotal 0 means "still counting" to the progress card — a folder
+      // selection needs a PROPFIND per subfolder before the real count is
+      // known, and showing the selection's own length meanwhile would put a
+      // "0/1" on screen that jumps to "0/38" a second later.
+      downloadProgress: { filesTotal: 0, filesDone: 0, bytesTotal: 0, bytesLoaded: 0 },
+    })
+    const name = archiveNameFor(entries, get().currentPath)
+    try {
+      const { filesTotal, zipped } = await runDownload(
+        entries,
+        name,
+        (p) => set({ downloadProgress: p }),
+        controller.signal,
+      )
+      useUiStore.getState().pushToast(
+        zipped ? `Скачано файлов: ${filesTotal} — «${name}»` : `Скачан «${entries[0].name}»`,
+      )
+    } catch (e) {
+      // An aborted fetch() rejects with a DOMException, not this app's own
+      // cancellation error — the signal is the one reliable way to tell a
+      // user-initiated stop from a real failure.
+      if (controller.signal.aborted) {
+        useUiStore.getState().pushToast('Скачивание отменено', 'info')
+      } else {
+        useUiStore.getState().pushToast(`Ошибка скачивания: ${errMsg(e)}`, 'error')
+      }
+    } finally {
+      set({ downloadProgress: null, downloadAbortController: null })
+    }
+  },
+
+  cancelDownload: () => {
+    get().downloadAbortController?.abort()
   },
 
   copyToClipboard: (entries) => {

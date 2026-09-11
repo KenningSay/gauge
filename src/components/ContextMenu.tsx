@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useState } from 'react'
 import { Eye, Pencil, Download, Trash2, FolderOpen, Copy, Scissors, CopyPlus } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
-import { downloadEntry } from '../utils/download'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import styles from './ContextMenu.module.css'
 
@@ -16,6 +15,9 @@ export function ContextMenu() {
   const copyToClipboard = useFileStore((s) => s.copyToClipboard)
   const cutToClipboard = useFileStore((s) => s.cutToClipboard)
   const duplicateEntry = useFileStore((s) => s.duplicateEntry)
+  const downloadEntries = useFileStore((s) => s.downloadEntries)
+  const selected = useFileStore((s) => s.selected)
+  const entries = useFileStore((s) => s.entries)
   const confirmDialog = useUiStore((s) => s.confirmDialog)
   const trapRef = useFocusTrap<HTMLDivElement>(!!contextMenu)
   // Clamped into the viewport post-render (useLayoutEffect runs before
@@ -53,6 +55,16 @@ export function ContextMenu() {
   if (!contextMenu || !contextMenu.entry) return null
   const entry = contextMenu.entry
 
+  // Right-clicking inside an existing multi-selection acts on the whole
+  // selection, not just the row under the cursor — that's what every file
+  // manager does, and it's the only place the selection is reachable
+  // without going back up to the toolbar.
+  const multi = selected.has(entry.path) && selected.size > 1
+  const downloadTargets = multi ? entries.filter((en) => selected.has(en.path)) : [entry]
+  const downloadLabel = multi
+    ? `Скачать выбранное (${selected.size})`
+    : entry.isDir ? 'Скачать папку (ZIP)' : 'Скачать'
+
   const style: React.CSSProperties = adjusted ?? { left: contextMenu.x, top: contextMenu.y }
 
   return (
@@ -86,11 +98,9 @@ export function ContextMenu() {
       <button role="menuitem" className={styles.item} onClick={() => { duplicateEntry(entry); closeContextMenu() }}>
         <CopyPlus size={16} /> Дублировать
       </button>
-      {!entry.isDir && (
-        <button role="menuitem" className={styles.item} onClick={() => { downloadEntry(entry.path, entry.name); closeContextMenu() }}>
-          <Download size={16} /> Скачать
-        </button>
-      )}
+      <button role="menuitem" className={styles.item} onClick={() => { downloadEntries(downloadTargets); closeContextMenu() }}>
+        <Download size={16} /> {downloadLabel}
+      </button>
       <div className={styles.sep} />
       <button
         role="menuitem"
