@@ -15,8 +15,16 @@ export const COLUMN_MIN: Record<ColumnKey, number> = { modified: 90, size: 70, t
 // filenames (and the handle needed to undo the drag) off past the visible
 // edge with no way to grab it back.
 export const COLUMN_MAX: Record<ColumnKey, number> = { modified: 260, size: 160, type: 160 }
-const DEFAULTS: Record<ColumnKey, number> = { modified: 130, size: 90, type: 80 }
-const STORAGE_KEY = 'gauge-column-widths'
+// Sized by measuring the widest string each column actually renders in the
+// real monospace face, plus the cell's own padding: "01 сент., 23:59" is
+// 177px and "999.9 GB" is 109px. The previous 130/90 fit neither, which is
+// what the values were spilling out of.
+const DEFAULTS: Record<ColumnKey, number> = { modified: 180, size: 110, type: 80 }
+// -v2: the widths saved under the previous key were picked against those
+// too-narrow defaults (and during the round where the drag handles
+// themselves were broken), so they're worth starting over from rather than
+// migrating.
+const STORAGE_KEY = 'gauge-column-widths-v2'
 
 function clamp(col: ColumnKey, px: number): number {
   return Math.min(COLUMN_MAX[col], Math.max(COLUMN_MIN[col], px))

@@ -125,8 +125,8 @@ export function davUrl(path: string): string {
 // display/download fetch the bytes with a real header here and hand the
 // browser a blob: URL instead of embedding creds in a plain URL. See
 // src/hooks/useAuthorizedUrl.ts and src/utils/download.ts.
-export async function fetchBlob(path: string): Promise<Blob> {
-  const res = await request(path, { method: 'GET' })
+export async function fetchBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await request(path, { method: 'GET', signal })
   return res.blob()
 }
 

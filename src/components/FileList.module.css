@@ -177,6 +177,12 @@
   font-family: var(--font-mono);
   font-size: 15px;
   white-space: nowrap;
+  /* nowrap alone let a value wider than its (fixed) column paint straight
+     over the next one — a long localized date over the size digits. The
+     column widths below are sized to fit, but nothing stops a user dragging
+     one narrower than its content, so the clipping has to be structural. */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .renameInput {

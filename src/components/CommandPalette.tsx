@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Folder, File as FileIcon, FolderPlus, Home, LayoutGrid, List, Loader2, ClipboardPaste } from 'lucide-react'
+import { Search, Folder, File as FileIcon, FolderPlus, Home, LayoutGrid, List, Loader2, ClipboardPaste, Download } from 'lucide-react'
 import { useFileStore } from '../store/useFileStore'
 import { useUiStore } from '../store/useUiStore'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -31,6 +31,8 @@ export function CommandPalette() {
   const indexBuilding = useFileStore((s) => s.indexBuilding)
   const clipboard = useFileStore((s) => s.clipboard)
   const pasteClipboard = useFileStore((s) => s.pasteClipboard)
+  const selected = useFileStore((s) => s.selected)
+  const downloadEntries = useFileStore((s) => s.downloadEntries)
   const promptDialog = useUiStore((s) => s.promptDialog)
 
   const [query, setQuery] = useState('')
@@ -53,6 +55,15 @@ export function CommandPalette() {
       { id: 'view-list', label: 'Вид: список', icon: <List size={16} />, run: () => setViewMode('list') },
       { id: 'view-grid', label: 'Вид: сетка', icon: <LayoutGrid size={16} />, run: () => setViewMode('grid') },
     ]
+    if (selected.size > 0) {
+      staticCmds.push({
+        id: 'download-selection',
+        label: selected.size === 1 ? 'Скачать выбранное' : `Скачать выбранное (${selected.size})`,
+        icon: <Download size={16} />,
+        hint: selected.size > 1 ? 'одним ZIP' : undefined,
+        run: () => downloadEntries(entries.filter((en) => selected.has(en.path))),
+      })
+    }
     if (clipboard) {
       staticCmds.push({
         id: 'paste',
@@ -91,7 +102,7 @@ export function CommandPalette() {
       }))
     const matchedStatic = staticCmds.filter((c) => c.label.toLowerCase().includes(q))
     return [...matchedStatic, ...matchCmds]
-  }, [entries, searchIndex, query, navigate, openViewer, createFolder, setViewMode, promptDialog, clipboard, pasteClipboard])
+  }, [entries, searchIndex, query, navigate, openViewer, createFolder, setViewMode, promptDialog, clipboard, pasteClipboard, selected, downloadEntries])
 
   useEffect(() => {
     if (!open) return
