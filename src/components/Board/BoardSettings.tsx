@@ -146,6 +146,19 @@ export function BoardSettings() {
             <label className={styles.check}>
               <input
                 type="checkbox"
+                // Undefined on boards made before the setting existed, and
+                // those boards were pushing — so absent reads as on.
+                checked={s.pushEnabled !== false}
+                onChange={(e) => setBoardSettings({ pushEnabled: e.target.checked })}
+              />
+              Расталкивать соседние пины
+            </label>
+          </div>
+
+          <div className={styles.section}>
+            <label className={styles.check}>
+              <input
+                type="checkbox"
                 checked={s.snapEnabled}
                 onChange={(e) => setBoardSettings({ snapEnabled: e.target.checked })}
               />

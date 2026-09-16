@@ -179,6 +179,11 @@ export interface Viewport {
 }
 
 export interface BoardSettings {
+  // "Капля в воду": a pin that lands on top of others pushes them clear,
+  // chain-reaction style. Absent on boards created before the setting
+  // existed, and read as enabled — it's the behaviour the board was
+  // specified with.
+  pushEnabled?: boolean
   snapEnabled: boolean
   snapStep: number
   gridVisible: boolean
