@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { FileText, AlertCircle } from 'lucide-react'
-import type { NotePin as NotePinT, NoteStyle } from '../../../api/board'
+import type { NotePin as NotePinT } from '../../../api/board'
+import { FONT_CLASS, HUD_STYLES, STYLE_CLASS, readableOn } from './noteStyles'
 import { getTextContent, putTextContent } from '../../../api/webdav'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { usePinActivation } from '../PinShell'
@@ -10,50 +11,7 @@ import { NoteDecor } from './NoteDecor'
 import styles from './Pins.module.css'
 import shell from '../PinShell.module.css'
 
-// Notes written before styles existed have no `style` and looked like a
-// sticky, so that's what absent means.
-const STYLE_CLASS: Record<NoteStyle, string> = {
-  sticky: styles.styleSticky,
-  paper: styles.stylePaper,
-  torn: styles.styleTorn,
-  lined: styles.styleLined,
-  spiral: styles.styleSpiral,
-  spiralSide: styles.styleSpiralSide,
-  clip: styles.styleClip,
-  clipboard: styles.styleClipboard,
-  tape: styles.styleTape,
-  tapeCorners: styles.styleTapeCorners,
-  card: styles.styleCard,
-  folder: styles.styleFolder,
-  ribbon: styles.styleRibbon,
-  banner: styles.styleBanner,
-  numbered: styles.styleNumbered,
-  doubleFrame: styles.styleDoubleFrame,
-  dashed: styles.styleDashed,
-  bolted: styles.styleBolted,
-  bubble: styles.styleBubble,
-  tag: styles.styleTag,
-  capsule: styles.styleCapsule,
-  hud: styles.styleHud,
-  hudBracket: styles.styleHudBracket,
-  terminal: styles.styleTerminal,
-  hazard: styles.styleHazard,
-  scan: styles.styleScan,
-  dither: styles.styleDither,
-  barcode: styles.styleBarcode,
-  chip: styles.styleChip,
-}
 
-const HUD_STYLES = new Set<NoteStyle>([
-  'hud',
-  'hudBracket',
-  'terminal',
-  'hazard',
-  'scan',
-  'dither',
-  'barcode',
-  'chip',
-])
 
 export function NotePin({ pin }: { pin: NotePinT }) {
   const { activated, setActivated } = usePinActivation()
@@ -147,9 +105,18 @@ export function NotePin({ pin }: { pin: NotePinT }) {
     return () => commitRef.current()
   }, [activated])
 
+  const style = pin.style ?? 'sticky'
+  const isHud = HUD_STYLES.has(style)
+  // A heads-up panel set in a humanist sans looks like a mistake, so the
+  // HUD family defaults to mono — but an explicit choice still wins.
+  const font = pin.font ?? (isHud ? 'mono' : 'default')
+
   return (
     <div
-      className={`${styles.root} ${STYLE_CLASS[pin.style ?? 'sticky']}`}
+      // Decorations measure themselves against this element, and find it by
+      // the attribute rather than by walking up a fixed number of parents.
+      data-decor-host=""
+      className={`${styles.root} ${STYLE_CLASS[style]} ${isHud ? styles.hudBase : ''} ${FONT_CLASS[font]}`}
       style={{
         background: hexWithOpacity(pin.color, pin.opacity),
         borderRadius: 'var(--radius-md)',
@@ -159,11 +126,12 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         // On the HUD styles the note's colour is the accent (brackets,
         // stripes, indicator), not the text colour — the plate is dark and
         // the text is set light in CSS.
-        color: HUD_STYLES.has(pin.style ?? 'sticky')
-          ? pin.color
-          : (pin.textColor ?? readableOn(pin.color)),
+        color: isHud ? pin.color : (pin.textColor ?? readableOn(pin.color)),
       }}
     >
+      {/* The HUD styles paint on their own layer rather than on the note,
+          so a chamfered plate can't clip what is pinned to its corners. */}
+      {isHud && <span className={styles.hudPlate} aria-hidden />}
       {activated ? (
         <textarea
           ref={areaRef}
@@ -192,7 +160,7 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         </div>
       )}
       {pin.decor && pin.decor.length > 0 && (
-        <NoteDecor items={pin.decor} accent={pin.color} />
+        <NoteDecor pinId={pin.id} items={pin.decor} accent={pin.color} />
       )}
 
       {pin.sourcePath && (
@@ -212,17 +180,6 @@ export function NotePin({ pin }: { pin: NotePinT }) {
       />
     </div>
   )
-}
-
-// Black or white, whichever reads better on the given background. Uses the
-// WCAG relative-luminance formula rather than a naive average: a saturated
-// yellow and a saturated blue have very different perceived brightness at
-// the same "average" RGB.
-export function readableOn(hex: string): string {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
-  const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
-  return luminance > 0.45 ? '#16150f' : '#f4f3ef'
 }
 
 // Compose the note background: pin color at pin opacity over the board's

@@ -130,6 +130,37 @@ export type NoteStyle =
   | 'dither'
   | 'barcode'
   | 'chip'
+  // Second pass over the same sheets, for the parts the first pass skipped:
+  // outlined frames with cut corners and a lit tab, callout leader lines,
+  // hex plates, waveforms, and the pixel-UI panels with screws and meters.
+  | 'vrFrame'
+  | 'vrPanel'
+  | 'callout'
+  | 'roundFrame'
+  | 'hexFrame'
+  | 'stripeBar'
+  | 'labelBar'
+  | 'waveform'
+  | 'arrowTab'
+  | 'pixelWindow'
+  | 'screwPlate'
+  | 'meter'
+  | 'octagon'
+  | 'stencil'
+
+// The typeface a note is set in. `default` means "whatever the app uses",
+// which is what every note written before this existed gets; the HUD styles
+// fall back to `mono` instead, since a heads-up panel in a humanist sans
+// looks like a mistake.
+export type NoteFont =
+  | 'default'
+  | 'mono'
+  | 'tech'
+  | 'techno'
+  | 'condensed'
+  | 'serif'
+  | 'hand'
+  | 'round'
 
 // Small things pinned onto a note: a paperclip over the corner, a pushpin,
 // a star, a folded ribbon. Each one remembers which corner it was dropped
@@ -145,12 +176,37 @@ export type DecorKind =
   | 'bracketCorner'
   | 'barcodeTag'
   | 'dot'
+  | 'gear'
+  | 'target'
+  | 'lightning'
+  | 'dpad'
+  | 'recycle'
+  | 'warnTriangle'
+  | 'hazardStrip'
+  | 'waveLine'
+  | 'segBar'
+  | 'screw'
+  | 'circuit'
+  | 'crosshair'
+  | 'diamondStack'
+  | 'wifi'
 
 export type DecorCorner = 'tl' | 'tr' | 'bl' | 'br'
 
 export interface Decor {
   id: string
   kind: DecorKind
+  // Where it sits, as a fraction of the note's own box (0..1, measured to
+  // the decoration's centre). Fractions rather than pixels so a decoration
+  // keeps its place when the note is resized. Absent on decorations saved
+  // before they could be moved — those fall back to `corner`.
+  x?: number
+  y?: number
+  // Drawn size in board units. Absent means the default.
+  size?: number
+  // The corner it was originally dropped on. Still the fallback position,
+  // and still what decides which way the glyph faces, so a paperclip over
+  // the right edge hooks the right way round.
   corner: DecorCorner
   color?: string
 }
@@ -160,6 +216,7 @@ export interface NotePin extends PinBase {
   text: string
   color: string
   style?: NoteStyle
+  font?: NoteFont
   // Absent on notes that have nothing pinned to them.
   decor?: Decor[]
   // Optional override. Left unset, the note picks black or white from the

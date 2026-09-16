@@ -17,6 +17,7 @@ import {
 import { collectDroppedEntries } from '../../utils/dropFolder'
 import { EdgeLayer } from './EdgeLayer'
 import { DECOR_MIME, TEMPLATE_MIME, decorById, templateById } from './TemplatePanel'
+import { MAX_DECOR_PER_NOTE, clampPos } from '../../utils/decorGeo'
 import { EdgeContextMenu } from './EdgeContextMenu'
 import { BoardToolbar } from './BoardToolbar'
 import { bestSides, edgePath, portPoint } from '../../utils/edgeGeo'
@@ -624,17 +625,32 @@ export function BoardCanvas() {
           pushToast('Брось на заметку — штучки цепляются к ним', 'info')
           return
         }
+        const existing = target.decor ?? []
+        if (existing.length >= MAX_DECOR_PER_NOTE) {
+          pushToast(`Больше ${MAX_DECOR_PER_NOTE} штучек на одну заметку — хватит`, 'info')
+          return
+        }
         const corner =
           `${dropAt.y < target.y + target.h / 2 ? 't' : 'b'}${dropAt.x < target.x + target.w / 2 ? 'l' : 'r'}` as
             | 'tl'
             | 'tr'
             | 'bl'
             | 'br'
+        // It lands exactly where it was dropped rather than snapping to the
+        // nearest corner; the corner is kept only as the fallback for
+        // decorations saved before they could be positioned freely.
         useBoardStore
           .getState()
           .updatePin(target.id, 'decor', [
-            ...(target.decor ?? []),
-            { id: crypto.randomUUID(), kind: def.kind, corner, color: def.color },
+            ...existing,
+            {
+              id: crypto.randomUUID(),
+              kind: def.kind,
+              corner,
+              color: def.color,
+              x: clampPos((dropAt.x - target.x) / target.w),
+              y: clampPos((dropAt.y - target.y) / target.h),
+            },
           ])
         return
       }

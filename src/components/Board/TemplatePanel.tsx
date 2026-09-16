@@ -8,7 +8,9 @@ import type { DecorKind, NoteStyle, NoteTexture } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import { useUiStore } from '../../store/useUiStore'
 import { DecorPreview } from './pins/DecorPreview'
+import { HUD_STYLES, STYLE_CLASS, hudClass, hudPlateClass, readableOn } from './pins/noteStyles'
 import { makeNotePin } from '../../utils/boardPinFactories'
+import { MAX_DECOR_PER_NOTE, nextFreeSlot } from '../../utils/decorGeo'
 import pins from './pins/Pins.module.css'
 import styles from './TemplatePanel.module.css'
 
@@ -32,6 +34,20 @@ export const DECOR_ITEMS: Array<{ id: DecorKind; label: string; color: string }>
   { id: 'ribbonCorner', label: 'Лента', color: '#f97316' },
   { id: 'barcodeTag', label: 'Бирка', color: '#e8eae6' },
   { id: 'dot', label: 'Индикатор', color: '#4ade80' },
+  { id: 'gear', label: 'Шестерня', color: '#cbd5e1' },
+  { id: 'target', label: 'Прицел', color: '#2dd4bf' },
+  { id: 'lightning', label: 'Молния', color: '#fbbf24' },
+  { id: 'dpad', label: 'Крестовина', color: '#e8eae6' },
+  { id: 'recycle', label: 'Цикл', color: '#4ade80' },
+  { id: 'warnTriangle', label: 'Внимание', color: '#fbbf24' },
+  { id: 'hazardStrip', label: 'Разметка', color: '#f97316' },
+  { id: 'waveLine', label: 'Сигнал', color: '#2dd4bf' },
+  { id: 'segBar', label: 'Шкала', color: '#4ade80' },
+  { id: 'screw', label: 'Винт', color: '#a8a6a0' },
+  { id: 'circuit', label: 'Дорожка', color: '#4ade80' },
+  { id: 'crosshair', label: 'Визир', color: '#e8eae6' },
+  { id: 'diamondStack', label: 'Ромбы', color: '#e8eae6' },
+  { id: 'wifi', label: 'Сигнал Wi-Fi', color: '#2dd4bf' },
 ]
 
 export function decorById(id: string): { kind: DecorKind; color: string } | null {
@@ -114,6 +130,32 @@ const GROUPS: Array<{ title: string; items: TemplateDef[] }> = [
     ],
   },
   {
+    // The outlined frames — the ones the sheets draw as a line rather than
+    // as a filled plate.
+    title: 'HUD / рамки',
+    items: [
+      { id: 'vrFrame', label: 'VR-рамка', sample: 'SYSTEM', color: '#fbbf24' },
+      { id: 'roundFrame', label: 'Скруглённая', sample: 'READOUT', color: '#2dd4bf' },
+      { id: 'hexFrame', label: 'Гекс', sample: 'NODE', color: '#e8eae6' },
+      { id: 'octagon', label: 'Октагон', sample: 'START', color: '#4ade80' },
+      { id: 'callout', label: 'Выноска', sample: 'DETAIL', color: '#f97316' },
+      { id: 'arrowTab', label: 'Стрелка', sample: 'NEXT', color: '#fbbf24' },
+    ],
+  },
+  {
+    title: 'HUD / панели',
+    items: [
+      { id: 'vrPanel', label: 'Боковая шкала', sample: 'POWER', color: '#fbbf24' },
+      { id: 'labelBar', label: 'Плашка', sample: 'SECTION', color: '#2dd4bf' },
+      { id: 'stripeBar', label: 'Полосы', sample: 'CAUTION', color: '#f97316' },
+      { id: 'waveform', label: 'Осциллограмма', sample: 'AUDIO', color: '#4ade80' },
+      { id: 'meter', label: 'Индикаторы', sample: 'LEVELS', color: '#4ade80' },
+      { id: 'pixelWindow', label: 'Пиксель-окно', sample: 'MENU', color: '#a7f3d0' },
+      { id: 'screwPlate', label: 'На винтах', sample: 'PANEL', color: '#cbd5e1' },
+      { id: 'stencil', label: 'Трафарет', sample: 'CARGO', color: '#fbbf24' },
+    ],
+  },
+  {
     title: 'Ленты и выноски',
     items: [
       { id: 'ribbon', label: 'Лента', sample: 'Заголовок', color: '#fca5a5' },
@@ -125,55 +167,6 @@ const GROUPS: Array<{ title: string; items: TemplateDef[] }> = [
   },
 ]
 
-const STYLE_CLASS: Record<NoteStyle, string> = {
-  sticky: pins.styleSticky,
-  paper: pins.stylePaper,
-  torn: pins.styleTorn,
-  lined: pins.styleLined,
-  spiral: pins.styleSpiral,
-  spiralSide: pins.styleSpiralSide,
-  clip: pins.styleClip,
-  clipboard: pins.styleClipboard,
-  tape: pins.styleTape,
-  tapeCorners: pins.styleTapeCorners,
-  card: pins.styleCard,
-  folder: pins.styleFolder,
-  ribbon: pins.styleRibbon,
-  banner: pins.styleBanner,
-  numbered: pins.styleNumbered,
-  doubleFrame: pins.styleDoubleFrame,
-  dashed: pins.styleDashed,
-  bolted: pins.styleBolted,
-  bubble: pins.styleBubble,
-  tag: pins.styleTag,
-  capsule: pins.styleCapsule,
-  hud: pins.styleHud,
-  hudBracket: pins.styleHudBracket,
-  terminal: pins.styleTerminal,
-  hazard: pins.styleHazard,
-  scan: pins.styleScan,
-  dither: pins.styleDither,
-  barcode: pins.styleBarcode,
-  chip: pins.styleChip,
-}
-
-const HUD_STYLES = new Set<NoteStyle>([
-  'hud',
-  'hudBracket',
-  'terminal',
-  'hazard',
-  'scan',
-  'dither',
-  'barcode',
-  'chip',
-])
-
-// Black or white text for the preview, by the same rule the real note uses.
-function readableOn(hex: string): string {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) > 0.45 ? '#16150f' : '#f4f3ef'
-}
 
 export function TemplatePanel() {
   const board = useBoardStore((s) => s.board)
@@ -203,9 +196,19 @@ export function TemplatePanel() {
     const pin = useBoardStore.getState().board?.pins.find((p) => p.id === pinId)
     if (!pin || pin.type !== 'note') return
     const def = decorById(kind)!
+    const existing = pin.decor ?? []
+    if (existing.length >= MAX_DECOR_PER_NOTE) {
+      pushToast(`Больше ${MAX_DECOR_PER_NOTE} штучек на одну заметку — хватит`, 'info')
+      return
+    }
+    // Clicking the same glyph repeatedly used to stack every copy on the
+    // top-left corner, where a dozen of them looked like one and only the
+    // top one could be grabbed. Each click now takes the next free spot
+    // around the note's edge.
+    const slot = nextFreeSlot(existing)
     const next = [
-      ...(pin.decor ?? []),
-      { id: crypto.randomUUID(), kind, corner: 'tl' as const, color: def.color },
+      ...existing,
+      { id: crypto.randomUUID(), kind, corner: 'tl' as const, color: def.color, ...slot },
     ]
     updatePin(pinId, 'decor', next)
   }
@@ -287,7 +290,9 @@ export function TemplatePanel() {
               >
                 <div className={styles.previewBox}>
                   <div
-                    className={`${pins.root} ${STYLE_CLASS[def.id]} ${styles.preview}`}
+                    className={`${pins.root} ${STYLE_CLASS[def.id]} ${
+                      HUD_STYLES.has(def.id) ? hudClass : ''
+                    } ${styles.preview}`}
                     style={{
                       background: def.color,
                       // Same split as the real pin: HUD plates take the
@@ -295,6 +300,10 @@ export function TemplatePanel() {
                       color: HUD_STYLES.has(def.id) ? def.color : readableOn(def.color),
                     }}
                   >
+                    {/* The preview is the real markup, so it needs the
+                        real plate layer too — without it a HUD style
+                        previews as a bare coloured rectangle. */}
+                    {HUD_STYLES.has(def.id) && <span className={hudPlateClass} aria-hidden />}
                     <div className={styles.previewText}>{def.sample}</div>
                   </div>
                 </div>
