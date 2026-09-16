@@ -127,6 +127,36 @@ describe('error handling', () => {
     await expect(call).rejects.toMatchObject({ status: 402 })
   })
 
+  it('explains a 404 in proxy mode as a missing proxy, not as a DeepSeek error', async () => {
+    // Nothing serving /ai/ on this origin — an unconfigured deployment, or
+    // a dev server without the proxy. A bare "404" leaves the user with
+    // nothing to act on.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>404</html>', { status: 404 })))
+    const call = streamChat({
+      config: { endpoint: '/ai/', apiKey: null, model: 'deepseek-chat' },
+      messages: [{ role: 'user', content: 'hi' }],
+      onChunk: () => {},
+    })
+    await expect(call).rejects.toMatchObject({ status: 404 })
+    await expect(call).rejects.toThrow(/прокси не настроен/)
+  })
+
+  it("keeps DeepSeek's own error text when there is one", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(JSON.stringify({ error: { message: 'Insufficient Balance' } }), { status: 402 }),
+      ),
+    )
+    await expect(
+      streamChat({
+        config: { endpoint: '/ai/', apiKey: null, model: 'deepseek-chat' },
+        messages: [{ role: 'user', content: 'hi' }],
+        onChunk: () => {},
+      }),
+    ).rejects.toThrow(/Insufficient Balance/)
+  })
+
   it('refuses a direct endpoint with no key rather than sending an unauthenticated request', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

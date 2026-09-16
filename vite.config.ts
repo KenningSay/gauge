@@ -15,6 +15,17 @@ export default defineConfig(({ mode }) => {
     base: './',
     server: {
       proxy: {
+        // The AI panel talks to a same-origin /ai/ that nginx provides in a
+        // real deployment (it attaches the DeepSeek key there). `npm run
+        // dev` has no nginx, so without this proxy every AI request in
+        // development 404s against Vite itself — which looks exactly like a
+        // broken deployment. Points at the same host as the WebDAV target
+        // by default, since that host is the one running the proxy.
+        '/ai': {
+          target: env.VITE_DEV_AI_TARGET || env.VITE_DEV_WEBDAV_TARGET || 'http://localhost',
+          changeOrigin: true,
+          secure: false,
+        },
         '/dav': {
           // VITE_DEV_WEBDAV_TARGET in .env.local (gitignored, see
           // .env.local.example) — was hardcoded to the original author's

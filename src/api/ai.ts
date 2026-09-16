@@ -210,6 +210,34 @@ async function readStream(
 }
 
 
+// Turns a failed response into an AiError, reading DeepSeek's own error
+// envelope when there is one. A 404 in proxy mode is special-cased: it
+// almost never means DeepSeek lost the endpoint, it means nothing is
+// serving /ai/ on this origin — an unconfigured deployment, or a dev server
+// without the proxy. Saying that beats printing a bare 404.
+async function throwForResponse(res: Response, config: AiConfig): Promise<never> {
+  if (res.status === 404 && isProxyEndpoint(config.endpoint)) {
+    throw new AiError(
+      `На сервере нет обработчика ${config.endpoint} — AI-прокси не настроен. ` +
+        'Либо настрой его (DEEPSEEK_API_KEY на сервере), либо укажи в настройках панели ' +
+        'прямой endpoint https://api.deepseek.com и свой ключ.',
+      404,
+    )
+  }
+  let detail = ''
+  try {
+    const text = await res.text()
+    const parsed = JSON.parse(text) as { error?: { message?: string } }
+    detail = parsed.error?.message ?? text.slice(0, 200)
+  } catch {
+    // Body wasn't JSON or was already consumed — the status alone will do.
+  }
+  throw new AiError(
+    detail ? `${res.status} ${res.statusText}: ${detail}` : `${res.status} ${res.statusText}`,
+    res.status,
+  )
+}
+
 // In proxy mode the DeepSeek key is attached server-side, so the browser
 // would otherwise send nothing of its own — leaving /ai/ open to anyone who
 // can reach the deployment, spending the owner's balance. The proxy is
@@ -255,23 +283,10 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
     throw new AiError(`Сеть: ${e instanceof Error ? e.message : String(e)}`)
   }
 
-  if (!res.ok) {
-    // Read the body for DeepSeek's error envelope — the JSON has a
-    // human-readable message that's much better than the HTTP status
-    // alone ("insufficient balance" vs "402").
-    let detail = ''
-    try {
-      const text = await res.text()
-      const parsed = JSON.parse(text) as { error?: { message?: string } }
-      detail = parsed.error?.message ?? text.slice(0, 200)
-    } catch {
-      // Body wasn't JSON or already consumed — status alone will do.
-    }
-    throw new AiError(
-      detail ? `${res.status} ${res.statusText}: ${detail}` : `${res.status} ${res.statusText}`,
-      res.status,
-    )
-  }
+  // throwForResponse reads the body itself for DeepSeek's error envelope
+  // ("insufficient balance" beats a bare 402) — reading it here as well
+  // would leave it with an already-consumed stream and no detail to show.
+  if (!res.ok) await throwForResponse(res, config)
 
   if (!res.body) {
     throw new AiError('Пустой ответ от DeepSeek')
@@ -306,20 +321,7 @@ export async function complete(
     }
     throw new AiError(`Сеть: ${e instanceof Error ? e.message : String(e)}`)
   }
-  if (!res.ok) {
-    let detail = ''
-    try {
-      const text = await res.text()
-      const parsed = JSON.parse(text) as { error?: { message?: string } }
-      detail = parsed.error?.message ?? text.slice(0, 200)
-    } catch {
-      // ignore
-    }
-    throw new AiError(
-      detail ? `${res.status} ${res.statusText}: ${detail}` : `${res.status} ${res.statusText}`,
-      res.status,
-    )
-  }
+  if (!res.ok) await throwForResponse(res, config)
   const json = (await res.json()) as {
     choices: Array<{ message: { content: string } }>
     usage: { prompt_tokens: number; completion_tokens: number }
