@@ -16,6 +16,7 @@ import { useFileStore } from './store/useFileStore'
 import { useUiStore } from './store/useUiStore'
 import { useAuthStore } from './store/useAuthStore'
 import styles from './App.module.css'
+import { hasMod, isKey } from './utils/keys'
 
 type Theme = 'dark' | 'light'
 
@@ -68,12 +69,12 @@ function MainApp() {
       // canvas's own select-all would fire too.
       if (activeTab === 'boards') return
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if (hasMod(e) && isKey(e, 'k')) {
         e.preventDefault()
         commandPaletteOpen ? closeCommandPalette() : openCommandPalette()
         return
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      if (hasMod(e) && isKey(e, 'i')) {
         e.preventDefault()
         toggleProperties()
         return
@@ -95,23 +96,23 @@ function MainApp() {
       const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
       if (typing) return
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); selectAll(); return }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selected.size > 0) {
+      if (hasMod(e) && isKey(e, 'a')) { e.preventDefault(); selectAll(); return }
+      if (hasMod(e) && isKey(e, 'c') && selected.size > 0) {
         e.preventDefault()
         copyToClipboard(entries.filter((en) => selected.has(en.path)))
         return
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x' && selected.size > 0) {
+      if (hasMod(e) && isKey(e, 'x') && selected.size > 0) {
         e.preventDefault()
         cutToClipboard(entries.filter((en) => selected.has(en.path)))
         return
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+      if (hasMod(e) && isKey(e, 'v')) {
         e.preventDefault()
         pasteClipboard()
         return
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && selected.size === 1) {
+      if (hasMod(e) && isKey(e, 'd') && selected.size === 1) {
         e.preventDefault()
         const t = entries.find((en) => selected.has(en.path))
         if (t) duplicateEntry(t)
