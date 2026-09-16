@@ -12,11 +12,14 @@ import {
   Link as LinkIcon,
   Sparkles,
   ChevronRight,
+  Pipette,
 } from 'lucide-react'
-import type { CustomAction, Pin } from '../../api/board'
+import type { CustomAction, NotePin as NotePinT, Pin } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
+import { readableOn } from './pins/NotePin'
 import { useAiStore } from '../../store/useAiStore'
+import { useUiStore } from '../../store/useUiStore'
 import { downloadEntry } from '../../utils/download'
 import styles from './PinContextMenu.module.css'
 
@@ -94,6 +97,7 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink }: 
 
 function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
   const store = useBoardStore
+  const promptDialog = useUiStore((s) => s.promptDialog)
   const maxZ = () => {
     const board = store.getState().board
     return board ? board.pins.reduce((m, p) => Math.max(m, p.z), 0) : 0
@@ -125,18 +129,10 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
     onClose()
   }
 
-  const handleColor = () => {
-    if (pin.type !== 'note') return
-    const v = window.prompt('Цвет (HEX)', pin.color)
-    if (!v) return
-    store.getState().updatePin(pin.id, 'color', v)
-    onClose()
-  }
-
-  const handleDescription = () => {
+  const handleDescription = async () => {
     if (pin.type === 'note' || pin.type === 'link') return
     const cur = 'description' in pin ? pin.description ?? '' : ''
-    const v = window.prompt('Описание', cur)
+    const v = await promptDialog('Описание', cur)
     if (v === null) return
     store.getState().updatePin(pin.id, 'description', v)
     onClose()
@@ -170,7 +166,7 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
       <div className={styles.divider} />
       <MenuItem icon={<Copy size={13} />} onClick={handleDuplicate}>Дублировать</MenuItem>
       {pin.type === 'note' && (
-        <MenuItem icon={<Palette size={13} />} onClick={handleColor}>Изменить цвет</MenuItem>
+        <ColorSubmenu pin={pin} />
       )}
       {(pin.type === 'image' || pin.type === 'video' || pin.type === 'audio' || pin.type === 'file') && (
         <MenuItem icon={<StickyNote size={13} />} onClick={handleDescription}>
@@ -271,6 +267,89 @@ const AI_ACTIONS: Array<{ id: string; label: string; prompt: string; resultType:
 // Actions that rewrite text in place are only offered for notes — on an
 // image pin there is nothing to rewrite, and the store would silently fall
 // back to creating a note instead.
+// Sticky-note palette. Hand-picked rather than a colour wheel: these all
+// stay legible with the automatic black/white text, and picking from eight
+// good colours is faster than dialling in a hex. The native picker is right
+// there for anything else.
+const NOTE_COLORS = [
+  '#fbbf24', '#f97316', '#ef4444', '#ec4899',
+  '#a855f7', '#3b82f6', '#10b981', '#64748b',
+]
+
+const TEXT_COLORS = ['#16150f', '#f4f3ef', '#7f1d1d', '#1e3a8a']
+
+function ColorSubmenu({ pin }: { pin: NotePinT }) {
+  const [open, setOpen] = useState(false)
+  const updatePin = useBoardStore((s) => s.updatePin)
+
+  // Changes apply live and stay open — picking a colour is a "try it and
+  // look" action, and closing the menu on every click would mean reopening
+  // it for each attempt.
+  const setColor = (value: string) => updatePin(pin.id, 'color', value)
+  const setTextColor = (value: string) => updatePin(pin.id, 'textColor', value)
+
+  return (
+    <div className={styles.submenuWrap}>
+      <button className={styles.item} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className={styles.itemIcon}><Palette size={13} /></span>
+        Цвет
+        <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
+      </button>
+      {open && (
+        <div className={styles.submenu}>
+          <div className={styles.swatchLabel}>Фон</div>
+          <div className={styles.swatches}>
+            {NOTE_COLORS.map((c) => (
+              <button
+                key={c}
+                className={`${styles.swatch} ${pin.color.toLowerCase() === c ? styles.swatchActive : ''}`}
+                style={{ background: c }}
+                title={c}
+                aria-label={`Фон ${c}`}
+                onClick={() => setColor(c)}
+              />
+            ))}
+            <label className={styles.swatchCustom} title="Свой цвет">
+              <Pipette size={12} />
+              <input type="color" value={pin.color} onChange={(e) => setColor(e.target.value)} />
+            </label>
+          </div>
+
+          <div className={styles.swatchLabel}>Текст</div>
+          <div className={styles.swatches}>
+            <button
+              className={`${styles.swatch} ${styles.swatchAuto} ${!pin.textColor ? styles.swatchActive : ''}`}
+              title="Автоматически по фону"
+              aria-label="Цвет текста автоматически"
+              onClick={() => updatePin(pin.id, 'textColor', undefined)}
+            >
+              A
+            </button>
+            {TEXT_COLORS.map((c) => (
+              <button
+                key={c}
+                className={`${styles.swatch} ${pin.textColor?.toLowerCase() === c ? styles.swatchActive : ''}`}
+                style={{ background: c }}
+                title={c}
+                aria-label={`Текст ${c}`}
+                onClick={() => setTextColor(c)}
+              />
+            ))}
+            <label className={styles.swatchCustom} title="Свой цвет">
+              <Pipette size={12} />
+              <input
+                type="color"
+                value={pin.textColor ?? readableOn(pin.color)}
+                onChange={(e) => setTextColor(e.target.value)}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // A module-level constant, not an inline `?? []`: a fresh array literal in
 // the selector is a new reference on every store read, which makes Zustand
 // think the slice changed and re-render forever.

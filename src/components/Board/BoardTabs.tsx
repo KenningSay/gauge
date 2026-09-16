@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, X, Pencil, Trash2 } from 'lucide-react'
 import type { BoardMeta } from '../../api/board'
+import { BoardSettings } from './BoardSettings'
 import styles from './BoardTabs.module.css'
 
 interface Props {
@@ -101,6 +102,8 @@ export function BoardTabs({
             ))}
         </select>
       )}
+
+      <BoardSettings />
     </div>
   )
 }

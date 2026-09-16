@@ -1,0 +1,206 @@
+.wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.trigger:hover { background: var(--bg-hover); color: var(--text); }
+.triggerActive { background: var(--bg-hover); color: var(--tick); }
+
+.popover {
+  /* Fixed + portal: see the note in BoardSettings.tsx — the tab strip
+     clips anything positioned inside it. */
+  position: fixed;
+  z-index: 4000;
+  width: 290px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  animation: pop-in 140ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.close {
+  display: flex;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.close:hover { background: var(--bg-hover); color: var(--text); }
+
+.section {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.row { padding-bottom: 4px; }
+
+.label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check input { accent-color: var(--signal); cursor: pointer; }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.chip:hover { background: var(--bg-hover); color: var(--text); }
+
+.chipActive {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: var(--bg-selected);
+}
+
+.swatches {
+  display: flex;
+  gap: 6px;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+.swatch:hover { transform: scale(1.12); }
+
+.swatchActive {
+  box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 3px var(--tick);
+}
+
+.swatchCustom {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, #ef4444, #3b82f6 50%, #10b981);
+  cursor: pointer;
+}
+
+.swatchCustom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sliderRow input[type='range'] {
+  flex: 1;
+  accent-color: var(--signal);
+}
+
+.sliderRow input[type='range']:disabled { opacity: 0.4; }
+
+.value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.historyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.smallBtn {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.smallBtn:hover:not(:disabled) { background: var(--bg-hover); }
+.smallBtn:disabled { opacity: 0.4; cursor: default; }
+
+.footNote {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-faint);
+}

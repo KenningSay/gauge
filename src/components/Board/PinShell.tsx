@@ -12,18 +12,24 @@
 // Animating box-shadow repaints the pin every frame; animating opacity
 // on a pre-composited layer is free.
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { Pin } from '../../api/board'
 import styles from './PinShell.module.css'
 
 export interface PinActivation {
   activated: boolean
   setActivated: (v: boolean) => void
+  // A pin whose double-click means something other than "start editing"
+  // (an image opens the viewer, a file downloads) registers a handler here.
+  // Returning true means it handled the gesture and the pin should NOT
+  // enter edit mode. See the note on double-click detection below.
+  registerDoubleClick: (handler: (() => boolean) | null) => void
 }
 
 const ActivationContext = createContext<PinActivation>({
   activated: false,
   setActivated: () => {},
+  registerDoubleClick: () => {},
 })
 
 export function usePinActivation(): PinActivation {
@@ -59,6 +65,41 @@ export function PinShell({
   const [activated, setActivatedState] = useState(false)
   const shellRef = useRef<HTMLDivElement | null>(null)
 
+  // Double-click is detected by hand, from pointerdown, instead of relying
+  // on the browser's own dblclick event: the drag handler calls
+  // setPointerCapture on the CANVAS, and while a capture is active the
+  // browser retargets the resulting click/dblclick to the capturing
+  // element. So dblclick fired on the canvas, never on the pin, and
+  // nothing that depended on it worked — you couldn't type in a note, an
+  // image wouldn't open the viewer, a file wouldn't download.
+  const lastDownRef = useRef<{ t: number; x: number; y: number } | null>(null)
+  const dblHandlerRef = useRef<(() => boolean) | null>(null)
+  const registerDoubleClick = useCallback((handler: (() => boolean) | null) => {
+    dblHandlerRef.current = handler
+  }, [])
+
+  const handleBodyPointerDown = (e: React.PointerEvent) => {
+    const last = lastDownRef.current
+    const now = e.timeStamp
+    // 400ms and 6px: the same tolerances a browser uses for its own
+    // dblclick, loose enough for a touchpad, tight enough that two
+    // deliberate clicks in a row don't trip it.
+    if (last && now - last.t < 400 && Math.abs(e.clientX - last.x) < 6 && Math.abs(e.clientY - last.y) < 6) {
+      lastDownRef.current = null
+      e.stopPropagation()
+      // Without this the browser's own pointerdown default action moves
+      // focus off the editor the moment it mounts, which fires the
+      // textarea's onBlur → commit → back to read mode. The pin appeared
+      // to ignore the double-click entirely.
+      e.preventDefault()
+      if (dblHandlerRef.current?.()) return
+      setActivatedState(true)
+      return
+    }
+    lastDownRef.current = { t: now, x: e.clientX, y: e.clientY }
+    onPointerDownBody(e)
+  }
+
   // Deactivate on any pointerdown outside the pin. Listens at document
   // level so a click on any other pin, the canvas, or an unrelated UI
   // surface all dismiss the activation — matching "click elsewhere =
@@ -86,7 +127,7 @@ export function PinShell({
 
   return (
     <ActivationContext.Provider
-      value={{ activated, setActivated: setActivatedState }}
+      value={{ activated, setActivated: setActivatedState, registerDoubleClick }}
     >
       <div
         ref={shellRef}
@@ -113,7 +154,7 @@ export function PinShell({
         {/* Tongue: always visible in mini form, expands on selection. */}
         <div
           className={`${styles.tongue} ${selected ? styles.tongueSelected : ''}`}
-          onPointerDown={(e) => onPointerDownBody(e)}
+          onPointerDown={handleBodyPointerDown}
           title="Перетащить"
         >
           <span className={styles.tongueDots} />
@@ -127,7 +168,7 @@ export function PinShell({
           {!activated && (
             <div
               className={styles.overlay}
-              onPointerDown={onPointerDownBody}
+              onPointerDown={handleBodyPointerDown}
               onContextMenu={onContextMenu}
             />
           )}

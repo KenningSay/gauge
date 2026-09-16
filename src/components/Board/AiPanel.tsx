@@ -595,6 +595,7 @@ function ChatInput({ onSendRequest }: { onSendRequest: () => void }) {
     return () => window.removeEventListener('gauge-ai-edit', handler)
   }, [])
 
+  const confirmDialog = useUiStore((s) => s.confirmDialog)
   const selectedCount = selected.size
   const boardPinCount = board?.pins.length ?? 0
 
@@ -608,7 +609,7 @@ function ChatInput({ onSendRequest }: { onSendRequest: () => void }) {
       // approximation is good enough for a UI hint. Real token counting
       // (tiktoken or similar) would add a megabyte of dependencies for a
       // warning that the user can override anyway.
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         `В доске ${boardPinCount} пинов. Отправить всю доску в AI может быть дорого и медленно. Продолжить?`,
       )
       if (!ok) return

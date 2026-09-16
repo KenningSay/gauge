@@ -18,7 +18,9 @@
   overflow: auto;
   font-size: 13px;
   line-height: 1.5;
-  color: #1a1a1a;
+  /* Colour comes from the pin wrapper, which derives it from the note's
+     own background — see readableOn() in NotePin.tsx. */
+  color: inherit;
   position: relative;
 }
 
@@ -65,7 +67,7 @@
 .noteMarkdown :global(h3) { font-size: 14px; margin: 0 0 4px; }
 .noteMarkdown :global(p) { margin: 0 0 8px; }
 .noteMarkdown :global(ul), .noteMarkdown :global(ol) { padding-left: 20px; margin: 0 0 8px; }
-.noteMarkdown :global(a) { color: #0f766e; }
+.noteMarkdown :global(a) { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---------- image / video ---------- */
 

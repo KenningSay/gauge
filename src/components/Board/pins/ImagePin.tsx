@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ImageOff } from 'lucide-react'
 import type { ImagePin as ImagePinT } from '../../../api/board'
 import { acquireBlobUrl, releaseBlobUrl } from '../../../utils/blobCache'
@@ -7,10 +7,28 @@ import { usePinActivation } from '../PinShell'
 import styles from './Pins.module.css'
 
 export function ImagePin({ pin }: { pin: ImagePinT }) {
-  const { activated } = usePinActivation()
+  const { activated, registerDoubleClick } = usePinActivation()
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const openFileViewer = useFileStore((s) => s.openViewer)
+
+
+  const openInViewer = useCallback(() => {
+    openFileViewer({
+      name: pin.fileName,
+      path: pin.assetPath,
+      isDir: false,
+      size: pin.fileSize,
+      modified: pin.updatedAt,
+      contentType: pin.mimeType,
+    })
+    return true
+  }, [openFileViewer, pin.fileName, pin.assetPath, pin.fileSize, pin.updatedAt, pin.mimeType])
+
+  useEffect(() => {
+    registerDoubleClick(openInViewer)
+    return () => registerDoubleClick(null)
+  }, [registerDoubleClick, openInViewer])
 
   useEffect(() => {
     let cancelled = false
@@ -47,21 +65,6 @@ export function ImagePin({ pin }: { pin: ImagePinT }) {
       src={url}
       alt={pin.description || pin.fileName}
       draggable={false}
-      onDoubleClick={(e) => {
-        // Double-click is normally intercepted by the shell as
-        // "activate". For images the spec says it should open the
-        // viewer instead — so we short-circuit before the shell's own
-        // dblclick handler sees it.
-        e.stopPropagation()
-        openFileViewer({
-          name: pin.fileName,
-          path: pin.assetPath,
-          isDir: false,
-          size: pin.fileSize,
-          modified: pin.updatedAt,
-          contentType: pin.mimeType,
-        })
-      }}
     />
   )
 }

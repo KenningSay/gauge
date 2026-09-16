@@ -97,6 +97,10 @@ export interface NotePin extends PinBase {
   type: 'note'
   text: string
   color: string
+  // Optional override. Left unset, the note picks black or white from the
+  // background's luminance, which is right for almost every colour — the
+  // field exists for the cases where it isn't.
+  textColor?: string
   opacity: number // 0-100, 100 = fully opaque
   texture: NoteTexture
 }
