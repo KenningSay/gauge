@@ -17,6 +17,8 @@
 // EventSource can't send a POST body or custom headers, which makes it
 // useless for the chat completions endpoint.
 
+import { getAuthHeader } from './webdav'
+
 export type AiModel = 'deepseek-chat' | 'deepseek-reasoner'
 
 export interface AiConfig {
@@ -207,6 +209,24 @@ async function readStream(
   void sawDone
 }
 
+
+// In proxy mode the DeepSeek key is attached server-side, so the browser
+// would otherwise send nothing of its own — leaving /ai/ open to anyone who
+// can reach the deployment, spending the owner's balance. The proxy is
+// expected to sit behind the same auth as the WebDAV share, so the session's
+// existing WebDAV credential is forwarded; the proxy checks it and replaces
+// the header with the real Bearer key before talking to DeepSeek. Direct
+// mode is unchanged: the user's own key goes in the header.
+function applyAuth(headers: Record<string, string>, config: AiConfig): void {
+  if (isProxyEndpoint(config.endpoint)) {
+    const dav = getAuthHeader()
+    if (dav) headers['Authorization'] = dav
+    return
+  }
+  if (!config.apiKey) throw new AiError('Не задан API-ключ DeepSeek', 401)
+  headers['Authorization'] = `Bearer ${config.apiKey}`
+}
+
 export async function streamChat(opts: StreamOptions): Promise<void> {
   const { config, messages, signal, onChunk } = opts
   const url = resolveEndpoint(config.endpoint).replace(/\/+$/, '') + '/chat/completions'
@@ -215,12 +235,7 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
   }
-  if (!isProxyEndpoint(config.endpoint)) {
-    if (!config.apiKey) {
-      throw new AiError('Не задан API-ключ DeepSeek', 401)
-    }
-    headers['Authorization'] = `Bearer ${config.apiKey}`
-  }
+  applyAuth(headers, config)
 
   const body = JSON.stringify({
     model: config.model,
@@ -276,10 +291,7 @@ export async function complete(
 ): Promise<{ content: string; promptTokens: number; completionTokens: number; costUsd: number }> {
   const url = resolveEndpoint(config.endpoint).replace(/\/+$/, '') + '/chat/completions'
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (!isProxyEndpoint(config.endpoint)) {
-    if (!config.apiKey) throw new AiError('Не задан API-ключ DeepSeek', 401)
-    headers['Authorization'] = `Bearer ${config.apiKey}`
-  }
+  applyAuth(headers, config)
   const body = JSON.stringify({
     model: config.model,
     messages,
@@ -334,7 +346,10 @@ export interface BalanceInfo {
 export async function fetchBalance(config: AiConfig, signal?: AbortSignal): Promise<BalanceInfo | null> {
   const url = resolveEndpoint(config.endpoint).replace(/\/+$/, '') + '/user/balance'
   const headers: Record<string, string> = {}
-  if (!isProxyEndpoint(config.endpoint)) {
+  if (isProxyEndpoint(config.endpoint)) {
+    const dav = getAuthHeader()
+    if (dav) headers['Authorization'] = dav
+  } else {
     if (!config.apiKey) return null
     headers['Authorization'] = `Bearer ${config.apiKey}`
   }

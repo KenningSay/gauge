@@ -18,6 +18,7 @@ Built and actually run against a raw nginx `dav` module; Nextcloud/ownCloud/Syno
 
 - [Why](#why)
 - [Features](#features)
+- [Boards](#boards)
 - [Quick start (Docker)](#quick-start-docker)
 - [Pointing it at your WebDAV server](#pointing-it-at-your-webdav-server)
 - [Keyboard shortcuts](#keyboard-shortcuts)
@@ -50,6 +51,31 @@ Most WebDAV clients are either a clunky OS-level network drive or a paid cloud d
 - Live cross-device updates (polls in the background, only re-renders when something actually changed)
 - Mobile-responsive: slide-in folder tree, touch multi-select, kebab menus, a bottom-safe layout — not just a squeezed desktop view
 - Dark/light theme, keyboard navigation throughout, a command palette for everything
+
+## Boards
+
+A second tab next to the file manager: an infinite canvas you drop things onto. It stores everything as plain JSON on the same WebDAV server — no extra service, no database.
+
+- **Pins**: notes (markdown, colour, opacity), images, video and audio, arbitrary files, and links (rendered as an iframe once you click into them, a favicon card otherwise)
+- Drag by the body or the tab on top, resize from eight handles, marquee-select with `Alt`+drag, right-click for layering/duplicate/colour/delete
+- **Undo/redo** (`Ctrl Z` / `Ctrl Shift Z`) over an unbounded op-log, persisted with the board — closing the tab doesn't reset your history
+- Drop files from your OS to copy them into the board's own assets folder; drag them in from the file manager tab to *reference* the vault file instead of duplicating it
+- Autosave, debounced, with a save indicator. If the board changed elsewhere since you loaded it, the save is refused and you're asked whether to overwrite or reload — it never silently clobbers another device's edits
+- Dropping a pin onto occupied space pushes the neighbours out of the way, chain-reaction style
+- Four built-in templates, plus "save this board as a template"
+
+### AI (DeepSeek, optional)
+
+A chat panel lives inside the boards tab, and pin right-click menus grow an **AI** submenu (improve/fix/shorten/expand text, summarize, find connections, tag). Answers land back on the board as notes, or rewrite the note you ran them on.
+
+Two ways to reach DeepSeek:
+
+- **Server-side proxy (recommended, and the default).** Set `DEEPSEEK_API_KEY` on the container; nginx injects the `Authorization` header at `/ai/`. The key never reaches the browser. **Protect that endpoint** — it spends your balance and the shipped template doesn't authenticate it. Gauge forwards the browser's WebDAV credential on every `/ai/` request for exactly this reason, so if the same server also hosts your WebDAV share, put its `auth_basic` on `/ai/` too and strangers get a 401.
+- **Direct endpoint (fallback).** Put `https://api.deepseek.com` in the panel's settings and your key alongside it. The key is kept in `sessionStorage` (gone when the tab closes) and never written to disk — but **this requires editing the CSP**: `connect-src 'self'` in `nginx.conf.template` blocks the request before CORS is even considered, so add `https://api.deepseek.com` there.
+
+Board data lives under `.gauge/` at the root of your WebDAV share (`boards-index/` for the board files, histories and chats; `boards/<id>/assets/` for uploaded pin files). Delete that folder and boards are gone — nothing else in the app depends on it. Don't create a `.gauge` folder by hand.
+
+Known limits: the audio pin shows cover art and a play button but the global player isn't built yet; there's no in-board search; and assets referenced by a *user-saved template* are not copied into boards created from it, so deleting the template breaks those pins.
 
 ## Quick start (Docker)
 
@@ -148,6 +174,8 @@ npm run dev
 - `Overwrite: F` is set on every `MOVE`/`COPY`, so renaming or pasting onto an existing name fails loudly instead of silently clobbering it.
 - Folder/file names are validated against path-traversal segments (`.`, `..`) before ever reaching a request — both at the input point and, independently, inside the one function that turns any path into a request URL, so a stray `..` can't be encoded/normalized into escaping `/dav/` onto another path on the same origin.
 - A 401 from the server (revoked credentials, expired session) drops the app back to the login screen immediately, instead of leaving a half-authenticated UI up with every subsequent request failing silently.
+
+- The DeepSeek key, in the recommended proxy setup, lives only in the container's environment and is attached by nginx — the browser never sees it. In direct mode it follows the same rule as the WebDAV credential: `sessionStorage`, never disk.
 
 Found something that looks like a real security issue? Open an issue — this is a young project and a second pair of eyes is always welcome.
 
