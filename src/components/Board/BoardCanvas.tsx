@@ -5,7 +5,7 @@ import { useUiStore } from '../../store/useUiStore'
 import { useFileStore } from '../../store/useFileStore'
 import { useBoardPanZoom, type ViewportState } from '../../hooks/useBoardPanZoom'
 import { useBoardVirtual } from '../../hooks/useBoardVirtual'
-import { boundsOf, rectsIntersect, resolvePush, type Rect } from '../../utils/boardGeo'
+import { boundsOf, rectsIntersect, resolvePush, resolvePushForMoved, type Rect } from '../../utils/boardGeo'
 import {
   looksLikeUrl,
   makeNotePin,
@@ -290,6 +290,23 @@ export function BoardCanvas() {
     [],
   )
 
+  // Pushes whatever the just-moved pins now overlap, as one undoable batch.
+  // The rule the board was specified with ("капля в воду") applied only to
+  // dropped files and AI-created notes; dragging a pin onto another simply
+  // buried it.
+  const pushNeighbours = useCallback((movedIds: string[]) => {
+    const state = useBoardStore.getState()
+    const current = state.board
+    // Absent on boards made before the setting existed, and those were
+    // pushing — so only an explicit false turns it off.
+    if (!current || current.settings.pushEnabled === false) return
+    const moves = resolvePushForMoved(
+      current.pins.map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h })),
+      movedIds,
+    )
+    if (moves.length) state.movePins(moves)
+  }, [])
+
   // Move/up listeners — attached to window so we keep getting events even
   // if the pointer leaves the container (user drags off-screen).
   useEffect(() => {
@@ -363,6 +380,7 @@ export function BoardCanvas() {
             moves.push({ id, x: snap(s.x + delta.dx), y: snap(s.y + delta.y) })
           }
           movePins(moves)
+          pushNeighbours(ids)
         }
       } else if (interaction.kind === 'resize') {
         const { id, current, startRect } = interaction
@@ -375,6 +393,8 @@ export function BoardCanvas() {
           }
           if (moves.length) movePins(moves)
           resizePin(id, { w: snap(current.w), h: snap(current.h) })
+          // A pin grown over its neighbours pushes them like a moved one.
+          pushNeighbours([id])
         }
       } else if (interaction.kind === 'marquee') {
         const { startWorld, currentWorld } = interaction
@@ -414,7 +434,23 @@ export function BoardCanvas() {
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
     }
-  }, [interaction, viewport.zoom, movePins, resizePin, selectMany, clearSelection, pins, screenToWorld])
+  }, [
+    interaction,
+    viewport.zoom,
+    movePins,
+    resizePin,
+    selectMany,
+    clearSelection,
+    pins,
+    screenToWorld,
+    // These were missing and the handlers close over them: a snap setting
+    // changed mid-session, or the push helper, would have been read from a
+    // stale closure until the next interaction rebuilt the effect.
+    pushNeighbours,
+    addEdge,
+    settings?.snapEnabled,
+    settings?.snapStep,
+  ])
 
   // --- keyboard shortcuts (scoped to when the board canvas is mounted) ---
   useEffect(() => {
@@ -765,6 +801,7 @@ export function BoardCanvas() {
       const pin = makeShapePin({ x: world.x - 130, y: world.y - 90, z }, kind)
       addPin(pin)
       useBoardStore.getState().selectOnly(pin.id)
+      pushNeighbours([pin.id])
       // No push here: a shape is usually drawn *around* existing pins, so
       // shoving them out of the way would defeat the point.
     },

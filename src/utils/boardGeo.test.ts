@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rectsIntersect, pointInRect, boundsOf, resolvePush, type Rect } from './boardGeo'
+import { rectsIntersect, pointInRect, boundsOf, resolvePush, resolvePushForMoved, type Rect } from './boardGeo'
 
 const r = (x: number, y: number, w = 100, h = 100): Rect => ({ x, y, w, h })
 
@@ -95,5 +95,52 @@ describe('resolvePush', () => {
       const final = { ...o, x: m?.x ?? o.x, y: m?.y ?? o.y }
       expect(rectsIntersect(placed, final)).toBe(false)
     }
+  })
+})
+
+describe('resolvePushForMoved', () => {
+  const pin = (id: string, x: number, y: number, w = 200, h = 160) => ({ id, x, y, w, h })
+
+  it('pushes a pin that the dragged one landed on', () => {
+    const moves = resolvePushForMoved([pin('dragged', 100, 100), pin('victim', 140, 120)], ['dragged'])
+    expect(moves.map((m) => m.id)).toEqual(['victim'])
+  })
+
+  it('leaves the moved pin itself alone', () => {
+    // Otherwise a drag shoves the very card the user is holding.
+    const moves = resolvePushForMoved([pin('dragged', 100, 100), pin('victim', 140, 120)], ['dragged'])
+    expect(moves.some((m) => m.id === 'dragged')).toBe(false)
+  })
+
+  it('clears a small pin dropped inside a much larger one', () => {
+    // The real case that started this: a note dropped into the middle of a
+    // big document card, entirely contained by it.
+    const big = pin('big', 751, -496, 680, 460)
+    const small = pin('small', 1000, -360, 220, 200)
+    const moves = resolvePushForMoved([big, small], ['small'])
+    expect(moves).toHaveLength(1)
+    const after = { ...big, x: moves[0].x, y: moves[0].y }
+    expect(rectsIntersect(small, after)).toBe(false)
+  })
+
+  it('moves nothing when nothing overlaps', () => {
+    expect(resolvePushForMoved([pin('a', 0, 0), pin('b', 900, 900)], ['a'])).toEqual([])
+  })
+
+  it('returns whole numbers', () => {
+    // Chained pushes accumulate fractions that would otherwise land in the
+    // saved board file as x: -430.4771835080092.
+    const moves = resolvePushForMoved(
+      [pin('a', 0, 0), pin('b', 33, 17), pin('c', 61, 29)],
+      ['a'],
+    )
+    for (const m of moves) {
+      expect(Number.isInteger(m.x)).toBe(true)
+      expect(Number.isInteger(m.y)).toBe(true)
+    }
+  })
+
+  it('ignores an unknown moved id instead of throwing', () => {
+    expect(resolvePushForMoved([pin('a', 0, 0)], ['ghost'])).toEqual([])
   })
 })

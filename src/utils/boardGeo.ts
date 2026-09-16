@@ -121,3 +121,42 @@ export function resolvePush(
   }
   return result
 }
+// Everything `movedIds` now overlaps, pushed clear in one pass.
+//
+// Extracted from the canvas so it can be tested: the per-pin resolvePush
+// above is easy to verify, but the part that actually decides which pins
+// move — excluding the dragged ones, carrying positions between pins,
+// rounding — lived inside a component where nothing could reach it.
+export function resolvePushForMoved(
+  pins: Array<{ id: string } & Rect>,
+  movedIds: string[],
+  gap = 16,
+): Array<{ id: string; x: number; y: number }> {
+  const moved = pins.filter((p) => movedIds.includes(p.id))
+  if (moved.length === 0) return []
+
+  const positions = new Map(pins.map((p) => [p.id, { x: p.x, y: p.y }]))
+  for (const pin of moved) {
+    // The moved pins are never pushed themselves — otherwise a drag would
+    // shove the very cards the user is holding.
+    const others = pins
+      .filter((p) => !movedIds.includes(p.id))
+      .map((p) => ({ id: p.id, ...positions.get(p.id)!, w: p.w, h: p.h }))
+    for (const push of resolvePush(others, { x: pin.x, y: pin.y, w: pin.w, h: pin.h }, gap)) {
+      positions.set(push.id, { x: push.x, y: push.y })
+    }
+  }
+
+  const out: Array<{ id: string; x: number; y: number }> = []
+  for (const pin of pins) {
+    if (movedIds.includes(pin.id)) continue
+    const pos = positions.get(pin.id)!
+    const x = Math.round(pos.x)
+    const y = Math.round(pos.y)
+    // Rounded before comparing: a chain of pushes accumulates fractions,
+    // and a pin at x=-430.4771835 would serialise into the board file
+    // exactly like that.
+    if (x !== Math.round(pin.x) || y !== Math.round(pin.y)) out.push({ id: pin.id, x, y })
+  }
+  return out
+}
