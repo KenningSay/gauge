@@ -97,7 +97,9 @@
   background: rgba(255, 255, 255, 0.14);
   border: calc(1px / var(--zoom, 1)) solid rgba(255, 255, 255, 0.18);
   backdrop-filter: blur(4px);
-  cursor: grab;
+  /* System cursor, not Chrome's oversized grab — see the note in
+     BoardCanvas.module.css. */
+  cursor: move;
   opacity: 0;
   transition: transform 160ms ease, background-color 160ms ease, opacity 140ms ease;
   z-index: 2;
@@ -105,7 +107,7 @@
 
 .shell:hover .tongue { opacity: 0.8; }
 
-.tongue:active { cursor: grabbing; }
+.tongue:active { cursor: move; }
 
 .tongueSelected {
   opacity: 1;
@@ -144,11 +146,14 @@
 .overlay {
   position: absolute;
   inset: 0;
-  cursor: grab;
+  /* Plain arrow at rest: the card is grabbable anywhere, but a permanent
+     "hand" over every pin is noise. It becomes a move cursor while
+     actually dragging. */
+  cursor: default;
   z-index: 1;
 }
 
-.overlay:active { cursor: grabbing; }
+.overlay:active { cursor: move; }
 
 /* ---------- resize handles ---------- */
 
