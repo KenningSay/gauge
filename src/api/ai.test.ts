@@ -167,7 +167,11 @@ describe('endpoint mode', () => {
     expect(isProxyEndpoint('https://api.deepseek.com')).toBe(false)
   })
 
-  it('sends no Authorization header in proxy mode — the key lives on the server', async () => {
+  it('never sends the DeepSeek key in proxy mode — it forwards the WebDAV session instead', async () => {
+    // The key belongs to the server in proxy mode. What goes out is the
+    // session's own WebDAV credential (null here, since no login happened),
+    // so the proxy can refuse strangers rather than letting anyone who finds
+    // the URL spend the owner's balance.
     const fetchMock = vi.fn(async (_url: unknown, _init: RequestInit) => sseResponse(['data: [DONE]\n\n']))
     vi.stubGlobal('fetch', fetchMock)
     await streamChat({
@@ -176,7 +180,9 @@ describe('endpoint mode', () => {
       onChunk: () => {},
     })
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
-    expect((init?.headers as Record<string, string>).Authorization).toBeUndefined()
+    const auth = (init?.headers as Record<string, string>).Authorization ?? ''
+    expect(auth).not.toContain('sk-should-not-be-sent')
+    expect(auth).not.toMatch(/^Bearer /)
   })
 })
 

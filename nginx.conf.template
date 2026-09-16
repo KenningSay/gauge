@@ -39,6 +39,14 @@ server {
     # proxy_buffering off is required for streaming: without it nginx
     # buffers the entire SSE response and the panel sees nothing until the
     # whole reply is complete, defeating the point of streaming.
+    # NOTE: this endpoint spends your DeepSeek balance, and nothing here
+    # authenticates the caller — anyone who can reach this container can use
+    # it. Gauge forwards the browser session's WebDAV credential on every
+    # /ai/ request precisely so a deployment can check it; if your setup can
+    # validate that credential (e.g. the same nginx also serves the WebDAV
+    # share and has its htpasswd), add auth_basic here. Otherwise keep this
+    # deployment off the public internet, or leave DEEPSEEK_API_KEY unset and
+    # use direct mode with your own key.
     location /ai/ {
         proxy_pass https://api.deepseek.com/;
         proxy_http_version 1.1;
