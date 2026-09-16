@@ -98,7 +98,29 @@
   .tonguesOpen { display: none; }
 
   .panel {
-    width: 100vw;
+    /* 100dvw, not 100vw: with a visible scrollbar or a zoomed visual
+       viewport, 100vw is wider than the screen and the panel starts
+       off-frame. */
+    width: 100dvw;
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+    padding-bottom: var(--safe-bottom);
+  }
+}
+
+/* A tongue is a 34px-wide strip down the edge of the screen. That is fine
+   for a cursor and hopeless for a thumb, so on touch it grows to a full
+   target and moves clear of the toolbar below it. */
+@media (pointer: coarse), (max-width: 640px) {
+  .tongue {
+    min-width: var(--tap);
+    padding: 20px 10px;
+  }
+
+  .tongues {
+    gap: 8px;
+    /* Clear of the bottom toolbar, which now spans the screen. */
+    bottom: auto;
   }
 }
 

@@ -132,3 +132,45 @@
   opacity: 0.55;
   cursor: default;
 }
+
+/* --- touch --------------------------------------------------------------
+   Keyed on the pointer OR a phone-width screen, not on width alone: a
+   touchscreen laptop is a coarse pointer at 1440px, and a 400px window on a
+   desktop is still a place where these controls are too small to aim at.
+
+   Eight tools do not fit across a 390px phone at a 44px target, so the row
+   scrolls sideways with snap points rather than shrinking to fit. Shrinking
+   to fit is how you get a toolbar nobody can hit. */
+
+@media (pointer: coarse), (max-width: 640px) {
+  .wrap {
+    left: max(8px, var(--safe-left));
+    right: max(8px, var(--safe-right));
+    bottom: max(10px, var(--safe-bottom));
+    transform: none;
+    align-items: stretch;
+  }
+
+  .bar {
+    /* The scroll lives on the row of buttons, not on the column that also
+       holds the hint, or the hint scrolls away with them. */
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    /* A pill whose ends are cut off by the scroll reads as broken; square
+       it off and let it span the screen instead. */
+    border-radius: var(--radius-lg);
+    padding: 5px 6px;
+  }
+
+  .bar::-webkit-scrollbar { display: none; }
+
+  .btn,
+  .shapeBtn {
+    width: var(--tap);
+    height: var(--tap);
+    flex: 0 0 auto;
+    scroll-snap-align: center;
+  }
+}

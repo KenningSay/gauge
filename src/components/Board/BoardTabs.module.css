@@ -167,3 +167,38 @@
 .menuItemDanger {
   color: var(--danger);
 }
+/* --- touch --------------------------------------------------------------
+   The board strip had a 16px close cross and a 28px "new board" button.
+   Both are well under what a finger can aim at, and the close cross sits
+   right beside the tab it closes, which is the worst possible neighbour. */
+
+@media (pointer: coarse), (max-width: 640px) {
+  .tab {
+    min-height: var(--tap);
+    padding-right: 6px;
+  }
+
+  /* 34 drawn, 44 hittable. A 44px close cross beside a 44px tab makes the
+     strip enormous and puts "close this board" under the same thumb as
+     "switch to it"; the halo buys the target without the bulk. */
+  .tabClose,
+  .addBtn {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+  }
+
+  .tabClose::after,
+  .addBtn::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+  }
+
+  /* The cross needs its own space from the tab label, or closing a board
+     and switching to it are the same gesture. */
+  .tabClose { margin-left: 6px; }
+
+  .existingSelect { min-height: var(--tap); }
+}
