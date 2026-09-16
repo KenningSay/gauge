@@ -50,6 +50,12 @@ interface UiStore {
   // to boards, not to the file list.
   activeTab: ActiveTab
   setActiveTab: (tab: ActiveTab) => void
+  // Whether the board's side panel is showing. It lives here because two
+  // components in different trees need it: the panel owns it, and the
+  // board's floating toolbar has to stand down while the panel is a
+  // full-screen surface on a phone.
+  boardPanelOpen: boolean
+  setBoardPanelOpen: (open: boolean) => void
 }
 
 let toastId = 0
@@ -98,6 +104,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   closeSidebar: () => set({ sidebarOpen: false }),
 
   activeTab: loadTab(),
+  boardPanelOpen: false,
+  setBoardPanelOpen: (open) => set({ boardPanelOpen: open }),
   setActiveTab: (tab) => {
     try {
       localStorage.setItem(TAB_STORAGE, tab)

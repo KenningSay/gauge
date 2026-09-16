@@ -80,6 +80,9 @@
   background: var(--bg-elevated);
   border-left: 1px solid var(--border);
   z-index: 25;
+  /* Closed, it is still mounted and parked off-screen for the transition;
+     without this it keeps catching pointer events along the right edge. */
+  pointer-events: none;
   /* Slides the full width of itself rather than fading in from a 30px
      offset: a panel that appears halfway across its own travel is what
      made the tabs look like they were racing it. */
@@ -89,6 +92,7 @@
 }
 
 .panelOpen {
+  pointer-events: auto;
   transform: translateX(0);
 }
 
@@ -98,6 +102,13 @@
   .tonguesOpen { display: none; }
 
   .panel {
+    /* On a phone the panel is the whole screen, not a strip beside the
+       board, so it has to sit above the board's own furniture. The toolbar
+       floats at z-index 60 and was landing across the panel's bottom edge:
+       over the chat input on the AI tab, over the last row of templates on
+       the other two. */
+    z-index: 80;
+
     /* 100dvw, not 100vw: with a visible scrollbar or a zoomed visual
        viewport, 100vw is wider than the screen and the panel starts
        off-frame. */

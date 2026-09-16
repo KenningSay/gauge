@@ -6,13 +6,14 @@
 // out of the way of the tab strip and the AI panel, the way most canvas
 // tools place theirs.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { StickyNote, FileText, Link as LinkIcon, Square, Circle, Diamond, Triangle, Maximize, Paperclip ,
   ImageDown,
   FileDown,
   Loader2,
 } from 'lucide-react'
 import type { ShapeKind } from '../../api/board'
+import { useUiStore } from '../../store/useUiStore'
 import styles from './BoardToolbar.module.css'
 
 interface Props {
@@ -37,10 +38,27 @@ const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
 ]
 
 export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onFit, onCreateVaultFile, onExport, exporting }: Props) {
+
+  // A phone shows the side panel full-screen; the toolbar would float
+  // across its bottom edge, over the chat input or the last row of
+  // templates. Nothing on the board is reachable at that moment anyway.
+  const panelOpen = useUiStore((s) => s.boardPanelOpen)
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px), (pointer: coarse)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px), (pointer: coarse)')
+    const onChange = () => setNarrow(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  const standDown = panelOpen && narrow
   const [shapesOpen, setShapesOpen] = useState(false)
 
   return (
-    <div className={styles.wrap}>
+    <div
+      data-board-toolbar
+      className={`${styles.wrap} ${standDown ? styles.standDown : ''}`}>
       {!hasEdges && (
         <div className={styles.hint}>Потяни точку на краю карточки, чтобы связать её с другой</div>
       )}

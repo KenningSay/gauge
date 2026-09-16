@@ -54,6 +54,16 @@ export function AiPanel() {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<PanelTab>('ai')
 
+  // The board's floating toolbar has to know the panel is up, and the two
+  // are in different component trees. A z-index race would be the other
+  // answer and it is the fragile one: they sit in different stacking
+  // contexts and the winner depends on which parent happens to make one.
+  const setBoardPanelOpen = useUiStore((s) => s.setBoardPanelOpen)
+  useEffect(() => {
+    setBoardPanelOpen(open)
+    return () => setBoardPanelOpen(false)
+  }, [open, setBoardPanelOpen])
+
   const toggleTab = (next: PanelTab) => {
     if (open && tab === next) {
       setOpen(false)
