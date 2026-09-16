@@ -39,15 +39,16 @@ import { useAiStore } from '../../store/useAiStore'
 import { useBoardStore } from '../../store/useBoardStore'
 import { useUiStore } from '../../store/useUiStore'
 import { makeNotePin } from '../../utils/boardPinFactories'
-import { LayoutTemplate } from 'lucide-react'
+import { BookOpen, LayoutTemplate } from 'lucide-react'
 import { TemplatePanel } from './TemplatePanel'
+import { HelpPanel } from './HelpPanel'
 import styles from './AiPanel.module.css'
 
 // The side panel holds more than the chat now: AI on one tab, the template
 // library on the other. The tongue stays a single control — two tongues
 // stacked down the edge of the board would be clutter — and switching tabs
 // while it's open is one click.
-type PanelTab = 'ai' | 'templates'
+type PanelTab = 'ai' | 'templates' | 'help'
 
 export function AiPanel() {
   const [open, setOpen] = useState(false)
@@ -111,6 +112,16 @@ export function AiPanel() {
           <LayoutTemplate size={14} />
           <span className={styles.tongueLabel}>Шаблоны</span>
         </button>
+        <button
+          className={`${styles.tongue} ${open && tab === 'help' ? styles.tongueActive : ''}`}
+          onClick={() => toggleTab('help')}
+          title="Как всё это работает"
+          aria-label="Справка"
+          aria-pressed={open && tab === 'help'}
+        >
+          <BookOpen size={14} />
+          <span className={styles.tongueLabel}>Справка</span>
+        </button>
       </div>
 
       {/* Always mounted so it can transition in and out; its contents are
@@ -124,7 +135,22 @@ export function AiPanel() {
       >
         {open && (
         <>
-          {tab === 'ai' ? (
+          {tab === 'help' ? (
+            <>
+              <div className={styles.simpleHeader}>
+                <span className={styles.headerTitleText}>Справка по доске</span>
+                <button
+                  className={styles.headerBtn}
+                  onClick={() => setOpen(false)}
+                  title="Закрыть"
+                  aria-label="Закрыть"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+              <HelpPanel />
+            </>
+          ) : tab === 'ai' ? (
             <>
               <PanelHeader onClose={() => setOpen(false)} streaming={streaming} />
               <ChatLog />

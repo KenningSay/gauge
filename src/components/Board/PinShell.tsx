@@ -144,6 +144,9 @@ export function PinShell({
     >
       <div
         ref={shellRef}
+        // Lets anything outside the pin find it — the formatting bar
+        // measures the note's body to fit text to the box.
+        data-pin-id={pin.id}
         // A shape is its own outline, so it opts out of the card chrome:
         // a rectangular drop shadow and a rectangular selection ring around
         // an ellipse look like a bug. Its shadow comes from the SVG path.
@@ -196,6 +199,7 @@ export function PinShell({
             <div
               key={side}
               className={`${styles.port} ${styles[`port_${side}`]}`}
+              data-export-ignore=""
               title="Потянуть связь"
               onPointerDown={(e) => {
                 e.stopPropagation()
@@ -213,6 +217,7 @@ export function PinShell({
             <div
               key={handle}
               className={`${styles.handle} ${styles[`handle_${handle}`]}`}
+              data-export-ignore=""
               onPointerDown={(e) => onPointerDownHandle(e, handle)}
             />
           ))}

@@ -50,7 +50,7 @@
   background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .input::placeholder { color: var(--text-faint); }
@@ -82,7 +82,7 @@
   background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 16px;
   text-align: left;
   cursor: pointer;
 }
@@ -108,20 +108,20 @@
   direction: rtl;
   text-align: right;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-faint);
 }
 
 .empty {
   padding: 24px 12px;
   text-align: center;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-dim);
 }
 
 .foot {
   padding: 8px 12px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-faint);
 }

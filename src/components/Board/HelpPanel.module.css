@@ -1,0 +1,128 @@
+.wrap {
+  /* The @container query below measures this element. Without the
+     container-type it matches nothing at all, and the one-column fallback
+     on a narrow panel silently never happened. */
+  container-type: inline-size;
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px 28px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  overscroll-behavior: contain;
+}
+
+.lead {
+  margin: 0 0 14px;
+  color: var(--text);
+}
+
+.section {
+  margin-bottom: 20px;
+}
+
+.h {
+  margin: 0 0 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Two columns while there is room for two, one when there isn't — the
+   panel is resizable and at its narrowest a label column eats the text. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 4px 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(232, 234, 230, 0.05);
+}
+
+@container (max-width: 340px) {
+  .row { grid-template-columns: 1fr; }
+}
+
+.rowLeft {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.rowRight {
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin: 10px 0 6px;
+}
+
+.keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
+.kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.sample {
+  position: relative;
+  margin: 6px 0 10px;
+}
+
+.sampleCode {
+  margin: 0;
+  padding: 9px 34px 9px 11px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.45;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.copy:hover {
+  color: var(--text);
+  border-color: var(--tick);
+}
+
+.wrap code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(232, 234, 230, 0.08);
+  font-family: var(--font-mono);
+  font-size: 16px;
+}

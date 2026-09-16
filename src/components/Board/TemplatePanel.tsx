@@ -187,6 +187,11 @@ const GROUPS: Array<{ title: string; items: TemplateDef[] }> = [
   },
 ]
 
+// How many styles the gallery offers, for the places that want to say so
+// without importing the whole table.
+export const TEMPLATE_COUNT = GROUPS.reduce((n, g) => n + g.items.length, 0)
+
+
 
 export function TemplatePanel() {
   const board = useBoardStore((s) => s.board)

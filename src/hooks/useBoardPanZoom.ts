@@ -55,6 +55,21 @@ function scrollableUnder(
   return false
 }
 
+// setPointerCapture throws NotFoundError when the pointer it names is
+// already gone — a click fast enough that the pointer is released between
+// the event being queued and the handler running, a pointer the browser
+// cancelled, a synthetic event. It is best-effort by nature: failing to
+// capture means the gesture ends when the pointer leaves the element,
+// which is a worse gesture, not a broken app. It must never throw out of
+// a pointerdown handler and abort the rest of it.
+function capture(el: HTMLElement | null, pointerId: number): void {
+  try {
+    el?.setPointerCapture(pointerId)
+  } catch {
+    // See above.
+  }
+}
+
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 4
 
@@ -157,8 +172,8 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
             p2: { id: e.pointerId, x: e.clientX, y: e.clientY },
             dist: null,
           }
-          containerRef.current?.setPointerCapture(e.pointerId)
-          containerRef.current?.setPointerCapture(first.pointerId)
+          capture(containerRef.current, e.pointerId)
+          capture(containerRef.current, first.pointerId)
           return
         }
       }
@@ -170,7 +185,7 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
         startViewportX: viewportRef.current.x,
         startViewportY: viewportRef.current.y,
       }
-      containerRef.current?.setPointerCapture(e.pointerId)
+      capture(containerRef.current, e.pointerId)
     },
     [containerRef],
   )

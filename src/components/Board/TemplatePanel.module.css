@@ -12,7 +12,7 @@
   padding: 10px 12px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-dim);
 }
 
@@ -22,7 +22,7 @@
 
 .groupTitle {
   margin: 8px 0 6px;
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -63,7 +63,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 62px;
+  height: 76px;
   padding: 10px 8px;
   overflow: hidden;
 }
@@ -79,7 +79,7 @@
 
 .previewText {
   padding: 0 6px;
-  font-size: 11px;
+  font-size: 16px;
   line-height: 1.2;
   text-align: center;
   overflow: hidden;
@@ -89,7 +89,7 @@
 }
 
 .cellLabel {
-  font-size: 12px;
+  font-size: 16px;
   text-align: center;
   color: var(--text-dim);
   overflow: hidden;
@@ -103,7 +103,9 @@
 
 .decorGrid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* Four across, not five: the labels are 16px now and five columns cut
+     every one of them mid-word. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -138,6 +140,9 @@
 }
 
 .decorCell .cellLabel {
-  font-size: 10px;
   letter-spacing: -0.01em;
+  /* Two lines rather than an ellipsis: "Сигнал Wi-Fi" cut to "Сигн…" is
+     not a label. */
+  white-space: normal;
+  line-height: 1.15;
 }

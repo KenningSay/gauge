@@ -100,7 +100,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(6px);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-dim);
   text-align: center;
   pointer-events: none;
@@ -115,4 +115,20 @@
 @media (pointer: coarse) {
   .btn, .shapeBtn { width: 42px; height: 42px; }
   .wrap { bottom: max(14px, env(safe-area-inset-bottom)); }
+}
+
+/* The export button while it works. Export mounts every pin on the board
+   at once and then rasterises them, which on a big board is a couple of
+   seconds of nothing happening otherwise. */
+.spin {
+  animation: toolbar-spin 900ms linear infinite;
+}
+
+@keyframes toolbar-spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }

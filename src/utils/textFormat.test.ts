@@ -9,6 +9,8 @@ import {
   toggleWrap,
   togglePrefix,
   frequentFonts,
+  fitFontSize,
+  bumpReaction,
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
 } from './textFormat'
@@ -189,5 +191,71 @@ describe('frequentFonts', () => {
   it('never returns more than it was asked for', () => {
     const many = Array.from({ length: 40 }, (_, i) => `f${i}`)
     expect(frequentFonts(many, FALLBACK)).toHaveLength(5)
+  })
+})
+
+describe('fitFontSize', () => {
+  it('finds the largest size that fits', () => {
+    expect(fitFontSize((s) => s <= 37)).toBe(37)
+  })
+
+  it('returns the minimum when nothing fits', () => {
+    // Better a note that is too small to read than a note left at 96px
+    // with its text hidden.
+    expect(fitFontSize(() => false)).toBe(MIN_FONT_SIZE)
+  })
+
+  it('returns the maximum when everything fits', () => {
+    expect(fitFontSize(() => true)).toBe(MAX_FONT_SIZE)
+  })
+
+  it('respects a caller-supplied range', () => {
+    expect(fitFontSize((s) => s <= 100, 10, 40)).toBe(40)
+  })
+
+  it('asks the measure function a bounded number of times', () => {
+    // A note holding a page of text reflows on every probe, so the search
+    // has to be bisection, not a walk.
+    let calls = 0
+    fitFontSize((s) => {
+      calls++
+      return s <= 53
+    })
+    expect(calls).toBeLessThanOrEqual(14)
+  })
+
+  it('never returns a size outside the range', () => {
+    const r = fitFontSize((s) => s <= 500, 8, 64)
+    expect(r).toBeGreaterThanOrEqual(8)
+    expect(r).toBeLessThanOrEqual(64)
+  })
+})
+
+describe('bumpReaction', () => {
+  it('adds a mark that is not there yet', () => {
+    expect(bumpReaction(undefined, '🔥', 1)).toEqual([{ emoji: '🔥', count: 1 }])
+  })
+
+  it('counts up rather than adding a second copy', () => {
+    expect(bumpReaction([{ emoji: '🔥', count: 1 }], '🔥', 1)).toEqual([{ emoji: '🔥', count: 2 }])
+  })
+
+  it('removes the mark when the last one is taken off', () => {
+    expect(bumpReaction([{ emoji: '🔥', count: 1 }], '🔥', -1)).toEqual([])
+  })
+
+  it('leaves the other marks alone', () => {
+    const out = bumpReaction([{ emoji: '🔥', count: 2 }, { emoji: '✅', count: 1 }], '🔥', -1)
+    expect(out).toEqual([{ emoji: '🔥', count: 1 }, { emoji: '✅', count: 1 }])
+  })
+
+  it('does nothing when asked to remove one that is not there', () => {
+    expect(bumpReaction([{ emoji: '✅', count: 1 }], '🔥', -1)).toEqual([{ emoji: '✅', count: 1 }])
+  })
+
+  it('never mutates the list it was given', () => {
+    const before = [{ emoji: '🔥', count: 1 }]
+    bumpReaction(before, '🔥', 1)
+    expect(before).toEqual([{ emoji: '🔥', count: 1 }])
   })
 })

@@ -7,7 +7,11 @@
 // tools place theirs.
 
 import { useState } from 'react'
-import { StickyNote, FileText, Link as LinkIcon, Square, Circle, Diamond, Triangle, Maximize, Paperclip } from 'lucide-react'
+import { StickyNote, FileText, Link as LinkIcon, Square, Circle, Diamond, Triangle, Maximize, Paperclip ,
+  ImageDown,
+  FileDown,
+  Loader2,
+} from 'lucide-react'
 import type { ShapeKind } from '../../api/board'
 import styles from './BoardToolbar.module.css'
 
@@ -15,6 +19,8 @@ interface Props {
   // Hides the connection hint once the user has made some — it's an
   // onboarding line, not a permanent label.
   hasEdges: boolean
+  onExport: (format: 'png' | 'pdf') => void
+  exporting: boolean
   onCreateNote: () => void
   onCreateVaultNote: () => void
   onCreateLink: () => void
@@ -30,7 +36,7 @@ const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
   { id: 'triangle', label: 'Треугольник', icon: <Triangle size={16} /> },
 ]
 
-export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onFit, onCreateVaultFile }: Props) {
+export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onFit, onCreateVaultFile, onExport, exporting }: Props) {
   const [shapesOpen, setShapesOpen] = useState(false)
 
   return (
@@ -97,6 +103,24 @@ export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCrea
 
         <button className={styles.btn} title="Показать всю доску" aria-label="Показать всю доску" onClick={onFit}>
           <Maximize size={17} />
+        </button>
+        <button
+          className={styles.btn}
+          title="Выгрузить доску в PNG"
+          aria-label="Выгрузить доску в PNG"
+          disabled={exporting}
+          onClick={() => onExport('png')}
+        >
+          {exporting ? <Loader2 size={17} className={styles.spin} /> : <ImageDown size={17} />}
+        </button>
+        <button
+          className={styles.btn}
+          title="Выгрузить доску в PDF"
+          aria-label="Выгрузить доску в PDF"
+          disabled={exporting}
+          onClick={() => onExport('pdf')}
+        >
+          <FileDown size={17} />
         </button>
       </div>
 
