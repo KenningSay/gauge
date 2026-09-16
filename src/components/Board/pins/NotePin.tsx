@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { FileText, AlertCircle } from 'lucide-react'
 import type { NotePin as NotePinT } from '../../../api/board'
+import { getTextContent, putTextContent } from '../../../api/webdav'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { usePinActivation } from '../PinShell'
 import styles from './Pins.module.css'
@@ -26,8 +28,48 @@ export function NotePin({ pin }: { pin: NotePinT }) {
     if (activated) areaRef.current?.focus()
   }, [activated])
 
+  // --- linked vault file ---------------------------------------------
+  // A note with a sourcePath is a view onto a real file: the board file
+  // keeps the last known text as a cache so the pin renders instantly, but
+  // the file wins on load and receives every edit.
+  const [linkError, setLinkError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!pin.sourcePath) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const fresh = await getTextContent(pin.sourcePath!)
+        if (cancelled) return
+        setLinkError(null)
+        // Only touch the board when the file actually differs, or every
+        // board open would mark the board dirty and trigger a save.
+        if (fresh !== pin.text) {
+          updatePin(pin.id, 'text', fresh)
+          setDraft(fresh)
+        }
+      } catch (e) {
+        if (!cancelled) setLinkError(e instanceof Error ? e.message : String(e))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // Deliberately keyed on the path alone: re-reading on every text change
+    // would fight the user's own typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin.sourcePath, pin.id])
+
   const commit = () => {
-    if (draftRef.current !== pin.text) updatePin(pin.id, 'text', draftRef.current)
+    const next = draftRef.current
+    if (next !== pin.text) {
+      updatePin(pin.id, 'text', next)
+      if (pin.sourcePath) {
+        void putTextContent(pin.sourcePath, next).catch((e) =>
+          setLinkError(e instanceof Error ? e.message : String(e)),
+        )
+      }
+    }
     setActivated(false)
   }
 
@@ -38,7 +80,14 @@ export function NotePin({ pin }: { pin: NotePinT }) {
   // cleanup, where the closed-over `draft` would be a stale render's copy.
   const commitRef = useRef(() => {})
   commitRef.current = () => {
-    if (draftRef.current !== pin.text) updatePin(pin.id, 'text', draftRef.current)
+    const next = draftRef.current
+    if (next === pin.text) return
+    updatePin(pin.id, 'text', next)
+    if (pin.sourcePath) {
+      void putTextContent(pin.sourcePath, next).catch((e) =>
+        setLinkError(e instanceof Error ? e.message : String(e)),
+      )
+    }
   }
 
   useEffect(() => {
@@ -85,6 +134,16 @@ export function NotePin({ pin }: { pin: NotePinT }) {
           </div>
         </div>
       )}
+      {pin.sourcePath && (
+        <div
+          className={`${styles.noteSource} ${linkError ? styles.noteSourceError : ''}`}
+          title={linkError ? `Файл недоступен: ${linkError}` : `Связана с ${pin.sourcePath}`}
+        >
+          {linkError ? <AlertCircle size={11} /> : <FileText size={11} />}
+          <span>{pin.sourcePath.split('/').pop()}</span>
+        </div>
+      )}
+
       <span
         className={shell.tongue}
         style={{ display: 'none' }}

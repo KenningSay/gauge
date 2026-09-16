@@ -2,15 +2,13 @@
 //   - positions the pin in world coords
 //   - the "tongue" on top for dragging pins with interactive bodies
 //   - 8 resize handles (visible only on hover/selection, per spec)
-//   - the selection glow layer (a separate absolutely-positioned div so
-//     the animation stays on opacity/transform only — the "не прожорливо"
-//     requirement from the spec)
+//   - the selection outline, which follows the pin's own rounded shape
 //   - the "activated" state (double-click) that lets interactive bodies
 //     (video, iframe, note textarea) receive pointer events
 //
-// The glow is a sibling element, not a box-shadow on the pin itself.
-// Animating box-shadow repaints the pin every frame; animating opacity
-// on a pre-composited layer is free.
+// Selection is an outline on the shell whose width is divided by the canvas
+// zoom (--zoom, set on the world layer), so it stays hairline-thin at any
+// scale instead of growing with the pin.
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { Pin } from '../../api/board'
@@ -148,9 +146,6 @@ export function PinShell({
           setActivatedState(true)
         }}
       >
-        {/* Glow layer — animated only via opacity, never re-laid-out. */}
-        <div className={styles.glow} aria-hidden />
-
         {/* Tongue: always visible in mini form, expands on selection. */}
         <div
           className={`${styles.tongue} ${selected ? styles.tongueSelected : ''}`}

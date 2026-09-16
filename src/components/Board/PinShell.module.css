@@ -25,49 +25,29 @@
      (an inline transform would otherwise win over anything set here). This
      rule only has to own the origin; the transition is on .shell. */
   transform-origin: center;
-  /* A crisp ring does the work the glow can't: the glow sits behind an
-     opaque pin, so only its outer halo is ever visible, and on a dark
-     board that halo alone is easy to miss. */
-  box-shadow:
-    0 0 0 2px var(--tick),
-    0 6px 28px rgba(251, 191, 36, 0.28);
+  /* An outline, not a glow: it follows the pin's own rounded corners
+     instead of drawing a rectangle around it, the way every serious canvas
+     (tldraw, Figma, Miro) marks a selection. Width is divided by the
+     canvas zoom so the line stays hairline-thin at any scale rather than
+     fattening up as you zoom in. */
+  outline: calc(1.5px / var(--zoom, 1)) solid var(--signal);
+  outline-offset: calc(2px / var(--zoom, 1));
+}
+
+/* Hover hint on an unselected pin — the same idea at a third of the
+   strength, so the board tells you what you're about to grab. */
+.shell:not(.selected):hover {
+  outline: calc(1px / var(--zoom, 1)) solid var(--border-strong);
+  outline-offset: calc(2px / var(--zoom, 1));
 }
 
 @media (prefers-reduced-motion: reduce) {
   .shell { animation: none; transition: none; }
 }
 
-/* ---------- glow layer ---------- */
-
-.glow {
-  position: absolute;
-  inset: -18px;
-  border-radius: 24px;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(251, 191, 36, 0.55) 0%,
-    rgba(251, 191, 36, 0.3) 55%,
-    rgba(251, 191, 36, 0) 85%
-  );
-  opacity: 0;
-  transition: opacity 200ms ease;
-  z-index: -1;
-}
-
-.shell.selected .glow {
-  opacity: 1;
-  animation: glow-breathe 2.8s ease-in-out infinite;
-}
-
-@keyframes glow-breathe {
-  0%, 100% { opacity: 0.7; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell.selected .glow { animation: none; opacity: 0.85; }
-}
+/* The glow layer is gone: a radial gradient behind an opaque pin only ever
+   showed as a rectangular haze around it, which read as a bug rather than a
+   highlight. Selection is the outline above. */
 
 /* ---------- tongue ---------- */
 
@@ -167,13 +147,20 @@
 .handle_e { right: -4px; }
 .handle_w { left: -4px; }
 
-/* Visual dot on the four corners — a subtle hint that a handle is
-   there without drawing a full border. */
+/* Round white dots on the corners, the pattern Miro and Figma both use:
+   the grab target stays a comfortable 14px while the dot itself reads as
+   small and precise. Sized against the zoom for the same reason as the
+   outline. */
 .handle_nw::after, .handle_ne::after, .handle_sw::after, .handle_se::after {
   content: '';
   position: absolute;
-  inset: 4px;
-  border-radius: 2px;
-  background: var(--tick);
-  opacity: 0.65;
+  top: 50%;
+  left: 50%;
+  width: calc(8px / var(--zoom, 1));
+  height: calc(8px / var(--zoom, 1));
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #fff;
+  border: calc(1.5px / var(--zoom, 1)) solid var(--signal);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }

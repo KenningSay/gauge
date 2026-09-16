@@ -14,6 +14,9 @@ import {
   pinFromVaultEntry,
 } from '../../utils/boardPinFactories'
 import { collectDroppedEntries } from '../../utils/dropFolder'
+import { getTextContent } from '../../api/webdav'
+import type { FileEntry } from '../../api/types'
+import { VaultNotePicker } from './VaultNotePicker'
 import { runPool } from '../../utils/pool'
 import { PinRenderer } from './pins/PinRenderer'
 import { PinContextMenu, type PinMenuTarget } from './PinContextMenu'
@@ -503,6 +506,45 @@ export function BoardCanvas() {
     [addPin, movePins, pins],
   )
 
+  // --- "Note from the vault" (a linked .md file) ---
+  // The picker is opened from here and resolves in the handler below; the
+  // world position is remembered so the pin lands where the menu was.
+  const [vaultPickerAt, setVaultPickerAt] = useState<{ x: number; y: number } | null>(null)
+
+  const createVaultNoteAt = useCallback((world: { x: number; y: number }) => {
+    setVaultPickerAt(world)
+  }, [])
+
+  const handleVaultNotePick = useCallback(
+    async (entry: FileEntry) => {
+      const world = vaultPickerAt
+      setVaultPickerAt(null)
+      if (!world) return
+      let text = ''
+      try {
+        text = await getTextContent(entry.path)
+      } catch (err) {
+        pushToast(
+          `Не удалось прочитать «${entry.name}»: ${err instanceof Error ? err.message : String(err)}`,
+          'error',
+        )
+        return
+      }
+      const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
+      const pin = makeNotePin({ x: world.x - 160, y: world.y - 130, z }, text, '#e8eae6')
+      // Wider than a sticky note by default — a real document needs room.
+      const linked = { ...pin, w: 320, h: 260, sourcePath: entry.path, textColor: '#16150f' }
+      addPin(linked)
+      const state = useBoardStore.getState()
+      const others = (state.board?.pins ?? [])
+        .filter((p) => p.id !== linked.id)
+        .map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h }))
+      const pushed = resolvePush(others, linked, 16)
+      if (pushed.length) movePins(pushed)
+    },
+    [vaultPickerAt, pins, addPin, movePins, pushToast],
+  )
+
   // --- "Create link here" from the context menu ---
   const createLinkAt = useCallback(
     async (world: { x: number; y: number }) => {
@@ -566,6 +608,10 @@ export function BoardCanvas() {
         style={{
           transform: `translate(${-viewport.x * viewport.zoom}px, ${-viewport.y * viewport.zoom}px) scale(${viewport.zoom})`,
           transformOrigin: '0 0',
+          // Everything inside this layer is scaled by the transform above,
+          // which would also scale hairlines and handles. Pins divide by
+          // this to stay visually constant at any zoom.
+          ['--zoom' as string]: viewport.zoom,
         }}
       >
         {sorted.map((pin) => (
@@ -597,7 +643,22 @@ export function BoardCanvas() {
         />
       )}
 
-      {menu && <PinContextMenu target={menu} onClose={() => setMenu(null)} onCreateNote={createNoteAt} onCreateLink={createLinkAt} />}
+      {menu && (
+        <PinContextMenu
+          target={menu}
+          onClose={() => setMenu(null)}
+          onCreateNote={createNoteAt}
+          onCreateLink={createLinkAt}
+          onCreateVaultNote={createVaultNoteAt}
+        />
+      )}
+
+      {vaultPickerAt && (
+        <VaultNotePicker
+          onPick={(entry) => void handleVaultNotePick(entry)}
+          onCancel={() => setVaultPickerAt(null)}
+        />
+      )}
     </div>
   )
 }
