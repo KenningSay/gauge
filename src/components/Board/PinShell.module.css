@@ -38,14 +38,16 @@
      (tldraw, Figma, Miro) marks a selection. Width is divided by the
      canvas zoom so the line stays hairline-thin at any scale rather than
      fattening up as you zoom in. */
-  outline: calc(1.5px / var(--zoom, 1)) solid var(--signal);
-  outline-offset: calc(2px / var(--zoom, 1));
-  /* A restrained halo *under* the card — it clears the edge by a few
-     pixels and no more. A box-shadow follows the border radius, so unlike
-     the old gradient layer it can't read as a rectangle around a rounded
-     card. The elevation shadows stay underneath it. */
+  /* Amber at 30%: present, but not a hard line drawn around the card. */
+  outline: calc(1.5px / var(--zoom, 1)) solid rgba(251, 191, 36, 0.3);
+  outline-offset: calc(3px / var(--zoom, 1));
+  /* The halo, in two layers: a tight bright one hugging the edge and a
+     wide soft one falling off into the board. One layer alone reads either
+     as a hard ring or as fog — the pair is what looks lit. Both follow the
+     border radius, so a rounded card glows rounded. */
   box-shadow:
-    0 0 calc(10px / var(--zoom, 1)) calc(1px / var(--zoom, 1)) rgba(45, 212, 191, 0.3),
+    0 0 calc(8px / var(--zoom, 1)) calc(1px / var(--zoom, 1)) rgba(251, 191, 36, 0.45),
+    0 0 calc(28px / var(--zoom, 1)) calc(6px / var(--zoom, 1)) rgba(251, 191, 36, 0.22),
     0 calc(1px / var(--zoom, 1)) calc(2px / var(--zoom, 1)) rgba(0, 0, 0, 0.3),
     0 calc(5px / var(--zoom, 1)) calc(18px / var(--zoom, 1)) rgba(0, 0, 0, 0.26);
 }
@@ -112,8 +114,8 @@
 .tongueSelected {
   opacity: 1;
   transform: translateX(-50%) scale(1);
-  background: color-mix(in srgb, var(--signal) 45%, transparent);
-  border-color: color-mix(in srgb, var(--signal) 75%, transparent);
+  background: color-mix(in srgb, var(--tick) 45%, transparent);
+  border-color: color-mix(in srgb, var(--tick) 75%, transparent);
 }
 
 .shell:hover .tongueSelected { opacity: 1; }
@@ -204,8 +206,8 @@
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: #fff;
-  border: calc(1.5px / var(--zoom, 1)) solid var(--signal);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  border: calc(1.5px / var(--zoom, 1)) solid var(--tick);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 /* ---------- connection ports ---------- */
 
@@ -233,13 +235,13 @@
   height: calc(9px / var(--zoom, 1));
   border-radius: 50%;
   background: var(--bg-elevated);
-  border: calc(2px / var(--zoom, 1)) solid var(--signal);
+  border: calc(2px / var(--zoom, 1)) solid var(--tick);
   transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1.1), background-color 120ms ease;
 }
 
 .port:hover .portDot {
   transform: scale(1.35);
-  background: var(--signal);
+  background: var(--tick);
 }
 
 .port_top    { top: calc(-9px / var(--zoom, 1)); left: 50%; margin-left: calc(-9px / var(--zoom, 1)); }
@@ -261,7 +263,7 @@
 
 .shell.shellShape.selected {
   box-shadow: none;
-  outline-color: color-mix(in srgb, var(--signal) 55%, transparent);
+  outline-color: rgba(251, 191, 36, 0.3);
   outline-offset: calc(4px / var(--zoom, 1));
 }
 
