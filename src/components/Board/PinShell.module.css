@@ -4,13 +4,21 @@
   left: 0;
   border-radius: var(--radius-md);
   /* Two separate easings on purpose: position follows the cursor with a
-     short overshoot, while the selection ring fades in on a plain curve —
-     a springy shadow reads as jitter. */
+     short overshoot, while shadows fade on a plain curve — a springy
+     shadow reads as jitter. */
   transition:
     transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1.1),
     box-shadow 180ms ease;
   will-change: transform;
   animation: pin-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  /* Resting elevation: a card sitting on the board, not painted onto it.
+     Two layers — a tight contact shadow plus a wider soft one — is what
+     makes a surface read as lifted rather than outlined. Blur radii are
+     divided by the zoom along with everything else, or a shadow tuned at
+     100% turns into a smear at 300%. */
+  box-shadow:
+    0 calc(1px / var(--zoom, 1)) calc(2px / var(--zoom, 1)) rgba(0, 0, 0, 0.28),
+    0 calc(4px / var(--zoom, 1)) calc(14px / var(--zoom, 1)) rgba(0, 0, 0, 0.22);
 }
 
 /* Appearing pins ease in rather than popping — the difference between a
@@ -32,6 +40,22 @@
      fattening up as you zoom in. */
   outline: calc(1.5px / var(--zoom, 1)) solid var(--signal);
   outline-offset: calc(2px / var(--zoom, 1));
+  /* A restrained halo *under* the card — it clears the edge by a few
+     pixels and no more. A box-shadow follows the border radius, so unlike
+     the old gradient layer it can't read as a rectangle around a rounded
+     card. The elevation shadows stay underneath it. */
+  box-shadow:
+    0 0 calc(10px / var(--zoom, 1)) calc(1px / var(--zoom, 1)) rgba(45, 212, 191, 0.3),
+    0 calc(1px / var(--zoom, 1)) calc(2px / var(--zoom, 1)) rgba(0, 0, 0, 0.3),
+    0 calc(5px / var(--zoom, 1)) calc(18px / var(--zoom, 1)) rgba(0, 0, 0, 0.26);
+}
+
+/* Held: the card lifts off the board while you drag it. Reuses the same
+   two-layer recipe, pushed one step further. */
+.shell.dragging {
+  box-shadow:
+    0 calc(2px / var(--zoom, 1)) calc(4px / var(--zoom, 1)) rgba(0, 0, 0, 0.32),
+    0 calc(12px / var(--zoom, 1)) calc(30px / var(--zoom, 1)) rgba(0, 0, 0, 0.35);
 }
 
 /* Hover hint on an unselected pin — the same idea at a third of the
@@ -39,6 +63,9 @@
 .shell:not(.selected):hover {
   outline: calc(1px / var(--zoom, 1)) solid var(--border-strong);
   outline-offset: calc(2px / var(--zoom, 1));
+  box-shadow:
+    0 calc(1px / var(--zoom, 1)) calc(3px / var(--zoom, 1)) rgba(0, 0, 0, 0.3),
+    0 calc(6px / var(--zoom, 1)) calc(20px / var(--zoom, 1)) rgba(0, 0, 0, 0.26);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -51,32 +78,43 @@
 
 /* ---------- tongue ---------- */
 
+/* The drag handle above the card. Hidden until the pin is hovered or
+   selected: a board of twenty pins used to be a board of twenty little
+   pills floating over it, which is visual noise for an affordance you only
+   need at the moment you reach for it. Sized against the zoom like the
+   other chrome. */
 .tongue {
   position: absolute;
-  top: -10px;
+  top: calc(-11px / var(--zoom, 1));
   left: 50%;
-  transform: translateX(-50%) scale(0.7);
+  transform: translateX(-50%) scale(0.85);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 10px;
+  width: calc(40px / var(--zoom, 1));
+  height: calc(11px / var(--zoom, 1));
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
+  border: calc(1px / var(--zoom, 1)) solid rgba(255, 255, 255, 0.18);
   backdrop-filter: blur(4px);
   cursor: grab;
-  transition: transform 160ms ease, background-color 160ms ease;
+  opacity: 0;
+  transition: transform 160ms ease, background-color 160ms ease, opacity 140ms ease;
   z-index: 2;
 }
+
+.shell:hover .tongue { opacity: 0.8; }
 
 .tongue:active { cursor: grabbing; }
 
 .tongueSelected {
+  opacity: 1;
   transform: translateX(-50%) scale(1);
-  background: rgba(251, 191, 36, 0.55);
-  border-color: rgba(251, 191, 36, 0.85);
+  background: color-mix(in srgb, var(--signal) 45%, transparent);
+  border-color: color-mix(in srgb, var(--signal) 75%, transparent);
 }
+
+.shell:hover .tongueSelected { opacity: 1; }
 
 .tongueDots {
   width: 22px;

@@ -70,6 +70,14 @@ export function releaseBlobUrl(path: string): void {
   if (!entry) return
   entry.refs--
   if (entry.refs > 0) return
+  // Defensive: an unbalanced release (one acquire, two releases) would
+  // otherwise tear down an entry other holders still depend on. Callers
+  // must pair the two, but a blank image with no error is a miserable bug
+  // to track down, so a stray release is ignored rather than trusted.
+  if (entry.refs < 0) {
+    entry.refs = 0
+    return
+  }
   cache.delete(path)
   // If the fetch never resolved (still in flight), the .then above will
   // see cache.get(path) !== entry and revoke on its own. If it did resolve,

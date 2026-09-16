@@ -79,3 +79,19 @@ describe('blobCache', () => {
     expect(() => releaseBlobUrl('/never-acquired.png')).not.toThrow()
   })
 })
+
+describe('unbalanced release', () => {
+  it('ignores a second release for the same acquire', async () => {
+    // One acquire, two releases: an image pin unmounting mid-fetch used to
+    // do exactly this, which revoked the blob a later mount was using.
+    const url = await acquireBlobUrl('/a.png')
+    releaseBlobUrl('/a.png')
+    releaseBlobUrl('/a.png')
+
+    revoked.length = 0
+    const again = await acquireBlobUrl('/a.png')
+    expect(again).toMatch(/^blob:/)
+    expect(revoked).not.toContain(again)
+    expect(url).not.toBe(again)
+  })
+})

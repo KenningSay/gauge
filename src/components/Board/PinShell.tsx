@@ -129,7 +129,7 @@ export function PinShell({
     >
       <div
         ref={shellRef}
-        className={`${styles.shell} ${selected ? styles.selected : ''}`}
+        className={`${styles.shell} ${selected ? styles.selected : ''} ${override ? styles.dragging : ''}`}
         style={{
           transform: `translate(${x}px, ${y}px)${selected ? ' scale(1.02)' : ''}`,
           // `override` is only set while a drag or resize is live. The
