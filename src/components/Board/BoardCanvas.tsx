@@ -14,6 +14,9 @@ import {
   pinFromVaultEntry,
 } from '../../utils/boardPinFactories'
 import { collectDroppedEntries } from '../../utils/dropFolder'
+import { EdgeLayer } from './EdgeLayer'
+import { bestSides, edgePath, portPoint } from '../../utils/edgeGeo'
+import type { Edge, PortSide } from '../../api/board'
 import { getTextContent } from '../../api/webdav'
 import type { FileEntry } from '../../api/types'
 import { VaultNotePicker } from './VaultNotePicker'
@@ -23,6 +26,19 @@ import { PinContextMenu, type PinMenuTarget } from './PinContextMenu'
 import styles from './BoardCanvas.module.css'
 
 type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+// setPointerCapture throws if the pointer is already gone — a fast flick,
+// a pointer the browser has released, or a synthetic event. It's an
+// optimisation (it keeps events coming when the cursor leaves the window),
+// never a requirement, so a failure must not abort the gesture that was
+// just starting.
+function capturePointer(el: HTMLElement | null, pointerId: number): void {
+  try {
+    el?.setPointerCapture(pointerId)
+  } catch {
+    // Ignored on purpose: window-level move/up listeners still fire.
+  }
+}
 
 type Interaction =
   | null
@@ -49,6 +65,17 @@ type Interaction =
       startWorld: { x: number; y: number }
       currentWorld: { x: number; y: number }
     }
+  | {
+      kind: 'wire'
+      pointerId: number
+      fromPinId: string
+      fromSide: PortSide
+      currentWorld: { x: number; y: number }
+      // The pin the cursor is over, if any — highlighted as a drop target.
+      overPinId: string | null
+    }
+
+const NO_EDGES: Edge[] = []
 
 const MIN_W = 80
 const MIN_H = 80
@@ -89,6 +116,10 @@ export function BoardCanvas() {
   const selected = useBoardStore((s) => s.selected)
   const setViewport = useBoardStore((s) => s.setViewport)
   const addPin = useBoardStore((s) => s.addPin)
+  const addEdge = useBoardStore((s) => s.addEdge)
+  const removeEdges = useBoardStore((s) => s.removeEdges)
+  const edges = useBoardStore((s) => s.board?.edges) ?? NO_EDGES
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const movePins = useBoardStore((s) => s.movePins)
   const resizePin = useBoardStore((s) => s.resizePin)
   const reorderPin = useBoardStore((s) => s.reorderPin)
@@ -158,7 +189,7 @@ export function BoardCanvas() {
         e.preventDefault()
         const rect = containerRef.current!.getBoundingClientRect()
         const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
-        containerRef.current!.setPointerCapture(e.pointerId)
+        capturePointer(containerRef.current, e.pointerId)
         setInteraction({
           kind: 'marquee',
           pointerId: e.pointerId,
@@ -204,7 +235,7 @@ export function BoardCanvas() {
         const p = pins.find((x) => x.id === id)
         if (p) startPositions.set(id, { x: p.x, y: p.y })
       }
-      containerRef.current!.setPointerCapture(e.pointerId)
+      capturePointer(containerRef.current, e.pointerId)
       setInteraction({
         kind: 'drag',
         pointerId: e.pointerId,
@@ -217,11 +248,29 @@ export function BoardCanvas() {
     [pins, reorderPin, selectMany, selectOnly],
   )
 
+  const beginWire = useCallback(
+    (e: React.PointerEvent, pin: Pin, side: PortSide) => {
+      if (e.button !== 0) return
+      e.stopPropagation()
+      capturePointer(containerRef.current, e.pointerId)
+      const rect = containerRef.current!.getBoundingClientRect()
+      setInteraction({
+        kind: 'wire',
+        pointerId: e.pointerId,
+        fromPinId: pin.id,
+        fromSide: side,
+        currentWorld: screenToWorld(e.clientX - rect.left, e.clientY - rect.top),
+        overPinId: null,
+      })
+    },
+    [containerRef, screenToWorld],
+  )
+
   const beginPinResize = useCallback(
     (e: React.PointerEvent, pin: Pin, handle: Handle) => {
       if (e.button !== 0) return
       e.stopPropagation()
-      containerRef.current!.setPointerCapture(e.pointerId)
+      capturePointer(containerRef.current, e.pointerId)
       const rect: Rect = { x: pin.x, y: pin.y, w: pin.w, h: pin.h }
       setInteraction({
         kind: 'resize',
@@ -265,6 +314,25 @@ export function BoardCanvas() {
         const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
         setInteraction((cur) =>
           cur && cur.kind === 'marquee' ? { ...cur, currentWorld: world } : cur,
+        )
+      } else if (interaction.kind === 'wire') {
+        const rect = containerRef.current!.getBoundingClientRect()
+        const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+        // Topmost pin under the cursor wins, matching what the user sees.
+        const over = [...pins]
+          .sort((a, b) => b.z - a.z)
+          .find(
+            (p) =>
+              p.id !== interaction.fromPinId &&
+              world.x >= p.x &&
+              world.x <= p.x + p.w &&
+              world.y >= p.y &&
+              world.y <= p.y + p.h,
+          )
+        setInteraction((cur) =>
+          cur && cur.kind === 'wire'
+            ? { ...cur, currentWorld: world, overPinId: over?.id ?? null }
+            : cur,
         )
       }
     }
@@ -314,6 +382,22 @@ export function BoardCanvas() {
         const hits = pins.filter((p) => rectsIntersect(box, p)).map((p) => p.id)
         if (hits.length) selectMany(hits)
         else clearSelection()
+      } else if (interaction.kind === 'wire') {
+        // Dropped on a pin: connect. Dropped anywhere else: nothing — the
+        // alternative (spawning a note there) is too easy to trigger by
+        // accident when you let go in the wrong place.
+        const { fromPinId, fromSide, overPinId } = interaction
+        if (overPinId) {
+          const target = pins.find((p) => p.id === overPinId)
+          const source = pins.find((p) => p.id === fromPinId)
+          if (target && source) {
+            addEdge({
+              id: crypto.randomUUID(),
+              from: { pinId: fromPinId, side: fromSide },
+              to: { pinId: overPinId, side: bestSides(source, target).to },
+            })
+          }
+        }
       }
       setInteraction(null)
     }
@@ -350,12 +434,22 @@ export function BoardCanvas() {
         redo()
         return
       }
+      // A selected connection takes priority over selected pins: you click
+      // a wire, press Delete, and the wire goes — deleting the cards it
+      // joins instead would be a nasty surprise.
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEdgeId) {
+        e.preventDefault()
+        removeEdges([selectedEdgeId])
+        setSelectedEdgeId(null)
+        return
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size > 0) {
         e.preventDefault()
         useBoardStore.getState().removePins(Array.from(selected))
         return
       }
       if (e.key === 'Escape') {
+        setSelectedEdgeId(null)
         clearSelection()
         return
       }
@@ -614,6 +708,27 @@ export function BoardCanvas() {
           ['--zoom' as string]: viewport.zoom,
         }}
       >
+        <EdgeLayer
+          edges={edges}
+          pins={pins}
+          overrides={overrides ?? undefined}
+          selectedEdgeId={selectedEdgeId}
+          onSelectEdge={setSelectedEdgeId}
+          pending={
+            interaction?.kind === 'wire'
+              ? {
+                  path: (() => {
+                    const source = pins.find((p) => p.id === interaction.fromPinId)
+                    if (!source) return ''
+                    const start = portPoint(source, interaction.fromSide)
+                    const end = interaction.currentWorld
+                    return edgePath(start, interaction.fromSide, end, oppositeOf(interaction.fromSide))
+                  })(),
+                }
+              : null
+          }
+        />
+
         {sorted.map((pin) => (
           <PinRenderer
             key={pin.id}
@@ -621,6 +736,7 @@ export function BoardCanvas() {
             override={overrides?.get(pin.id)}
             selected={selected.has(pin.id)}
             onPointerDownBody={(e) => beginPinDrag(e, pin)}
+            onPortPointerDown={(e, side) => beginWire(e, pin, side)}
             onPointerDownHandle={(e, handle) => beginPinResize(e, pin, handle)}
             onContextMenu={(e) => {
               e.preventDefault()
@@ -664,6 +780,13 @@ export function BoardCanvas() {
 }
 
 // ---------- helpers ----------
+
+// While a wire is being pulled it has no target side yet; aiming the free
+// end at the opposite side of the source keeps the curve's shape stable
+// instead of flipping as the cursor crosses the card.
+function oppositeOf(side: PortSide): PortSide {
+  return side === 'top' ? 'bottom' : side === 'bottom' ? 'top' : side === 'left' ? 'right' : 'left'
+}
 
 function viewportCenterWorld(
   viewport: ViewportState,

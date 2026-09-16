@@ -179,6 +179,19 @@ export interface CustomAction {
   resultType: 'note' | 'apply' | 'chat'
 }
 
+// Which edge of a pin a connection leaves from or arrives at. Kept as a
+// side rather than a point so the curve re-anchors itself when either pin
+// moves or resizes — the same approach Obsidian Canvas's JSON format takes.
+export type PortSide = 'top' | 'right' | 'bottom' | 'left'
+
+export interface Edge {
+  id: string
+  from: { pinId: string; side: PortSide }
+  to: { pinId: string; side: PortSide }
+  label?: string
+  color?: string
+}
+
 export interface Board {
   id: string
   name: string
@@ -187,6 +200,9 @@ export interface Board {
   viewport: Viewport
   settings: BoardSettings
   pins: Pin[]
+  // Absent on boards created before connections existed — always read it
+  // as `board.edges ?? []`.
+  edges?: Edge[]
   customActions?: CustomAction[]
 }
 
@@ -266,6 +282,9 @@ export type Op =
       to: unknown
     }
   | { type: 'reorderPin'; id: string; from: number; to: number }
+  | { type: 'addEdge'; edge: Edge }
+  | { type: 'removeEdge'; edge: Edge }
+  | { type: 'updateEdge'; id: string; field: string; from: unknown; to: unknown }
 
 export interface BoardHistory {
   ops: Op[]
