@@ -65,13 +65,18 @@ export function PinShell({
   // leave edit mode" from the spec.
   useEffect(() => {
     if (!activated) return
+    let alive = true
     const handler = (e: PointerEvent) => {
+      if (!alive) return
       const target = e.target as Node | null
       if (target && shellRef.current?.contains(target)) return
       setActivatedState(false)
     }
     document.addEventListener('pointerdown', handler, true)
-    return () => document.removeEventListener('pointerdown', handler, true)
+    return () => {
+      alive = false
+      document.removeEventListener('pointerdown', handler, true)
+    }
   }, [activated])
 
   const x = override?.x ?? pin.x
@@ -87,7 +92,11 @@ export function PinShell({
         ref={shellRef}
         className={`${styles.shell} ${selected ? styles.selected : ''}`}
         style={{
-          transform: `translate(${x}px, ${y}px)`,
+          transform: `translate(${x}px, ${y}px)${selected ? ' scale(1.02)' : ''}`,
+          // `override` is only set while a drag or resize is live. The
+          // 120ms transform transition that makes selection feel soft would
+          // otherwise make the pin lag behind the cursor for the whole drag.
+          transition: override ? 'none' : undefined,
           width: `${w}px`,
           height: `${h}px`,
           zIndex: pin.z,

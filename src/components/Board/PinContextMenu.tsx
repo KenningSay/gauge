@@ -10,10 +10,13 @@ import {
   Download,
   StickyNote,
   Link as LinkIcon,
+  Sparkles,
+  ChevronRight,
 } from 'lucide-react'
-import type { Pin } from '../../api/board'
+import type { CustomAction, Pin } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
+import { useAiStore } from '../../store/useAiStore'
 import { downloadEntry } from '../../utils/download'
 import styles from './PinContextMenu.module.css'
 
@@ -183,6 +186,8 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
         <MenuItem icon={<Download size={13} />} onClick={handleDownload}>Скачать</MenuItem>
       )}
       <div className={styles.divider} />
+      <AiSubmenu pin={pin} onClose={onClose} />
+      <div className={styles.divider} />
       <MenuItem icon={<Trash2 size={13} />} danger onClick={handleDelete}>
         Удалить
       </MenuItem>
@@ -210,20 +215,102 @@ function EmptyMenuItems({
     <>
       <MenuItem icon={<StickyNote size={13} />} onClick={onCreateNote}>Создать заметку здесь</MenuItem>
       <MenuItem icon={<LinkIcon size={13} />} onClick={onCreateLink}>Создать ссылку здесь</MenuItem>
-      <div className={styles.divider} />
-      <MenuItem
-        icon={<Copy size={13} />}
-        onClick={() => {
-          // "Вставить" delegates to the same paste pipeline the canvas
-          // already listens for on the window — simplest way to reuse it
-          // without duplicating the "clipboard vs. URL" logic here.
-          document.execCommand('paste')
-          onClose()
-        }}
-      >
-        Вставить
-      </MenuItem>
     </>
+  )
+}
+
+// The built-in AI actions. Prompts live here rather than in the store so
+// the store stays a transport: it fills {selection} and talks to DeepSeek,
+// it doesn't decide what to ask. resultType picks where the answer lands —
+// 'apply' rewrites the note in place, 'note' drops a new note on the board.
+const AI_ACTIONS: Array<{ id: string; label: string; prompt: string; resultType: 'note' | 'apply' }> = [
+  {
+    id: 'improve',
+    label: 'Улучшить текст',
+    prompt: 'Перепиши следующий текст лучше, сохраняя смысл. Не добавляй пояснений, верни только переписанный текст:\n\n{selection}',
+    resultType: 'apply',
+  },
+  {
+    id: 'fix',
+    label: 'Исправить ошибки',
+    prompt: 'Исправь орфографические, пунктуационные и грамматические ошибки. Верни только исправленный текст:\n\n{selection}',
+    resultType: 'apply',
+  },
+  {
+    id: 'shorten',
+    label: 'Сократить',
+    prompt: 'Сократи следующий текст, сохранив главное. Верни только сокращённый вариант:\n\n{selection}',
+    resultType: 'apply',
+  },
+  {
+    id: 'expand',
+    label: 'Расширить',
+    prompt: 'Дополни следующий текст деталями и примерами. Верни только расширенный вариант:\n\n{selection}',
+    resultType: 'apply',
+  },
+  {
+    id: 'summarize',
+    label: 'Суммировать',
+    prompt: 'Суммируй следующие материалы в одну заметку. Верни только текст заметки без пояснений:\n\n{selection}',
+    resultType: 'note',
+  },
+  {
+    id: 'relate',
+    label: 'Найти связи',
+    prompt: 'Проанализируй следующие пины и опиши, как они связаны между собой. Верни текст заметки без пояснений:\n\n{selection}',
+    resultType: 'note',
+  },
+  {
+    id: 'tag',
+    label: 'Тегировать',
+    prompt: 'Сгенерируй 3-7 тегов для следующих пинов. Верни только список тегов через запятую:\n\n{selection}',
+    resultType: 'note',
+  },
+]
+
+// Actions that rewrite text in place are only offered for notes — on an
+// image pin there is nothing to rewrite, and the store would silently fall
+// back to creating a note instead.
+// A module-level constant, not an inline `?? []`: a fresh array literal in
+// the selector is a new reference on every store read, which makes Zustand
+// think the slice changed and re-render forever.
+const NO_ACTIONS: CustomAction[] = []
+
+function AiSubmenu({ pin, onClose }: { pin: Pin; onClose: () => void }) {
+  const [open, setOpen] = useState(false)
+  const applyContentAction = useAiStore((s) => s.applyContentAction)
+  const customActions = useBoardStore((s) => s.board?.customActions) ?? NO_ACTIONS
+
+  const actions = AI_ACTIONS.filter((a) => a.resultType !== 'apply' || pin.type === 'note')
+
+  const run = (id: string, prompt: string, resultType: 'note' | 'apply' | 'chat') => {
+    void applyContentAction(id, prompt, [pin], resultType)
+    onClose()
+  }
+
+  return (
+    <div className={styles.submenuWrap}>
+      <button className={styles.item} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className={styles.itemIcon}><Sparkles size={13} /></span>
+        AI
+        <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
+      </button>
+      {open && (
+        <div className={styles.submenu}>
+          {actions.map((a) => (
+            <MenuItem key={a.id} icon={<Sparkles size={13} />} onClick={() => run(a.id, a.prompt, a.resultType)}>
+              {a.label}
+            </MenuItem>
+          ))}
+          {customActions.length > 0 && <div className={styles.divider} />}
+          {customActions.map((a) => (
+            <MenuItem key={a.id} icon={<Sparkles size={13} />} onClick={() => run(a.id, a.prompt, a.resultType)}>
+              {a.name}
+            </MenuItem>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

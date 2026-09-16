@@ -60,3 +60,25 @@
   margin: 4px 6px;
   background: var(--border);
 }
+/* ---------- AI submenu ---------- */
+
+/* Expands in place rather than flying out sideways: the menu is already
+   clamped to the viewport edge, and a second floating layer would need its
+   own clamping pass for no real gain. */
+.submenuWrap {
+  position: relative;
+}
+
+.submenuChevron {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  color: var(--text-dim);
+}
+
+.submenu {
+  padding-left: 12px;
+  margin-left: 6px;
+  border-left: 1px solid var(--border);
+  animation: menu-in 100ms ease-out;
+}
