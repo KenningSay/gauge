@@ -2,12 +2,38 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { FileText, AlertCircle } from 'lucide-react'
-import type { NotePin as NotePinT } from '../../../api/board'
+import type { NotePin as NotePinT, NoteStyle } from '../../../api/board'
 import { getTextContent, putTextContent } from '../../../api/webdav'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { usePinActivation } from '../PinShell'
 import styles from './Pins.module.css'
 import shell from '../PinShell.module.css'
+
+// Notes written before styles existed have no `style` and looked like a
+// sticky, so that's what absent means.
+const STYLE_CLASS: Record<NoteStyle, string> = {
+  sticky: styles.styleSticky,
+  paper: styles.stylePaper,
+  torn: styles.styleTorn,
+  lined: styles.styleLined,
+  spiral: styles.styleSpiral,
+  spiralSide: styles.styleSpiralSide,
+  clip: styles.styleClip,
+  clipboard: styles.styleClipboard,
+  tape: styles.styleTape,
+  tapeCorners: styles.styleTapeCorners,
+  card: styles.styleCard,
+  folder: styles.styleFolder,
+  ribbon: styles.styleRibbon,
+  banner: styles.styleBanner,
+  numbered: styles.styleNumbered,
+  doubleFrame: styles.styleDoubleFrame,
+  dashed: styles.styleDashed,
+  bolted: styles.styleBolted,
+  bubble: styles.styleBubble,
+  tag: styles.styleTag,
+  capsule: styles.styleCapsule,
+}
 
 export function NotePin({ pin }: { pin: NotePinT }) {
   const { activated, setActivated } = usePinActivation()
@@ -103,7 +129,7 @@ export function NotePin({ pin }: { pin: NotePinT }) {
 
   return (
     <div
-      className={styles.root}
+      className={`${styles.root} ${STYLE_CLASS[pin.style ?? 'sticky']}`}
       style={{
         background: hexWithOpacity(pin.color, pin.opacity),
         borderRadius: 'var(--radius-md)',

@@ -39,10 +39,28 @@ import { useAiStore } from '../../store/useAiStore'
 import { useBoardStore } from '../../store/useBoardStore'
 import { useUiStore } from '../../store/useUiStore'
 import { makeNotePin } from '../../utils/boardPinFactories'
+import { LayoutTemplate } from 'lucide-react'
+import { TemplatePanel } from './TemplatePanel'
 import styles from './AiPanel.module.css'
+
+// The side panel holds more than the chat now: AI on one tab, the template
+// library on the other. The tongue stays a single control — two tongues
+// stacked down the edge of the board would be clutter — and switching tabs
+// while it's open is one click.
+type PanelTab = 'ai' | 'templates'
 
 export function AiPanel() {
   const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState<PanelTab>('ai')
+
+  const toggleTab = (next: PanelTab) => {
+    if (open && tab === next) {
+      setOpen(false)
+      return
+    }
+    setTab(next)
+    setOpen(true)
+  }
   const boardId = useBoardStore((s) => s.board?.id)
   const streaming = useAiStore((s) => !!s.streamingId)
 
@@ -69,21 +87,56 @@ export function AiPanel() {
 
   return (
     <>
-      <button
-        className={`${styles.tongue} ${open ? styles.tongueOpen : ''}`}
-        onClick={() => setOpen((v) => !v)}
-        title={open ? 'Скрыть AI' : 'AI-помощник'}
-        aria-label={open ? 'Скрыть AI-панель' : 'Открыть AI-панель'}
-      >
-        <Sparkles size={14} />
-        <span className={styles.tongueLabel}>AI</span>
-      </button>
+      {/* One tongue per tab, stacked down the edge. Clicking a tongue opens
+          its tab, switches to it if the other one is showing, and closes the
+          panel if it's already the one you're looking at. */}
+      <div className={`${styles.tongues} ${open ? styles.tonguesOpen : ''}`}>
+        <button
+          className={`${styles.tongue} ${open && tab === 'ai' ? styles.tongueActive : ''}`}
+          onClick={() => toggleTab('ai')}
+          title="AI-помощник"
+          aria-label="AI-помощник"
+          aria-pressed={open && tab === 'ai'}
+        >
+          <Sparkles size={14} />
+          <span className={styles.tongueLabel}>AI</span>
+        </button>
+        <button
+          className={`${styles.tongue} ${open && tab === 'templates' ? styles.tongueActive : ''}`}
+          onClick={() => toggleTab('templates')}
+          title="Шаблоны заметок"
+          aria-label="Шаблоны заметок"
+          aria-pressed={open && tab === 'templates'}
+        >
+          <LayoutTemplate size={14} />
+          <span className={styles.tongueLabel}>Шаблоны</span>
+        </button>
+      </div>
 
       {open && (
-        <div className={styles.panel} role="complementary" aria-label="AI-помощник">
-          <PanelHeader onClose={() => setOpen(false)} streaming={streaming} />
-          <ChatLog />
-          <ChatInput onSendRequest={() => undefined} />
+        <div className={styles.panel} role="complementary" aria-label="Панель доски">
+          {tab === 'ai' ? (
+            <>
+              <PanelHeader onClose={() => setOpen(false)} streaming={streaming} />
+              <ChatLog />
+              <ChatInput onSendRequest={() => undefined} />
+            </>
+          ) : (
+            <>
+              <div className={styles.simpleHeader}>
+                <span className={styles.headerTitleText}>Шаблоны заметок</span>
+                <button
+                  className={styles.headerBtn}
+                  onClick={() => setOpen(false)}
+                  title="Закрыть"
+                  aria-label="Закрыть"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+              <TemplatePanel />
+            </>
+          )}
         </div>
       )}
     </>
