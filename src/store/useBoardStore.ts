@@ -30,6 +30,11 @@ interface BoardState {
   history: BoardHistory
   chat: ChatLog
   selected: Set<string>
+  // Which pin is currently in text-edit mode, if any. UI state, not board
+  // data — it lives here rather than inside the pin component so the
+  // keyboard (Enter, or just typing) and pin creation can put a pin into
+  // edit mode without reaching into it.
+  activePinId: string | null
 
   saveState: SaveState
   saveError: string | null
@@ -42,6 +47,7 @@ interface BoardState {
   toggleSelect: (id: string) => void
   selectMany: (ids: string[]) => void
   clearSelection: () => void
+  setActivePin: (id: string | null) => void
 
   addPin: (pin: Pin) => void
   addEdge: (edge: Edge) => void
@@ -127,6 +133,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
     history: { ops: [], cursor: 0 },
     chat: { messages: [] },
     selected: new Set(),
+    activePinId: null,
 
     saveState: 'idle',
     saveError: null,
@@ -193,6 +200,8 @@ export const useBoardStore = create<BoardState>((set, get) => {
       }),
     selectMany: (ids) => set({ selected: new Set(ids) }),
     clearSelection: () => set({ selected: new Set() }),
+
+    setActivePin: (id) => set({ activePinId: id }),
 
     addPin: (pin) => {
       const { board, history } = get()

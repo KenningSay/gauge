@@ -452,6 +452,11 @@ export function BoardCanvas() {
         return
       }
       if (e.key === 'Escape') {
+        // Step out of editing first; a second Escape clears the selection.
+        if (useBoardStore.getState().activePinId) {
+          useBoardStore.getState().setActivePin(null)
+          return
+        }
         setSelectedEdgeId(null)
         clearSelection()
         return
@@ -460,6 +465,39 @@ export function BoardCanvas() {
         e.preventDefault()
         selectMany(pins.map((p) => p.id))
         return
+      }
+
+      // Enter edits the selected pin, Escape leaves — the convention every
+      // board tool shares. Only with exactly one pin selected, since there
+      // is no sensible "edit five pins".
+      if (e.key === 'Enter' && selected.size === 1) {
+        const id = Array.from(selected)[0]
+        const pin = pins.find((p) => p.id === id)
+        if (pin && (pin.type === 'note' || pin.type === 'shape')) {
+          e.preventDefault()
+          useBoardStore.getState().setActivePin(id)
+        }
+        return
+      }
+
+      // Just start typing, like Miro: the first character opens the editor
+      // and lands in the text rather than being swallowed. Printable keys
+      // only, and never with a modifier held (that's a shortcut).
+      if (
+        selected.size === 1 &&
+        e.key.length === 1 &&
+        !mod &&
+        !e.altKey &&
+        !useBoardStore.getState().activePinId
+      ) {
+        const id = Array.from(selected)[0]
+        const pin = pins.find((p) => p.id === id)
+        if (pin && (pin.type === 'note' || pin.type === 'shape')) {
+          e.preventDefault()
+          const store = useBoardStore.getState()
+          store.updatePin(id, 'text', (pin.text ?? '') + e.key)
+          store.setActivePin(id)
+        }
       }
     }
     window.addEventListener('keydown', handler)
@@ -638,6 +676,11 @@ export function BoardCanvas() {
       const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
       const pin = makeNotePin({ x: world.x - 110, y: world.y - 100, z })
       addPin(pin)
+      // Straight into editing, the way FigJam drops you into a new sticky:
+      // creating a note is only ever a prelude to writing in it.
+      const store = useBoardStore.getState()
+      store.selectOnly(pin.id)
+      store.setActivePin(pin.id)
       const state = useBoardStore.getState()
       const others = (state.board?.pins ?? [])
         .filter((p) => p.id !== pin.id)
@@ -709,6 +752,7 @@ export function BoardCanvas() {
       const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
       const pin = makeShapePin({ x: world.x - 130, y: world.y - 90, z }, kind)
       addPin(pin)
+      useBoardStore.getState().selectOnly(pin.id)
       // No push here: a shape is usually drawn *around* existing pins, so
       // shoving them out of the way would defeat the point.
     },

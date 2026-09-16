@@ -62,6 +62,7 @@ A second tab next to the file manager: an infinite canvas you drop things onto. 
 - **Shapes**: rectangle, ellipse, diamond, triangle — each can hold markdown text, a picture from the vault clipped to its outline, or nothing at all (a plain frame drawn around a group of pins)
 - **Connections**: every pin grows four ports on hover; drag one onto another pin to join them with a curve. The wire re-anchors to the nearest sides as you move cards around, follows them live during a drag, and `Delete` removes a selected one
 - Drag by the body or the tab on top, resize from eight handles, marquee-select with `Alt`+drag, right-click for layering/duplicate/colour/delete
+- Editing follows the convention every board tool shares: select a pin and press `Enter`, or just start typing and the first character lands in the text; `Esc` leaves the editor and keeps the selection. Double-click still works. A note you just created opens for typing straight away
 - **Undo/redo** (`Ctrl Z` / `Ctrl Shift Z`) over an unbounded op-log, persisted with the board — closing the tab doesn't reset your history
 - Drop files from your OS to copy them into the board's own assets folder; drag them in from the file manager tab to *reference* the vault file instead of duplicating it
 - Autosave, debounced, with a save indicator. If the board changed elsewhere since you loaded it, the save is refused and you're asked whether to overwrite or reload — it never silently clobbers another device's edits
