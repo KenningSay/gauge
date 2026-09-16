@@ -23,12 +23,13 @@ import {
   Eraser,
   Type,
   Check,
+  Smile,
 } from 'lucide-react'
 import type { CustomAction, NoteFont, NotePin as NotePinT, NoteStyle, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import { FONT_BY_ID, HUD_STYLES, NOTE_FONTS, readableOn } from './pins/noteStyles'
-import { frequentFonts } from '../../utils/textFormat'
+import { bumpReaction, frequentFonts } from '../../utils/textFormat'
 import { putTextContent } from '../../api/webdav'
 import { useAiStore } from '../../store/useAiStore'
 import { useUiStore } from '../../store/useUiStore'
@@ -60,6 +61,17 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, on
   // to move — a submenu holding its own `open` state re-rendered only
   // itself, so the effect that keeps the menu on screen never ran and the
   // menu grew straight off the bottom edge.
+  // The pin as it is *now*, not as it was when the menu opened.
+  //
+  // The menu used to work off the snapshot it was handed, so every submenu
+  // computed its next value from a stale one: adding a second reaction
+  // wiped the first, because it was added to the list as it had been
+  // before the first was added. Anything that edits a list rather than
+  // replacing a single value hit this.
+  const targetId = target.kind === 'pin' ? target.pin.id : null
+  const livePin = useBoardStore((s) =>
+    targetId ? s.board?.pins.find((p) => p.id === targetId) : undefined,
+  )
   const [openSub, setOpenSub] = useState<string | null>(null)
   const submenu = (name: string) => ({
     open: openSub === name,
@@ -123,7 +135,7 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, on
     >
       {target.kind === 'pin' ? (
         <PinMenuItems
-          pin={target.pin}
+          pin={livePin ?? target.pin}
           onClose={onClose}
           onPickShapeImage={onPickShapeImage}
           submenu={submenu}
@@ -277,6 +289,9 @@ function PinMenuItems({
       )}
       {pin.type === 'note' && (
         <FontSubmenu pin={pin} {...submenu('font')} />
+      )}
+      {pin.type === 'note' && (
+        <ReactionSubmenu pin={pin} {...submenu('reaction')} />
       )}
       {pin.type === 'shape' && (
         <ShapeColorSubmenu pin={pin} {...submenu('shapeColor')} />
@@ -548,6 +563,50 @@ function ShapeColorSubmenu({ pin, open, onToggle }: { pin: ShapePinT } & Submenu
               </button>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// The marks you can stick on a note. Deliberately a fixed set rather than
+// a full emoji picker: a picker is a search box and a thousand pictures,
+// and what this is for is marking a note done, blocked, or worth a second
+// look.
+const REACTIONS = [
+  '✅', '❌', '🔥', '⭐', '❓', '❗',
+  '👀', '👍', '👎', '💡', '⏳', '🔒',
+  '🐛', '🚀', '📌', '🧠', '⚠️', '🎯',
+]
+
+function ReactionSubmenu({ pin, open, onToggle }: { pin: NotePinT } & SubmenuControl) {
+  const updatePin = useBoardStore((s) => s.updatePin)
+  const on = new Map((pin.reactions ?? []).map((r) => [r.emoji, r.count]))
+
+  return (
+    <div className={styles.submenuWrap}>
+      <button className={styles.item} onClick={onToggle} aria-expanded={open}>
+        <span className={styles.itemIcon}><Smile size={13} /></span>
+        Реакция
+        <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
+      </button>
+      {open && (
+        <div className={`${styles.submenu} ${styles.submenuScroll}`}>
+          <div className={styles.reactionGrid}>
+            {REACTIONS.map((e) => (
+              <button
+                key={e}
+                className={`${styles.reactionPick} ${on.has(e) ? styles.reactionPickOn : ''}`}
+                title={on.has(e) ? `${e} ×${on.get(e)} — ещё раз добавит, Alt уберёт` : e}
+                onClick={(ev) =>
+                  updatePin(pin.id, 'reactions', bumpReaction(pin.reactions, e, ev.altKey ? -1 : 1))
+                }
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+          <div className={styles.hint}>Alt+клик убирает</div>
         </div>
       )}
     </div>

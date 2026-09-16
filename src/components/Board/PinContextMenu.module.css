@@ -245,3 +245,35 @@
   color: var(--text-faint);
   line-height: 1.3;
 }
+
+/* ---------- reactions ---------- */
+
+.reactionGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  padding: 4px 8px 6px;
+}
+
+.reactionPick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reactionPick:hover { background: var(--bg-hover); }
+
+/* Already on the note — so a second click reads as "one more", not as a
+   click that did nothing. */
+.reactionPickOn {
+  border-color: rgba(251, 191, 36, 0.7);
+  background: rgba(251, 191, 36, 0.12);
+}

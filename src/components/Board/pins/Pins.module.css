@@ -64,8 +64,14 @@
   color: inherit;
 }
 
+/* Inherit, do not set. This was an absolute 16px, which quietly blocked
+   every size the note itself was given: the formatting bar wrote a size
+   onto .noteBody, .noteBody passed it down, and this rule threw it away
+   before it reached a single rendered word. The editor obeyed and the
+   rendered text did not, which looked like the control doing nothing.
+   The headings below are all in `em`, so they scale with whatever arrives. */
 .noteMarkdown {
-  font-size: 16px;
+  font-size: inherit;
 }
 
 /* A real type scale instead of three sizes a couple of pixels apart:
@@ -213,7 +219,7 @@
 }
 
 .audioArtist {
-  font-size: 14px;
+  font-size: 16px;
   color: rgba(232, 234, 230, 0.6);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -260,7 +266,7 @@
 
 .audioTime {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: rgba(232, 234, 230, 0.6);
   white-space: nowrap;
 }
@@ -303,7 +309,7 @@
 }
 
 .fileName {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -312,7 +318,7 @@
 }
 
 .fileSize {
-  font-size: 11px;
+  font-size: 16px;
   color: rgba(232, 234, 230, 0.55);
   font-family: var(--font-mono);
 }
@@ -347,7 +353,7 @@
 }
 
 .linkDomain {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -355,7 +361,7 @@
 }
 
 .linkTitle {
-  font-size: 11px;
+  font-size: 16px;
   color: rgba(232, 234, 230, 0.55);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -408,7 +414,7 @@
   color: inherit;
   opacity: 0.75;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -901,7 +907,7 @@
 .hudBase .noteEditor {
   position: relative;
   z-index: 1;
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 0.01em;
   /* Explicit, so it doesn't inherit the accent colour from the plate. */
   color: #e8eae6;
@@ -1597,7 +1603,7 @@
   background: #1b1a18;
   box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.9);
   color: #e8eae6;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
@@ -1819,4 +1825,49 @@
   color: #fca5a5;
   font-size: 0.8em;
   white-space: pre-wrap;
+}
+
+/* --- reactions --------------------------------------------------------
+   A row of marks along the bottom edge of the note, half outside it so
+   they read as stuck on rather than written in. They scroll with the note
+   and scale with the zoom like everything else in the world layer. */
+
+.reactions {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -12px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  /* The row itself must not catch clicks in the gaps between the chips,
+     or the note becomes undraggable along its bottom edge. */
+  pointer-events: none;
+}
+
+.reaction {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+  background: #2b2926;
+  color: #e8eae6;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.2;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 110ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+.reaction:hover { transform: translateY(-2px); }
+
+.reactionCount {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
 }

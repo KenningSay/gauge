@@ -48,7 +48,7 @@
 }
 
 .title {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text);
 }
@@ -73,7 +73,7 @@
 .row { padding-bottom: 4px; }
 
 .label {
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -84,7 +84,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text);
   cursor: pointer;
 }
@@ -105,7 +105,7 @@
   background: transparent;
   color: var(--text-dim);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
@@ -172,7 +172,7 @@
 
 .value {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-dim);
 }
 
@@ -190,7 +190,7 @@
   background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
   transition: background-color 120ms ease;
 }
@@ -201,6 +201,6 @@
 .footNote {
   padding-top: 8px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-faint);
 }

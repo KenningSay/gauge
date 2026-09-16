@@ -23,17 +23,19 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  Scaling,
   Strikethrough,
   Underline,
   Type,
 } from 'lucide-react'
 import type { NotePin as NotePinT, TextAlign, TextVAlign } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
-import { FONT_BY_ID, FONT_GROUPS, HUD_STYLES, NOTE_FONTS } from './pins/noteStyles'
+import { BASE_NOTE_FONT_SIZE, FONT_BY_ID, FONT_GROUPS, HUD_STYLES, NOTE_FONTS } from './pins/noteStyles'
 import {
   clampFontSize,
   clampLetterSpacing,
   clampLineHeight,
+  fitFontSize,
   hasTextFormat,
   stepFontSize,
 } from '../../utils/textFormat'
@@ -51,9 +53,8 @@ interface Props {
 // somewhere sensible instead of jumping to 16 first.
 function effectiveSize(pin: NotePinT): number {
   if (pin.fontSize !== undefined) return pin.fontSize
-  const base = HUD_STYLES.has(pin.style ?? 'sticky') ? 15 : 16
   const scale = pin.font ? FONT_BY_ID.get(pin.font)?.scale : undefined
-  return Math.round(base * (scale ?? 1))
+  return Math.round(BASE_NOTE_FONT_SIZE * (scale ?? 1))
 }
 
 const BAR_HEIGHT = 44
@@ -87,6 +88,28 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   const top = above ? rect.y - BAR_HEIGHT - GAP : Math.min(rect.y + rect.h + GAP, container.h - BAR_HEIGHT - 4)
   const half = (width || 520) / 2
   const left = Math.min(Math.max(rect.x + rect.w / 2, half + 8), Math.max(half + 8, container.w - half - 8))
+
+  // Grow the text until it would overflow, then step back one. Measured on
+  // the real element rather than on a clone: a clone would have to
+  // reproduce the note's padding, its style's own padding overrides, the
+  // font that may still be loading and the markdown inside it — and would
+  // get one of them wrong. The element is put back the way it was either
+  // way, and the committed value is what re-renders it.
+  const fitToBox = () => {
+    const body = document.querySelector<HTMLElement>(
+      `[data-pin-id="${pin.id}"] [data-note-body]`,
+    )
+    if (!body) return
+    const previous = body.style.fontSize
+    const best = fitFontSize((px) => {
+      body.style.fontSize = `${px}px`
+      // One pixel of slack: sub-pixel rounding otherwise reports a box that
+      // fits exactly as overflowing, and the answer comes out one step small.
+      return body.scrollHeight <= body.clientHeight + 1 && body.scrollWidth <= body.clientWidth + 1
+    })
+    body.style.fontSize = previous
+    set('fontSize', best)
+  }
 
   const alignBtn = (value: TextAlign, icon: React.ReactNode, label: string) => (
     <button
@@ -235,6 +258,16 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
           onChange={(e) => set('letterSpacing', clampLetterSpacing(Number(e.target.value)))}
         />
       </div>
+
+      <button
+        type="button"
+        className={styles.btn}
+        title="Подогнать размер под рамку"
+        aria-label="Подогнать размер под рамку"
+        onClick={fitToBox}
+      >
+        <Scaling size={15} />
+      </button>
 
       {hasTextFormat(pin) && (
         <>

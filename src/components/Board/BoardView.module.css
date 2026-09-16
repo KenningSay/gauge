@@ -42,7 +42,7 @@
 }
 
 .emptyHint {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-dim);
   max-width: 380px;
   line-height: 1.5;
@@ -58,7 +58,7 @@
   background: var(--signal);
   color: #0b0b0b;
   font-weight: 500;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
   transition: opacity 150ms ease, transform 100ms ease;
 }
@@ -71,7 +71,7 @@
   border: 1px solid var(--border-strong);
   background: transparent;
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
 }
 .secondaryBtn:hover { background: var(--bg-hover); }
@@ -163,7 +163,7 @@
 
 .fieldLabel {
   display: block;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-dim);
   margin-bottom: 6px;
 }
@@ -175,7 +175,7 @@
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
   margin-bottom: 16px;
 }
 
@@ -197,7 +197,7 @@
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
-  font-size: 13px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 120ms ease;
 }

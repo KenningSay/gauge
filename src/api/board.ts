@@ -148,6 +148,14 @@ export type NoteStyle =
   | 'octagon'
   | 'stencil'
 
+// A reaction stuck to a note. The count exists because the same mark gets
+// used as a tally — three ticks on a note means three of something, and
+// having to add three separate ticks to say so would be absurd.
+export interface Reaction {
+  emoji: string
+  count: number
+}
+
 // How a note's text is set. Everything here is optional and absent means
 // "whatever the style says" — a note written before any of this existed
 // must keep looking exactly as it did.
@@ -318,6 +326,7 @@ export interface NotePin extends PinBase {
   uppercase?: boolean
   // Absent on notes that have nothing pinned to them.
   decor?: Decor[]
+  reactions?: Reaction[]
   // Optional override. Left unset, the note picks black or white from the
   // background's luminance, which is right for almost every colour — the
   // field exists for the cases where it isn't.

@@ -86,6 +86,13 @@ export const HUD_STYLES = new Set<NoteStyle>([
 export const hudClass = styles.hudBase
 export const hudPlateClass = styles.hudPlate
 
+// The size a note's text is set at before anyone changes it. It is here
+// rather than read off the stylesheet because two different places have to
+// agree with the CSS about it — the size box in the formatting bar, and
+// the scale applied to the small script faces. They were hardcoded as 16
+// and 15, and a sweep that changed the stylesheet left both of them lying.
+export const BASE_NOTE_FONT_SIZE = 16
+
 // Every typeface the note menu offers, with the css to set it in and the
 // group it is listed under. `scale` is for the faces drawn much smaller or
 // larger than their nominal size — a script face at 16px reads as a

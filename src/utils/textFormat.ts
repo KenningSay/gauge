@@ -168,3 +168,51 @@ export function frequentFonts(
   }
   return out
 }
+
+// --- fitting the text to the box --------------------------------------
+
+// The largest size at which the text still fits the box it is in, found by
+// bisection rather than by stepping: a note can hold anything from two
+// words to two pages, and stepping a pixel at a time from 200 would reflow
+// the thing two hundred times.
+//
+// Takes a measure function rather than an element so the search itself can
+// be tested — and so the caller decides what "fits" means for the element
+// it has.
+export function fitFontSize(
+  fits: (size: number) => boolean,
+  min = MIN_FONT_SIZE,
+  max = MAX_FONT_SIZE,
+): number {
+  // Nothing fits, not even the smallest size: return the smallest anyway.
+  // Refusing to answer would leave the note at whatever it was, which is
+  // worse than too small.
+  if (!fits(min)) return min
+  let lo = min
+  let hi = max
+  // Twelve halvings covers 8..200 to the pixel; the bound also guarantees
+  // this can never spin if `fits` is inconsistent.
+  for (let i = 0; i < 12 && lo < hi; i++) {
+    const mid = Math.ceil((lo + hi) / 2)
+    if (fits(mid)) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}
+
+// --- reactions --------------------------------------------------------
+
+// Adding a mark that is already there bumps its count rather than putting
+// a second copy beside it; taking the last one off removes the mark.
+export function bumpReaction(
+  list: Array<{ emoji: string; count: number }> | undefined,
+  emoji: string,
+  by: 1 | -1,
+): Array<{ emoji: string; count: number }> {
+  const current = list ?? []
+  const found = current.find((r) => r.emoji === emoji)
+  if (!found) return by > 0 ? [...current, { emoji, count: 1 }] : current
+  const count = found.count + by
+  if (count <= 0) return current.filter((r) => r.emoji !== emoji)
+  return current.map((r) => (r.emoji === emoji ? { ...r, count } : r))
+}

@@ -21,6 +21,17 @@ import { MAX_DECOR_PER_NOTE, clampPos } from '../../utils/decorGeo'
 import { EdgeContextMenu } from './EdgeContextMenu'
 import { BoardToolbar } from './BoardToolbar'
 import { NoteFormatBar } from './NoteFormatBar'
+import { FONT_BY_ID } from './pins/noteStyles'
+import {
+  downloadBlob,
+  downloadDataUrl,
+  elementToPng,
+  exportFileName,
+  exportTooSmall,
+  pngToPdf,
+  usedFontEmbedCss,
+  withTimeout,
+} from '../../utils/boardExport'
 import { bestSides, edgePath, portPoint } from '../../utils/edgeGeo'
 import type { Edge, PortSide, ShapeKind } from '../../api/board'
 import { getTextContent } from '../../api/webdav'
@@ -112,6 +123,8 @@ const GRID_PATTERN: Record<string, { image: (c: string) => string; size: number 
 
 export function BoardCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  // The zoomed layer that holds the pins — what an export snapshots.
+  const worldRef = useRef<HTMLDivElement | null>(null)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
   const [interaction, setInteraction] = useState<Interaction>(null)
   const [menu, setMenu] = useState<PinMenuTarget | null>(null)
@@ -160,12 +173,17 @@ export function BoardCanvas() {
   }, [])
 
   // --- virtualized list of pins to actually render ---
-  const visiblePins = useBoardVirtual({
+  // While exporting, every pin must be in the DOM: html-to-image
+  // serialises what is mounted, and the board only mounts what is on
+  // screen. Without this the picture is whatever happened to be in view.
+  const [exporting, setExporting] = useState(false)
+  const windowed = useBoardVirtual({
     pins,
     viewport,
     containerWidth: containerSize.w,
     containerHeight: containerSize.h,
   })
+  const visiblePins = exporting ? pins : windowed
 
   // --- per-pin drag/resize overrides applied on top of stored positions ---
   const overrides = useMemo(() => {
@@ -986,6 +1004,78 @@ export function BoardCanvas() {
     [addPin, pins],
   )
 
+  const exportBoard = useCallback(
+    async (format: 'png' | 'pdf') => {
+      const world = worldRef.current
+      const bounds = boundsOf(pins.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })))
+      if (!world || !bounds) {
+        pushToast('Пустая доска — нечего выгружать', 'info')
+        return
+      }
+      // Enough to clear what hangs outside a pin's own box: a decoration
+      // sits astride a corner and can be 160 units across, and reactions
+      // hang below the bottom edge. Cropping those is the kind of thing
+      // nobody notices until the picture is already sent.
+      const pad = 120
+      const size = { width: Math.ceil(bounds.w + pad * 2), height: Math.ceil(bounds.h + pad * 2) }
+      if (exportTooSmall(size)) {
+        pushToast('Доска очень большая — картинка выйдет грубой', 'info')
+      }
+      setExporting(true)
+      try {
+        // Give the pins that virtualization was hiding a moment to mount,
+        // and wait on the font promise, because a webfont that arrives
+        // after the snapshot simply is not in it.
+        //
+        // Deliberately timers and not requestAnimationFrame: rAF does not
+        // fire in a tab that isn't being painted. Start an export and
+        // switch tabs and the rAF version waits for ever, with the button
+        // stuck disabled and nothing to say why.
+        await new Promise((r) => setTimeout(r, 60))
+        await document.fonts.ready
+        // Only the families the board is actually set in: see
+        // usedFontEmbedCss — embedding all of them takes minutes.
+        const used = new Set<string>([
+          'IBM Plex Sans',
+          'IBM Plex Mono',
+          ...pins.flatMap((p) =>
+            p.type === 'note'
+              ? [FONT_BY_ID.get(p.font ?? 'default')?.css.split(',')[0] ?? '']
+              : [],
+          ),
+        ])
+        const fontCss = await usedFontEmbedCss(used)
+        const origin = world.style.transform
+        // The world is parked wherever the user was looking; the export
+        // wants the board's own top-left at the origin.
+        world.style.transform = `translate(${pad - bounds.x}px, ${pad - bounds.y}px)`
+        let png: string
+        try {
+          // A hard stop: html-to-image waits on image loads that can
+          // simply never resolve — a decode that fails, a tab that stops
+          // painting — and a button disabled for ever is the worst way to
+          // fail.
+          png = await withTimeout(
+            elementToPng(world, size, settings?.backgroundColor ?? '#1b1a18', fontCss),
+            90_000,
+            'снимок доски не уложился в полторы минуты',
+          )
+        } finally {
+          world.style.transform = origin
+        }
+        const name = exportFileName(board?.name ?? 'board', format)
+        if (format === 'png') downloadDataUrl(png, name)
+        else downloadBlob(await pngToPdf(png, size), name)
+        pushToast(`Сохранено: ${name}`, 'success')
+      } catch (e) {
+        pushToast(`Не удалось выгрузить: ${e instanceof Error ? e.message : String(e)}`, 'error')
+      } finally {
+        setExporting(false)
+      }
+    },
+    [board?.name, pins, pushToast, settings?.backgroundColor],
+  )
+
   if (!board) return null
 
   const gridCfg = GRID_PATTERN[settings?.backgroundTexture ?? 'dots']
@@ -1057,6 +1147,7 @@ export function BoardCanvas() {
       onDrop={onDrop}
     >
       <div
+        ref={worldRef}
         className={styles.world}
         style={{
           transform: `translate(${-viewport.x * viewport.zoom}px, ${-viewport.y * viewport.zoom}px) scale(${viewport.zoom})`,
@@ -1157,6 +1248,8 @@ export function BoardCanvas() {
         onCreateLink={() => void createLinkAt(viewportCenterWorld(viewport, containerSize))}
         onCreateShape={(kind) => createShapeAt(viewportCenterWorld(viewport, containerSize), kind)}
         onFit={fitToPins}
+        onExport={(f) => void exportBoard(f)}
+        exporting={exporting}
         onCreateVaultFile={() => setFilePickerAt(viewportCenterWorld(viewport, containerSize))}
       />
 
