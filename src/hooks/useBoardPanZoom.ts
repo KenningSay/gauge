@@ -21,6 +21,40 @@ export interface ViewportState {
   zoom: number
 }
 
+// True when something under the cursor can absorb this scroll itself — a
+// long note, a scrollable card. Uses elementsFromPoint rather than the
+// event target because every unactivated pin has a transparent overlay on
+// top of it (it's what makes dragging work over a textarea or an iframe),
+// and that overlay would otherwise hide the scrollable content beneath it
+// from this check.
+//
+// Only yields while the element can still move in the requested direction,
+// so hitting the end of a note hands the gesture back to the board rather
+// than dead-ending the scroll.
+function scrollableUnder(
+  x: number,
+  y: number,
+  container: HTMLElement | null,
+  deltaY: number,
+): boolean {
+  if (deltaY === 0) return false
+  for (const el of document.elementsFromPoint(x, y)) {
+    if (el === container) break
+    if (!(el instanceof HTMLElement)) continue
+    const style = getComputedStyle(el)
+    if (!/(auto|scroll|overlay)/.test(style.overflowY)) continue
+    if (el.scrollHeight <= el.clientHeight + 1) continue
+    const atTop = el.scrollTop <= 0
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
+    if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) continue
+    // The overlay swallows wheel events aimed at the content below it, so
+    // the scroll is applied here by hand.
+    el.scrollTop += deltaY
+    return true
+  }
+  return false
+}
+
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 4
 
@@ -182,6 +216,16 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
     (e: WheelEvent) => {
       const rect = containerRef.current?.getBoundingClientRect()
       if (!rect) return
+
+      // A pin's own scrollable content wins over panning the board: with a
+      // long note open, the wheel has to move the text, not the canvas
+      // underneath it. Only yields when that element can actually scroll
+      // further in the direction asked for, so reaching the end of a note
+      // hands the gesture back to the board instead of dead-ending.
+      if (!e.ctrlKey && !e.metaKey && scrollableUnder(e.clientX, e.clientY, containerRef.current, e.deltaY)) {
+        e.preventDefault()
+        return
+      }
       const screenX = e.clientX - rect.left
       const screenY = e.clientY - rect.top
 

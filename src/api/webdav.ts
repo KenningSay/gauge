@@ -126,7 +126,13 @@ export function davUrl(path: string): string {
 // browser a blob: URL instead of embedding creds in a plain URL. See
 // src/hooks/useAuthorizedUrl.ts and src/utils/download.ts.
 export async function fetchBlob(path: string, signal?: AbortSignal): Promise<Blob> {
-  const res = await request(path, { method: 'GET', signal })
+  // 'no-cache' revalidates instead of skipping the cache: the browser still
+  // sends If-None-Match/If-Modified-Since and a 304 costs nothing, but a
+  // file changed from Obsidian, another device, or the file manager is
+  // never served stale. Without it the browser happily replays its cached
+  // copy for the lifetime of the tab — an image edited elsewhere kept
+  // showing the old bytes on a board until a hard reload.
+  const res = await request(path, { method: 'GET', signal, cache: 'no-cache' })
   return res.blob()
 }
 
@@ -232,7 +238,7 @@ export async function list(path: string): Promise<FileEntry[]> {
 }
 
 export async function getTextContent(path: string): Promise<string> {
-  const res = await request(path, { method: 'GET' })
+  const res = await request(path, { method: 'GET', cache: 'no-cache' })
   return res.text()
 }
 

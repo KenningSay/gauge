@@ -14,10 +14,13 @@
 .noteBody {
   width: 100%;
   height: 100%;
-  padding: 12px 14px;
+  /* Generous, asymmetric padding: a sticky note reads better with a little
+     more room at the top than at the bottom, and the extra bottom space
+     keeps text clear of the linked-file badge. */
+  padding: 14px 16px 22px;
   overflow: auto;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.55;
   /* Colour comes from the pin wrapper, which derives it from the note's
      own background — see readableOn() in NotePin.tsx. */
   color: inherit;
@@ -48,26 +51,96 @@
 .noteEditor {
   width: 100%;
   height: 100%;
-  padding: 12px 14px;
+  /* Matches .noteBody exactly, so text doesn't jump when you enter or
+     leave edit mode. */
+  padding: 14px 16px 22px;
   border: none;
   outline: none;
   resize: none;
   background: transparent;
   font-family: inherit;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.55;
   color: inherit;
 }
 
 .noteMarkdown {
-  font-size: 13px;
+  font-size: 16px;
 }
-.noteMarkdown :global(h1) { font-size: 18px; margin: 0 0 8px; }
-.noteMarkdown :global(h2) { font-size: 16px; margin: 0 0 6px; }
-.noteMarkdown :global(h3) { font-size: 14px; margin: 0 0 4px; }
-.noteMarkdown :global(p) { margin: 0 0 8px; }
-.noteMarkdown :global(ul), .noteMarkdown :global(ol) { padding-left: 20px; margin: 0 0 8px; }
+
+/* A real type scale instead of three sizes a couple of pixels apart:
+   headings need to be distinguishable at a glance from across the board,
+   and tighter leading on a heading separates it from its body text. */
+.noteMarkdown :global(h1) {
+  font-size: 1.5em;
+  line-height: 1.25;
+  font-weight: 650;
+  margin: 0 0 0.4em;
+  letter-spacing: -0.01em;
+}
+.noteMarkdown :global(h2) {
+  font-size: 1.25em;
+  line-height: 1.3;
+  font-weight: 650;
+  margin: 0.8em 0 0.35em;
+}
+.noteMarkdown :global(h3) {
+  font-size: 1.08em;
+  line-height: 1.35;
+  font-weight: 650;
+  margin: 0.7em 0 0.3em;
+}
+.noteMarkdown :global(h1):first-child,
+.noteMarkdown :global(h2):first-child,
+.noteMarkdown :global(h3):first-child { margin-top: 0; }
+
+.noteMarkdown :global(p) { margin: 0 0 0.6em; }
+.noteMarkdown :global(p):last-child { margin-bottom: 0; }
+.noteMarkdown :global(ul), .noteMarkdown :global(ol) { padding-left: 1.3em; margin: 0 0 0.6em; }
+.noteMarkdown :global(li) { margin: 0.15em 0; }
 .noteMarkdown :global(a) { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.noteMarkdown :global(strong) { font-weight: 650; }
+
+/* Inline code and blocks tint with the note's own text colour rather than
+   a fixed grey, so they stay legible on a dark note and a light one. */
+.noteMarkdown :global(code) {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.noteMarkdown :global(pre) {
+  margin: 0 0 0.6em;
+  padding: 0.6em 0.7em;
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.noteMarkdown :global(pre) :global(code) { padding: 0; background: none; }
+
+.noteMarkdown :global(blockquote) {
+  margin: 0 0 0.6em;
+  padding-left: 0.8em;
+  border-left: 3px solid color-mix(in srgb, currentColor 35%, transparent);
+  opacity: 0.85;
+}
+
+.noteMarkdown :global(hr) {
+  border: none;
+  border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  margin: 0.8em 0;
+}
+
+.noteMarkdown :global(table) { border-collapse: collapse; margin: 0 0 0.6em; font-size: 0.95em; }
+.noteMarkdown :global(th), .noteMarkdown :global(td) {
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  padding: 0.25em 0.5em;
+  text-align: left;
+}
+
+/* Images inside a note (markdown embeds) must not blow the card out. */
+.noteMarkdown :global(img) { max-width: 100%; border-radius: var(--radius-sm); }
 
 /* ---------- image / video ---------- */
 

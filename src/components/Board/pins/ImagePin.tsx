@@ -34,10 +34,12 @@ export function ImagePin({ pin }: { pin: ImagePinT }) {
     let cancelled = false
     acquireBlobUrl(pin.assetPath)
       .then((u) => {
-        if (cancelled) {
-          releaseBlobUrl(pin.assetPath)
-          return
-        }
+        // No release here when cancelled: the cleanup below already did it.
+        // Releasing twice for one acquire drove the refcount past zero and
+        // revoked a URL another mount was still using — under StrictMode's
+        // mount/unmount/mount that happens on every image pin, and the
+        // <img> ended up pointing at a revoked blob (blank pin, no error).
+        if (cancelled) return
         setUrl(u)
       })
       .catch(() => !cancelled && setFailed(true))
