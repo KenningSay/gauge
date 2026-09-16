@@ -5,10 +5,14 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  cursor: grab;
+/* `grab`/`grabbing` are drawn by Chrome itself rather than taken from the
+   system cursor theme, and on a scaled Windows desktop they render enormous
+   next to every other cursor on screen. `move` and `default` come from the
+   OS, so they match whatever size the user has set. */
+  cursor: default;
 }
 .wrap.dragging {
-  cursor: grabbing;
+  cursor: move;
 }
 
 .img {
