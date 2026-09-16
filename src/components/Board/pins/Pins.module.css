@@ -868,3 +868,253 @@
 
 .styleCapsule .noteBody,
 .styleCapsule .noteEditor { padding-left: 30%; padding-right: 22px; }
+
+/* --- HUD family -------------------------------------------------------
+   Monochrome, technical, drawn the way the reference sheets draw it: hard
+   chamfers instead of rounded corners, hairline rules, hazard stripes, and
+   a monospace voice. These override the note's own colour with an ink-dark
+   plate, because the look depends on contrast rather than on hue — the
+   note's colour survives as the accent line. */
+
+/* These keep the note's own colour as `currentColor` — it's the accent the
+   brackets, stripes and indicators are drawn in — while the text itself is
+   set light below. The plate is dark regardless, which is why the
+   backgrounds are !important: the note's colour arrives as an inline style
+   and would otherwise win. */
+.styleHud,
+.styleHudBracket,
+.styleTerminal,
+.styleHazard,
+.styleScan,
+.styleDither,
+.styleBarcode,
+.styleChip {
+  border-radius: 0;
+}
+
+.styleHud .noteBody,
+.styleHudBracket .noteBody,
+.styleTerminal .noteBody,
+.styleHazard .noteBody,
+.styleScan .noteBody,
+.styleDither .noteBody,
+.styleBarcode .noteBody,
+.styleChip .noteBody,
+.styleHud .noteEditor,
+.styleHudBracket .noteEditor,
+.styleTerminal .noteEditor,
+.styleHazard .noteEditor,
+.styleScan .noteEditor,
+.styleDither .noteEditor,
+.styleBarcode .noteEditor,
+.styleChip .noteEditor {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  /* Explicit, so it doesn't inherit the accent colour from the plate. */
+  color: #e8eae6;
+}
+
+/* Chamfered plate: corners cut at 45°, a hairline inset rule, and the
+   note's own colour as a bar down the left. */
+.styleHud {
+  background: #14140f !important;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.35);
+}
+
+.styleHud::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18px;
+  bottom: 18px;
+  width: 4px;
+  background: currentColor;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* Corner brackets only — the frame implied by four L-shapes. */
+.styleHudBracket {
+  background: #14140f !important;
+}
+
+.styleHudBracket::before,
+.styleHudBracket::after {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 2px solid rgba(232, 234, 230, 0.75);
+  pointer-events: none;
+}
+
+.styleHudBracket::before { top: 6px; left: 6px; border-right: none; border-bottom: none; }
+.styleHudBracket::after { bottom: 6px; right: 6px; border-left: none; border-top: none; }
+
+/* Terminal readout: a title bar with a window dot row, and a caret. */
+.styleTerminal {
+  background: #0d0f0c !important;
+  padding-top: 24px;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.28);
+}
+
+.styleTerminal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: rgba(232, 234, 230, 0.1);
+  border-bottom: 1px solid rgba(232, 234, 230, 0.2);
+  pointer-events: none;
+}
+
+.styleTerminal::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 26px;
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    currentColor 0 4px,
+    transparent 4px 9px
+  );
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* Hazard tape along the bottom edge. */
+.styleHazard {
+  background: #14140f !important;
+  padding-bottom: 20px;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.3);
+}
+
+.styleHazard::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+  background: repeating-linear-gradient(
+    -45deg,
+    currentColor 0 8px,
+    transparent 8px 16px
+  );
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* CRT scan lines over an ink plate. */
+.styleScan {
+  background: #101310 !important;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.25);
+}
+
+.styleScan::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    rgba(232, 234, 230, 0.07) 0 1px,
+    transparent 1px 3px
+  );
+  pointer-events: none;
+}
+
+/* Dithered plate: the pixel-fade from the reference, as two dot grids of
+   different sizes fading across the card. */
+.styleDither {
+  background: #101010 !important;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.25);
+}
+
+.styleDither::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(rgba(232, 234, 230, 0.5) 1px, transparent 1.4px),
+    radial-gradient(rgba(232, 234, 230, 0.28) 1px, transparent 1.4px);
+  background-size: 6px 6px, 10px 10px;
+  background-position: 0 0, 3px 3px;
+  -webkit-mask-image: linear-gradient(135deg, #000 0%, transparent 62%);
+  mask-image: linear-gradient(135deg, #000 0%, transparent 62%);
+  pointer-events: none;
+}
+
+/* A barcode strip across the bottom, uneven on purpose. */
+.styleBarcode {
+  background: #14140f !important;
+  padding-bottom: 24px;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.3);
+}
+
+.styleBarcode::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 7px;
+  height: 14px;
+  background:
+    repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(90deg, transparent 0 9px, currentColor 9px 12px, transparent 12px 21px);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* Status chip: a pill with a notched left end and a lit indicator. */
+.styleChip {
+  background: #14140f !important;
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.35);
+}
+
+.styleChip::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  pointer-events: none;
+}
+
+.styleChip .noteBody,
+.styleChip .noteEditor { padding-left: 36px; }
+
+/* --- pinned decorations ---------------------------------------------- */
+
+/* Sits astride the corner it was dropped on — half on the note, half off,
+   the way a real clip or pin does. Never takes pointer events, so it can't
+   get in the way of dragging or editing the note underneath. */
+.decor {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+  z-index: 3;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+
+.decor svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.decorTl { top: -14px; left: -10px; }
+.decorTr { top: -14px; right: -10px; transform: scaleX(-1); }
+.decorBl { bottom: -14px; left: -10px; transform: scaleY(-1); }
+.decorBr { bottom: -14px; right: -10px; transform: scale(-1, -1); }

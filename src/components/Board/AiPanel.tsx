@@ -113,8 +113,17 @@ export function AiPanel() {
         </button>
       </div>
 
-      {open && (
-        <div className={styles.panel} role="complementary" aria-label="Панель доски">
+      {/* Always mounted so it can transition in and out; its contents are
+          only built while it's open, since the template gallery is not
+          cheap to render. */}
+      <div
+        className={`${styles.panel} ${open ? styles.panelOpen : ''}`}
+        role="complementary"
+        aria-label="Панель доски"
+        aria-hidden={!open}
+      >
+        {open && (
+        <>
           {tab === 'ai' ? (
             <>
               <PanelHeader onClose={() => setOpen(false)} streaming={streaming} />
@@ -137,8 +146,9 @@ export function AiPanel() {
               <TemplatePanel />
             </>
           )}
-        </div>
-      )}
+        </>
+        )}
+      </div>
     </>
   )
 }

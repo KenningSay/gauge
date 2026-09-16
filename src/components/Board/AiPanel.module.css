@@ -2,16 +2,19 @@
 
 /* The two tongues ride together: one stack, centred on the edge, so they
    read as a pair of tabs rather than two unrelated buttons. */
+/* One shared easing and duration for the tabs and the panel, declared
+   once: when they differed the tabs arrived before the panel did and the
+   pair visibly came apart mid-slide. */
 .tongues {
   position: absolute;
   right: 0;
   top: 50%;
-  transform: translateY(-50%) translateX(2px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   z-index: 30;
-  transition: transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.05);
+  transform: translateY(-50%) translateX(0);
+  transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* Rides the panel's own width so the tongues always sit exactly on its
@@ -21,31 +24,43 @@
   transform: translateY(-50%) translateX(calc(-1 * min(420px, 100vw)));
 }
 
+/* Real bookmark tabs: stacked flush against each other, the active one
+   flowing into the panel it opens. */
+
 .tongue {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 12px 6px;
+  justify-content: center;
+  gap: 8px;
+  /* Inactive tabs sit slightly recessed; the active one slides out to meet
+     the panel. Padding carries that offset instead of a transform, so the
+     tab's own box never moves and can't jitter under the cursor. */
+  padding: 16px 7px 16px 9px;
   border: 1px solid var(--border);
   border-right: none;
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
-  background: var(--bg-elevated);
+  border-radius: 10px 0 0 10px;
+  background: var(--bg-elevated-2);
   color: var(--text-dim);
   cursor: pointer;
-  transition: color 150ms ease, background-color 150ms ease;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    padding 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 150ms ease;
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  font-size: 11px;
-  letter-spacing: 0.05em;
+  font-size: 12px;
+  letter-spacing: 0.06em;
   font-weight: 500;
   user-select: none;
 }
 
+/* Hover nudges the tab out by a couple of pixels — the paper-tab reflex —
+   without moving its layout box. */
 .tongue:hover {
-  color: var(--tick);
-  background: var(--bg-elevated-2);
-  transform: translateY(-50%) translateX(0);
+  color: var(--text);
+  padding-left: 13px;
 }
 
 .tongueLabel {
@@ -65,13 +80,16 @@
   background: var(--bg-elevated);
   border-left: 1px solid var(--border);
   z-index: 25;
-  animation: slide-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1.05);
+  /* Slides the full width of itself rather than fading in from a 30px
+     offset: a panel that appears halfway across its own travel is what
+     made the tabs look like they were racing it. */
+  transform: translateX(100%);
+  transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
   box-shadow: -20px 0 40px rgba(0, 0, 0, 0.3);
 }
 
-@keyframes slide-in {
-  from { transform: translateX(30px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+.panelOpen {
+  transform: translateX(0);
 }
 
 @media (max-width: 640px) {
@@ -829,11 +847,17 @@
 
 
 /* The active tongue is tied to the panel: same surface, amber marker. */
+/* The open tab is part of the panel: same surface, no seam between them,
+   and an amber marker down its outer edge. */
 .tongueActive {
   background: var(--bg-elevated);
   color: var(--text);
-  box-shadow: inset -2px 0 0 var(--tick);
+  padding-left: 15px;
+  box-shadow: inset 3px 0 0 var(--tick);
+  z-index: 1;
 }
+
+.tongueActive:hover { padding-left: 15px; }
 
 .simpleHeader {
   display: flex;

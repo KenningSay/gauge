@@ -4,11 +4,50 @@
 // which is what you usually want once something is already there.
 
 import { useMemo } from 'react'
-import type { NoteStyle, NoteTexture } from '../../api/board'
+import type { DecorKind, NoteStyle, NoteTexture } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
+import { useUiStore } from '../../store/useUiStore'
+import { DecorPreview } from './pins/DecorPreview'
 import { makeNotePin } from '../../utils/boardPinFactories'
 import pins from './pins/Pins.module.css'
 import styles from './TemplatePanel.module.css'
+
+// Our own drag type: the canvas accepts a drop only when it sees this, so
+// a file dragged in from the OS and a template dragged from the panel can
+// never be confused for one another.
+export const TEMPLATE_MIME = 'application/x-gauge-note-style'
+
+// Decorations travel under their own type too, so a note style and a
+// paperclip can never be mistaken for each other on drop.
+export const DECOR_MIME = 'application/x-gauge-decor'
+
+export const DECOR_ITEMS: Array<{ id: DecorKind; label: string; color: string }> = [
+  { id: 'clip', label: 'Скрепка', color: '#cbd5e1' },
+  { id: 'pushpin', label: 'Кнопка', color: '#f87171' },
+  { id: 'star', label: 'Звезда', color: '#fbbf24' },
+  { id: 'heart', label: 'Сердце', color: '#fb7185' },
+  { id: 'arrow', label: 'Стрелка', color: '#e8eae6' },
+  { id: 'chevron', label: 'Шеврон', color: '#2dd4bf' },
+  { id: 'bracketCorner', label: 'Уголок', color: '#e8eae6' },
+  { id: 'ribbonCorner', label: 'Лента', color: '#f97316' },
+  { id: 'barcodeTag', label: 'Бирка', color: '#e8eae6' },
+  { id: 'dot', label: 'Индикатор', color: '#4ade80' },
+]
+
+export function decorById(id: string): { kind: DecorKind; color: string } | null {
+  const found = DECOR_ITEMS.find((d) => d.id === id)
+  return found ? { kind: found.id, color: found.color } : null
+}
+
+// Everything the canvas needs to build the dropped note without importing
+// the panel's own layout.
+export function templateById(id: string): { style: NoteStyle; color: string; texture?: NoteTexture } | null {
+  for (const group of GROUPS) {
+    const found = group.items.find((i) => i.id === id)
+    if (found) return { style: found.id, color: found.color, texture: found.texture }
+  }
+  return null
+}
 
 interface TemplateDef {
   id: NoteStyle
@@ -59,6 +98,22 @@ const GROUPS: Array<{ title: string; items: TemplateDef[] }> = [
     ],
   },
   {
+    // The monochrome set from the reference sheets: these ignore the note
+    // colour for their plate and use it as the accent instead, so the
+    // swatches here are the accent, not the background.
+    title: 'HUD / киберпанк',
+    items: [
+      { id: 'hud', label: 'Панель', sample: 'STATUS', color: '#2dd4bf' },
+      { id: 'hudBracket', label: 'Уголки', sample: 'TARGET', color: '#e8eae6' },
+      { id: 'terminal', label: 'Терминал', sample: '> run', color: '#4ade80' },
+      { id: 'hazard', label: 'Разметка', sample: 'WARNING', color: '#fbbf24' },
+      { id: 'scan', label: 'Скан-линии', sample: 'SIGNAL', color: '#60a5fa' },
+      { id: 'dither', label: 'Дизеринг', sample: 'NOISE', color: '#e8eae6' },
+      { id: 'barcode', label: 'Штрихкод', sample: 'ID-4471', color: '#e8eae6' },
+      { id: 'chip', label: 'Статус', sample: 'ONLINE', color: '#4ade80' },
+    ],
+  },
+  {
     title: 'Ленты и выноски',
     items: [
       { id: 'ribbon', label: 'Лента', sample: 'Заголовок', color: '#fca5a5' },
@@ -92,7 +147,26 @@ const STYLE_CLASS: Record<NoteStyle, string> = {
   bubble: pins.styleBubble,
   tag: pins.styleTag,
   capsule: pins.styleCapsule,
+  hud: pins.styleHud,
+  hudBracket: pins.styleHudBracket,
+  terminal: pins.styleTerminal,
+  hazard: pins.styleHazard,
+  scan: pins.styleScan,
+  dither: pins.styleDither,
+  barcode: pins.styleBarcode,
+  chip: pins.styleChip,
 }
+
+const HUD_STYLES = new Set<NoteStyle>([
+  'hud',
+  'hudBracket',
+  'terminal',
+  'hazard',
+  'scan',
+  'dither',
+  'barcode',
+  'chip',
+])
 
 // Black or white text for the preview, by the same rule the real note uses.
 function readableOn(hex: string): string {
@@ -108,6 +182,7 @@ export function TemplatePanel() {
   const updatePin = useBoardStore((s) => s.updatePin)
   const setActivePin = useBoardStore((s) => s.setActivePin)
   const selectOnly = useBoardStore((s) => s.selectOnly)
+  const pushToast = useUiStore((s) => s.pushToast)
 
   // One selected note means "restyle this one"; anything else means "add a
   // new note in this style".
@@ -117,6 +192,23 @@ export function TemplatePanel() {
     const pin = board?.pins.find((p) => p.id === id)
     return pin && pin.type === 'note' ? pin : null
   }, [selected, board])
+
+  // Pins a decoration onto a note. Used by the click path; the drop path
+  // lives in the canvas, which knows where the pointer was.
+  const attachTo = (pinId: string | undefined, kind: DecorKind) => {
+    if (!pinId) {
+      pushToast('Сначала выбери заметку, к которой прицепить', 'info')
+      return
+    }
+    const pin = useBoardStore.getState().board?.pins.find((p) => p.id === pinId)
+    if (!pin || pin.type !== 'note') return
+    const def = decorById(kind)!
+    const next = [
+      ...(pin.decor ?? []),
+      { id: crypto.randomUUID(), kind, corner: 'tl' as const, color: def.color },
+    ]
+    updatePin(pinId, 'decor', next)
+  }
 
   const apply = (def: TemplateDef) => {
     if (restyleTarget) {
@@ -145,6 +237,33 @@ export function TemplatePanel() {
         {restyleTarget ? 'Применить к выбранной заметке' : 'Клик добавит заметку на доску'}
       </div>
 
+      <div className={styles.group}>
+        <div className={styles.groupTitle}>Штучки — перетащи на заметку</div>
+        <div className={styles.decorGrid}>
+          {DECOR_ITEMS.map((d) => (
+            <button
+              key={d.id}
+              className={styles.decorCell}
+              title={`${d.label} — перетащи на заметку`}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DECOR_MIME, d.id)
+                e.dataTransfer.setData('text/plain', d.label)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+              // Clicking pins it to the selected note, for when dragging is
+              // awkward — on a touchpad, or on a phone.
+              onClick={() => attachTo(restyleTarget?.id, d.id)}
+            >
+              <span className={styles.decorGlyph} style={{ color: d.color }}>
+                <DecorPreview kind={d.id} />
+              </span>
+              <span className={styles.cellLabel}>{d.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {GROUPS.map((group) => (
         <div key={group.title} className={styles.group}>
           <div className={styles.groupTitle}>{group.title}</div>
@@ -155,11 +274,26 @@ export function TemplatePanel() {
                 className={styles.cell}
                 title={def.label}
                 onClick={() => apply(def)}
+                // Dragged onto the board, a template lands where you drop
+                // it. The payload is just the style id under our own MIME
+                // type, so a drop from anywhere else can't be mistaken for
+                // one of these.
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(TEMPLATE_MIME, def.id)
+                  e.dataTransfer.setData('text/plain', def.label)
+                  e.dataTransfer.effectAllowed = 'copy'
+                }}
               >
                 <div className={styles.previewBox}>
                   <div
                     className={`${pins.root} ${STYLE_CLASS[def.id]} ${styles.preview}`}
-                    style={{ background: def.color, color: readableOn(def.color) }}
+                    style={{
+                      background: def.color,
+                      // Same split as the real pin: HUD plates take the
+                      // colour as an accent, everything else as text.
+                      color: HUD_STYLES.has(def.id) ? def.color : readableOn(def.color),
+                    }}
                   >
                     <div className={styles.previewText}>{def.sample}</div>
                   </div>

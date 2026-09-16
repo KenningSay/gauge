@@ -119,12 +119,49 @@ export type NoteStyle =
   | 'bubble'
   | 'tag'
   | 'capsule'
+  // The monochrome HUD family, from the cyberpunk element sheets in the
+  // user's reference folder: chamfered frames, hazard stripes, terminal
+  // readouts, dithered plates.
+  | 'hud'
+  | 'hudBracket'
+  | 'terminal'
+  | 'hazard'
+  | 'scan'
+  | 'dither'
+  | 'barcode'
+  | 'chip'
+
+// Small things pinned onto a note: a paperclip over the corner, a pushpin,
+// a star, a folded ribbon. Each one remembers which corner it was dropped
+// on, so it stays where you put it when the note is moved or resized.
+export type DecorKind =
+  | 'clip'
+  | 'pushpin'
+  | 'star'
+  | 'heart'
+  | 'arrow'
+  | 'ribbonCorner'
+  | 'chevron'
+  | 'bracketCorner'
+  | 'barcodeTag'
+  | 'dot'
+
+export type DecorCorner = 'tl' | 'tr' | 'bl' | 'br'
+
+export interface Decor {
+  id: string
+  kind: DecorKind
+  corner: DecorCorner
+  color?: string
+}
 
 export interface NotePin extends PinBase {
   type: 'note'
   text: string
   color: string
   style?: NoteStyle
+  // Absent on notes that have nothing pinned to them.
+  decor?: Decor[]
   // Optional override. Left unset, the note picks black or white from the
   // background's luminance, which is right for almost every colour — the
   // field exists for the cases where it isn't.

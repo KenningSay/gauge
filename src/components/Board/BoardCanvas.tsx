@@ -16,6 +16,7 @@ import {
 } from '../../utils/boardPinFactories'
 import { collectDroppedEntries } from '../../utils/dropFolder'
 import { EdgeLayer } from './EdgeLayer'
+import { DECOR_MIME, TEMPLATE_MIME, decorById, templateById } from './TemplatePanel'
 import { EdgeContextMenu } from './EdgeContextMenu'
 import { BoardToolbar } from './BoardToolbar'
 import { bestSides, edgePath, portPoint } from '../../utils/edgeGeo'
@@ -600,6 +601,71 @@ export function BoardCanvas() {
     async (e: React.DragEvent) => {
       e.preventDefault()
       if (!board) return
+      const rect0 = containerRef.current!.getBoundingClientRect()
+      const dropAt = screenToWorld(e.clientX - rect0.left, e.clientY - rect0.top)
+
+      // A decoration dropped onto a note: pin it to whichever corner of
+      // that note the pointer was nearest, so it lands where you aimed.
+      const decorId = e.dataTransfer.getData(DECOR_MIME)
+      if (decorId) {
+        const def = decorById(decorId)
+        const target = [...pins]
+          .sort((a, b) => b.z - a.z)
+          .find(
+            (p) =>
+              p.type === 'note' &&
+              dropAt.x >= p.x &&
+              dropAt.x <= p.x + p.w &&
+              dropAt.y >= p.y &&
+              dropAt.y <= p.y + p.h,
+          )
+        if (!def) return
+        if (!target || target.type !== 'note') {
+          pushToast('Брось на заметку — штучки цепляются к ним', 'info')
+          return
+        }
+        const corner =
+          `${dropAt.y < target.y + target.h / 2 ? 't' : 'b'}${dropAt.x < target.x + target.w / 2 ? 'l' : 'r'}` as
+            | 'tl'
+            | 'tr'
+            | 'bl'
+            | 'br'
+        useBoardStore
+          .getState()
+          .updatePin(target.id, 'decor', [
+            ...(target.decor ?? []),
+            { id: crypto.randomUUID(), kind: def.kind, corner, color: def.color },
+          ])
+        return
+      }
+
+      // A template dragged out of the side panel: build that note here
+      // rather than in the middle of the screen, since the drop point is
+      // the whole reason to drag instead of click.
+      const styleId = e.dataTransfer.getData(TEMPLATE_MIME)
+      if (styleId) {
+        const def = templateById(styleId)
+        if (def) {
+          const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
+          const note = makeNotePin(
+            { x: Math.round(dropAt.x - 110), y: Math.round(dropAt.y - 100), z },
+            '',
+            def.color,
+          )
+          const styled = {
+            ...note,
+            style: def.style,
+            ...(def.texture ? { texture: def.texture } : {}),
+          }
+          addPin(styled)
+          const store = useBoardStore.getState()
+          store.selectOnly(styled.id)
+          store.setActivePin(styled.id)
+          pushNeighbours([styled.id])
+        }
+        return
+      }
+
       // collectDroppedEntries returns null when the Entries API isn't
       // available (it's what makes dropping a *folder* work). Falling back
       // to the plain file list matters: without it the drop silently did

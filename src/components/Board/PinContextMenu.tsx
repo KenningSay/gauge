@@ -20,6 +20,7 @@ import {
   Diamond,
   Triangle,
   Image as ImageIcon,
+  Eraser,
 } from 'lucide-react'
 import type { CustomAction, NotePin as NotePinT, NoteStyle, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
 import { newId } from '../../api/board'
@@ -256,6 +257,17 @@ function PinMenuItems({ pin, onClose, onPickShapeImage }: { pin: Pin; onClose: (
           }}
         >
           Убрать картинку
+        </MenuItem>
+      )}
+      {pin.type === 'note' && (pin.decor?.length ?? 0) > 0 && (
+        <MenuItem
+          icon={<Eraser size={13} />}
+          onClick={() => {
+            store.getState().updatePin(pin.id, 'decor', [])
+            onClose()
+          }}
+        >
+          Убрать штучки ({pin.decor?.length})
         </MenuItem>
       )}
       {pin.type === 'note' && !pin.sourcePath && (

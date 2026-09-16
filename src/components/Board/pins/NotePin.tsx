@@ -6,6 +6,7 @@ import type { NotePin as NotePinT, NoteStyle } from '../../../api/board'
 import { getTextContent, putTextContent } from '../../../api/webdav'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { usePinActivation } from '../PinShell'
+import { NoteDecor } from './NoteDecor'
 import styles from './Pins.module.css'
 import shell from '../PinShell.module.css'
 
@@ -33,7 +34,26 @@ const STYLE_CLASS: Record<NoteStyle, string> = {
   bubble: styles.styleBubble,
   tag: styles.styleTag,
   capsule: styles.styleCapsule,
+  hud: styles.styleHud,
+  hudBracket: styles.styleHudBracket,
+  terminal: styles.styleTerminal,
+  hazard: styles.styleHazard,
+  scan: styles.styleScan,
+  dither: styles.styleDither,
+  barcode: styles.styleBarcode,
+  chip: styles.styleChip,
 }
+
+const HUD_STYLES = new Set<NoteStyle>([
+  'hud',
+  'hudBracket',
+  'terminal',
+  'hazard',
+  'scan',
+  'dither',
+  'barcode',
+  'chip',
+])
 
 export function NotePin({ pin }: { pin: NotePinT }) {
   const { activated, setActivated } = usePinActivation()
@@ -136,7 +156,12 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         // Set on the wrapper so the markdown view and the textarea inherit
         // the same colour — they used to disagree, and the editor inherited
         // the app's light text, i.e. white on a yellow sticky note.
-        color: pin.textColor ?? readableOn(pin.color),
+        // On the HUD styles the note's colour is the accent (brackets,
+        // stripes, indicator), not the text colour — the plate is dark and
+        // the text is set light in CSS.
+        color: HUD_STYLES.has(pin.style ?? 'sticky')
+          ? pin.color
+          : (pin.textColor ?? readableOn(pin.color)),
       }}
     >
       {activated ? (
@@ -166,6 +191,10 @@ export function NotePin({ pin }: { pin: NotePinT }) {
           </div>
         </div>
       )}
+      {pin.decor && pin.decor.length > 0 && (
+        <NoteDecor items={pin.decor} accent={pin.color} />
+      )}
+
       {pin.sourcePath && (
         <div
           className={`${styles.noteSource} ${linkError ? styles.noteSourceError : ''}`}
