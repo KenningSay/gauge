@@ -9,7 +9,7 @@
 // standalone so integration wiring can be verified before the canvas is
 // written.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, Loader2, AlertCircle } from 'lucide-react'
 import type { BoardIndex, BoardMeta, Pin } from '../../api/board'
 import * as boardApi from '../../api/board'
@@ -127,6 +127,35 @@ export function BoardView() {
       pushToast(`Не удалось открыть доску: ${e instanceof Error ? e.message : String(e)}`, 'error')
     })
   }, [activeId, board, loadBoard, unloadBoard, pushToast])
+
+  // ---- save conflict (412) ----
+
+  // A conflict stops the autosave loop dead: the file on the server moved
+  // under us (another tab, another device, a hand-edit), so writing would
+  // clobber it. Before this the only signal was a red dot in the corner and
+  // every later edit silently went nowhere. The ref keeps the dialog from
+  // reopening on each render while it's already up.
+  const conflictAsked = useRef(false)
+  useEffect(() => {
+    if (saveState !== 'conflict') {
+      conflictAsked.current = false
+      return
+    }
+    if (conflictAsked.current) return
+    conflictAsked.current = true
+    void (async () => {
+      const overwrite = await confirmDialog(
+        'Доска изменена где-то ещё. Перезаписать серверную версию своими изменениями? ' +
+          '«Отмена» — перезагрузить доску с сервера и потерять несохранённые правки.',
+      )
+      try {
+        if (overwrite) await useBoardStore.getState().overwriteServer()
+        else await useBoardStore.getState().reloadFromServer()
+      } catch (e) {
+        pushToast(`Не удалось разрешить конфликт: ${e instanceof Error ? e.message : String(e)}`, 'error')
+      }
+    })()
+  }, [saveState, confirmDialog, pushToast])
 
   // ---- user templates ----
 

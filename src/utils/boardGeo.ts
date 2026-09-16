@@ -86,13 +86,20 @@ export function resolvePush(
   const pos = new Map<string, { x: number; y: number }>()
   for (const o of others) pos.set(o.id, { x: o.x, y: o.y })
 
-  const queue: Rect[] = [{ x: placed.x, y: placed.y, w: placed.w, h: placed.h }]
+  // A pusher carries the id of the pin it came from (null for the freshly
+  // placed rect, which isn't in `others` yet). Without it a displaced pin
+  // meets *itself* in the loop below — a rect always overlaps itself, so it
+  // would shove itself sideways by its own width on every pass.
+  const queue: Array<{ id: string | null; rect: Rect }> = [
+    { id: null, rect: { x: placed.x, y: placed.y, w: placed.w, h: placed.h } },
+  ]
   let iter = 0
 
   while (queue.length > 0 && iter < MAX_ITER) {
     iter++
-    const pusher = queue.shift()!
+    const { id: pusherId, rect: pusher } = queue.shift()!
     for (const other of others) {
+      if (other.id === pusherId) continue
       const cur = pos.get(other.id)!
       const target: Rect = { x: cur.x, y: cur.y, w: other.w, h: other.h }
       const push = pushOut(pusher, target, gap)
@@ -101,7 +108,7 @@ export function resolvePush(
       cur.y += push.dy
       // The moved rect becomes a pusher itself, so the displacement can
       // ripple outward — the "chain reaction" the spec calls for.
-      queue.push({ x: cur.x, y: cur.y, w: other.w, h: other.h })
+      queue.push({ id: other.id, rect: { x: cur.x, y: cur.y, w: other.w, h: other.h } })
     }
   }
 

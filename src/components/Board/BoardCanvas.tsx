@@ -14,6 +14,7 @@ import {
   pinFromVaultEntry,
 } from '../../utils/boardPinFactories'
 import { collectDroppedEntries } from '../../utils/dropFolder'
+import { runPool } from '../../utils/pool'
 import { PinRenderer } from './pins/PinRenderer'
 import { PinContextMenu, type PinMenuTarget } from './PinContextMenu'
 import styles from './BoardCanvas.module.css'
@@ -418,29 +419,35 @@ export function BoardCanvas() {
       const dropWorld = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
       let z = pins.reduce((m, p) => Math.max(m, p.z), 0)
 
-      for (let i = 0; i < dropped.length; i++) {
-        const { file, relPath } = dropped[i]
-        const offset = i * 24
-        const args = { x: dropWorld.x + offset, y: dropWorld.y + offset, z: ++z }
-        try {
-          const pin = await pinFromDroppedFile(board.id, file, args)
-          addPin(pin)
-          // "Капля в воду": push overlapping pins out of the way. Runs
-          // against the current board state (which now includes the pin
-          // we just added — filtered out below), and any actual movement
-          // is committed as a normal batch of move ops.
-          const state = useBoardStore.getState()
-          const others = (state.board?.pins ?? [])
-            .filter((p) => p.id !== pin.id)
-            .map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h }))
-          const pushed = resolvePush(others, pin, 16)
-          if (pushed.length) movePins(pushed)
-        } catch (err) {
-          pushToast(
-            `Не удалось загрузить «${relPath.join('/')}»: ${err instanceof Error ? err.message : String(err)}`,
-            'error',
-          )
-        }
+      // Uploads run through the shared pool (limit 3) like every other bulk
+      // operation — dropping a folder of images used to upload them strictly
+      // one after another. Layout offsets are assigned up front, from the
+      // index, so a pin's position doesn't depend on which upload finishes
+      // first.
+      const boardId = board.id
+      const jobs = dropped.map((entry, i) => ({ ...entry, index: i, z: ++z }))
+      const result = await runPool(jobs, 3, async (job) => {
+        const offset = job.index * 24
+        const args = { x: dropWorld.x + offset, y: dropWorld.y + offset, z: job.z }
+        const pin = await pinFromDroppedFile(boardId, job.file, args)
+        addPin(pin)
+        // "Капля в воду": push overlapping pins out of the way. Runs
+        // against the current board state (which now includes the pin
+        // we just added — filtered out below), and any actual movement
+        // is committed as a normal batch of move ops.
+        const state = useBoardStore.getState()
+        const others = (state.board?.pins ?? [])
+          .filter((p) => p.id !== pin.id)
+          .map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h }))
+        const pushed = resolvePush(others, pin, 16)
+        if (pushed.length) movePins(pushed)
+      })
+
+      for (const { item, error } of result.failed) {
+        pushToast(
+          `Не удалось загрузить «${item.relPath.join('/')}»: ${error instanceof Error ? error.message : String(error)}`,
+          'error',
+        )
       }
     },
     [addPin, board, movePins, pins, pushToast, screenToWorld],

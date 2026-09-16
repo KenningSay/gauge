@@ -8,11 +8,10 @@
 }
 
 .shell.selected {
-  /* A soft scale on the whole shell — cheap, GPU-composited, and the
-     "чуть подрастает" feel from the spec. */
+  /* The scale itself lives in the inline transform alongside the translate
+     (an inline transform would otherwise win over anything set here). This
+     rule only has to own the origin; the transition is on .shell. */
   transform-origin: center;
-  /* transform is set inline; the scale is applied via a child pseudo
-     layer so we don't fight the inline translate. */
 }
 
 /* ---------- glow layer ---------- */
