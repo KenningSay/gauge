@@ -111,6 +111,24 @@ export function BoardView() {
     }
   }, [reconcile])
 
+  // Closing the tab inside the save debounce — or while a save is still in
+  // flight — used to drop the last edits without a word. The browser only
+  // allows a generic prompt here, and only if the user has interacted with
+  // the page, but a generic prompt beats silent loss. The flush is fired
+  // too: it usually completes, and when it doesn't the prompt is the net.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      const { saveState, flushSave } = useBoardStore.getState()
+      if (saveState !== 'dirty' && saveState !== 'saving' && saveState !== 'conflict') return
+      void flushSave()
+      e.preventDefault()
+      // Legacy browsers key off the return value rather than the default.
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
+
   useEffect(() => {
     if (!cachedIndex) void loadIndex()
   }, [loadIndex])

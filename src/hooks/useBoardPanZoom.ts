@@ -58,6 +58,20 @@ function scrollableUnder(
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 4
 
+// A wheel event does not have to report pixels. Firefox reports lines
+// (deltaMode 1) for most physical mice, and a page (deltaMode 2) for
+// page-up/down style devices — so `deltaY` comes through as 3 rather than
+// ~100, and everything downstream that treats it as pixels moves about a
+// thirtieth as far. That is the difference between a wheel notch panning
+// the board and a wheel notch doing visibly nothing.
+const LINE_HEIGHT_PX = 16
+
+export function normalizeWheel(e: WheelEvent, pageHeight: number): { dx: number; dy: number } {
+  const scale =
+    e.deltaMode === 1 ? LINE_HEIGHT_PX : e.deltaMode === 2 ? Math.max(1, pageHeight) : 1
+  return { dx: e.deltaX * scale, dy: e.deltaY * scale }
+}
+
 interface Options {
   viewport: ViewportState
   onChange: (v: ViewportState) => void
@@ -109,6 +123,11 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
   const pinchRef = useRef<{
     p1: { id: number; x: number; y: number }
     p2: { id: number; x: number; y: number }
+    // Distance at the previous move. This used to live on `window`, which
+    // meant two boards shared one pinch, and a gesture interrupted by
+    // unmounting left a stale distance behind that made the next pinch
+    // jump.
+    dist: number | null
   } | null>(null)
 
   const onPointerDown = useCallback(
@@ -136,6 +155,7 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
           pinchRef.current = {
             p1: { id: first.pointerId, x: first.startX, y: first.startY },
             p2: { id: e.pointerId, x: e.clientX, y: e.clientY },
+            dist: null,
           }
           containerRef.current?.setPointerCapture(e.pointerId)
           containerRef.current?.setPointerCapture(first.pointerId)
@@ -177,12 +197,8 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
         const dx = pinch.p2.x - pinch.p1.x
         const dy = pinch.p2.y - pinch.p1.y
         const dist = Math.hypot(dx, dy)
-        const prevDist = (window as unknown as { __gaugePinchDist?: number }).__gaugePinchDist
-        if (prevDist) {
-          const factor = dist / prevDist
-          onChange(zoomAt(v, worldX, worldY, factor))
-        }
-        ;(window as unknown as { __gaugePinchDist?: number }).__gaugePinchDist = dist
+        if (pinch.dist) onChange(zoomAt(v, worldX, worldY, dist / pinch.dist))
+        pinch.dist = dist
         return
       }
 
@@ -199,18 +215,31 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
     [containerRef, onChange],
   )
 
-  const endPointer = useCallback((e: PointerEvent) => {
-    const pinch = pinchRef.current
-    if (pinch && (e.pointerId === pinch.p1.id || e.pointerId === pinch.p2.id)) {
-      pinchRef.current = null
-      ;(window as unknown as { __gaugePinchDist?: number }).__gaugePinchDist = undefined
-      return
-    }
-    const drag = dragRef.current
-    if (drag && drag.pointerId === e.pointerId) {
-      dragRef.current = null
-    }
-  }, [])
+  const endPointer = useCallback(
+    (e: PointerEvent) => {
+      const pinch = pinchRef.current
+      if (pinch && (e.pointerId === pinch.p1.id || e.pointerId === pinch.p2.id)) {
+        pinchRef.current = null
+        // Lifting one finger of a pinch used to leave the board inert until
+        // the other was lifted too. The finger still down becomes a pan,
+        // anchored where it is now rather than where the pinch began.
+        const remaining = e.pointerId === pinch.p1.id ? pinch.p2 : pinch.p1
+        dragRef.current = {
+          pointerId: remaining.id,
+          startX: remaining.x,
+          startY: remaining.y,
+          startViewportX: viewportRef.current.x,
+          startViewportY: viewportRef.current.y,
+        }
+        return
+      }
+      const drag = dragRef.current
+      if (drag && drag.pointerId === e.pointerId) {
+        dragRef.current = null
+      }
+    },
+    [],
+  )
 
   const onWheel = useCallback(
     (e: WheelEvent) => {
@@ -222,7 +251,8 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
       // underneath it. Only yields when that element can actually scroll
       // further in the direction asked for, so reaching the end of a note
       // hands the gesture back to the board instead of dead-ending.
-      if (!e.ctrlKey && !e.metaKey && scrollableUnder(e.clientX, e.clientY, containerRef.current, e.deltaY)) {
+      const { dx: rawDx, dy: rawDy } = normalizeWheel(e, rect.height)
+      if (!e.ctrlKey && !e.metaKey && scrollableUnder(e.clientX, e.clientY, containerRef.current, rawDy)) {
         e.preventDefault()
         return
       }
@@ -241,7 +271,7 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
         // Exponential so each wheel tick is a fixed ratio, not fixed
         // delta — otherwise zoom crawls when zoomed out and jumps when
         // zoomed in.
-        const factor = Math.exp(-e.deltaY * 0.002)
+        const factor = Math.exp(-rawDy * 0.002)
         onChange(zoomAt(v, worldX, worldY, factor))
         return
       }
@@ -253,8 +283,8 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
       const v = viewportRef.current
       // Shift swaps axes, matching the OS convention (shift+wheel is
       // horizontal scroll everywhere).
-      const dx = e.shiftKey ? e.deltaY : e.deltaX
-      const dy = e.shiftKey ? 0 : e.deltaY
+      const dx = e.shiftKey ? rawDy : rawDx
+      const dy = e.shiftKey ? 0 : rawDy
       onChange({
         ...v,
         x: v.x + dx / v.zoom,
