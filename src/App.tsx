@@ -11,6 +11,7 @@ import { ToastContainer } from './components/Toast'
 import { Dialog } from './components/Dialog'
 import { LoginScreen } from './components/LoginScreen'
 import { ViewerModal } from './components/Viewer/ViewerModal'
+import { BoardView } from './components/Board/BoardView'
 import { useFileStore } from './store/useFileStore'
 import { useUiStore } from './store/useUiStore'
 import { useAuthStore } from './store/useAuthStore'
@@ -26,6 +27,7 @@ function getInitialTheme(): Theme {
 
 function MainApp() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
+  const activeTab = useUiStore((s) => s.activeTab)
   const navigate = useFileStore((s) => s.navigate)
   const openCommandPalette = useFileStore((s) => s.openCommandPalette)
   const closeCommandPalette = useFileStore((s) => s.closeCommandPalette)
@@ -59,6 +61,13 @@ function MainApp() {
 
   useEffect(() => {
     const handler = async (e: KeyboardEvent) => {
+      // The entire file-manager keyboard layer is scoped to the Files tab.
+      // On Boards, Ctrl+A/Ctrl+C/Delete/arrows all belong to the canvas
+      // (and its own keydown handler), and running both would make the two
+      // fight — e.g. Ctrl+A here would select every file entry AND the
+      // canvas's own select-all would fire too.
+      if (activeTab === 'boards') return
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         commandPaletteOpen ? closeCommandPalette() : openCommandPalette()
@@ -104,8 +113,8 @@ function MainApp() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && selected.size === 1) {
         e.preventDefault()
-        const target = entries.find((en) => selected.has(en.path))
-        if (target) duplicateEntry(target)
+        const t = entries.find((en) => selected.has(en.path))
+        if (t) duplicateEntry(t)
         return
       }
       if (e.key === 'ArrowDown') { e.preventDefault(); moveCursor(1) }
@@ -117,6 +126,7 @@ function MainApp() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [
+    activeTab,
     commandPaletteOpen, openCommandPalette, closeCommandPalette, viewerEntry, renamingPath,
     selected, entries, deleteEntries, startRename, clearSelection,
     moveCursor, activateCursor, goUp, confirmDialog, toggleProperties, selectAll,
@@ -126,14 +136,18 @@ function MainApp() {
   return (
     <div className={styles.app}>
       <Toolbar theme={theme} onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
-      <div className={styles.content}>
-        <FolderTree />
-        <div className={styles.main}>
-          <Breadcrumbs />
-          <FileList />
+      {activeTab === 'boards' ? (
+        <BoardView />
+      ) : (
+        <div className={styles.content}>
+          <FolderTree />
+          <div className={styles.main}>
+            <Breadcrumbs />
+            <FileList />
+          </div>
+          <PropertiesPanel />
         </div>
-        <PropertiesPanel />
-      </div>
+      )}
       <ContextMenu />
       <CommandPalette />
       <ViewerModal />

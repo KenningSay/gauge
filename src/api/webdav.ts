@@ -367,3 +367,60 @@ export async function moveEntry(entry: FileEntry, destDir: string): Promise<void
 export async function copyEntry(entry: FileEntry, destDir: string, destName: string): Promise<void> {
   await moveOrCopy('COPY', entry.path, joinPath(destDir, destName), entry.isDir)
 }
+
+// ---------- Additions for boards ----------
+
+export interface ResourceStat {
+  etag: string | null
+  lastModified: string | null
+}
+
+// HEAD is unreliable against nginx's dav module for ETag (the module only
+// adds it to PROPFIND responses), and PROPFIND with Depth: 0 gets both
+// getetag and getlastmodified in one round-trip. Returns null on 404 so
+// callers can tell "doesn't exist yet" apart from a real error — used by
+// saveBoard to skip If-Match on the very first save of a fresh board, and
+// by asset helpers to pick a non-colliding name.
+export async function stat(path: string): Promise<ResourceStat | null> {
+  try {
+    const res = await request(path, {
+      method: 'PROPFIND',
+      headers: { Depth: '0' },
+    })
+    const xml = await res.text()
+    const doc = new DOMParser().parseFromString(xml, 'text/xml')
+    return {
+      etag: extText(doc.documentElement, 'getetag') || null,
+      lastModified: extText(doc.documentElement, 'getlastmodified') || null,
+    }
+  } catch (e) {
+    if (e instanceof WebDavError && e.status === 404) return null
+    throw e
+  }
+}
+
+export class PreconditionFailedError extends Error {}
+
+// Same as putTextContent, but sends If-Match when ifMatch is provided so
+// the server rejects the write with 412 if the resource changed since the
+// ETag was captured. This is the whole mechanism behind the boards'
+// "changed elsewhere" dialog — client-side timestamp comparison would race
+// against another tab/device writing between our stat() and our PUT.
+export async function putTextContentConditional(
+  path: string,
+  content: string,
+  ifMatch: string | null,
+): Promise<ResourceStat> {
+  const headers: Record<string, string> = { 'Content-Type': 'text/plain; charset=utf-8' }
+  if (ifMatch) headers['If-Match'] = ifMatch
+  try {
+    await request(path, { method: 'PUT', headers, body: content })
+  } catch (e) {
+    if (e instanceof WebDavError && e.status === 412 && ifMatch) {
+      throw new PreconditionFailedError('Ресурс изменился с момента загрузки')
+    }
+    throw e
+  }
+  const s = await stat(path)
+  return s ?? { etag: null, lastModified: null }
+}
