@@ -461,14 +461,42 @@ async function buildFromUserTemplate(templateId: string, boardName: string) {
   const remappedPins = pins.map((p) =>
     p.sourceIds ? { ...p, sourceIds: p.sourceIds.map((sid) => idMap.get(sid) ?? sid) } : p,
   )
-  fresh.pins = remappedPins
   fresh.viewport = { ...template.viewport }
   fresh.settings = { ...template.settings }
-  // Assets are NOT copied here — the create flow in this component only
-  // duplicates state. Template asset copying is a follow-up (see
-  // boardApi.copyVaultAssetToBoard, currently unused by the UI). Boards
-  // created from a user template will reference the template's asset
-  // paths directly, which works as long as the template exists — this is
-  // the known limitation documented in §4.9 of the handoff.
+
+  // Copy the template's own asset files into the new board. Without this
+  // the new board's pins point straight at files inside the template's
+  // folder: deleting the template then breaks every board ever made from
+  // it, and editing a picture in one silently changes it in all of them.
+  // Only files that actually live in the template's own assets folder are
+  // copied — a pin referencing a file elsewhere in the vault is a
+  // deliberate reference and stays one.
+  const templateAssetDir = `${boardApi.TEMPLATES_DIR}/${templateId}/assets/`
+  const withAssets: Pin[] = []
+  for (const pin of remappedPins) {
+    const assetPath = 'assetPath' in pin ? pin.assetPath : undefined
+    if (!assetPath || !assetPath.startsWith(templateAssetDir)) {
+      withAssets.push(pin)
+      continue
+    }
+    try {
+      const copied = await boardApi.copyVaultAssetToBoard(
+        fresh.id,
+        assetPath,
+        ('fileName' in pin && pin.fileName) || assetPath.split('/').pop() || 'file',
+      )
+      // The cast is narrow and deliberate: this branch only runs for pins
+      // that already carry an assetPath, and TypeScript can't see that the
+      // `in` check above narrowed the union.
+      withAssets.push({ ...pin, assetPath: copied } as Pin)
+    } catch {
+      // A missing or unreadable template asset must not stop the board
+      // from being created — the pin keeps pointing at the original, which
+      // is no worse than before.
+      withAssets.push(pin)
+    }
+  }
+  fresh.pins = withAssets
+
   return fresh
 }

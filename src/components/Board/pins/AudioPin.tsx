@@ -1,68 +1,99 @@
-import { useEffect, useState } from 'react'
-import { Music, Play, Loader2 } from 'lucide-react'
+// An audio pin that actually plays.
+//
+// It used to download the whole file into a blob "to read ID3 tags",
+// never read them, and hand the mp3 to an <img> as cover art — so every
+// audio pin on a board pulled megabytes over the network to display a
+// fallback icon, and the play button raised a toast saying a player would
+// arrive some day.
+//
+// This plays through a plain <audio> pointed at the WebDAV URL, the same
+// way video pins do: the service worker attaches the credential, so the
+// browser streams it with Range requests instead of buffering the whole
+// file first.
+
+import { useEffect, useRef, useState } from 'react'
+import { Music, Play, Pause } from 'lucide-react'
 import type { AudioPin as AudioPinT } from '../../../api/board'
-import { acquireBlobUrl, releaseBlobUrl } from '../../../utils/blobCache'
-import { useUiStore } from '../../../store/useUiStore'
+import { davUrl } from '../../../api/webdav'
 import { usePinActivation } from '../PinShell'
 import styles from './Pins.module.css'
 
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds)) return '--:--'
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 export function AudioPin({ pin }: { pin: AudioPinT }) {
   const { activated } = usePinActivation()
-  const [cover, setCover] = useState<string | null>(null)
-  const [coverFailed, setCoverFailed] = useState(false)
-  const pushToast = useUiStore((s) => s.pushToast)
-  const [loading, setLoading] = useState(false)
+  const ref = useRef<HTMLAudioElement | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const [time, setTime] = useState(0)
+  const [duration, setDuration] = useState(pin.duration ?? NaN)
 
+  // Same rule as video: a pin the user has panned away from shouldn't keep
+  // playing. Deactivating pauses it.
   useEffect(() => {
-    let cancelled = false
-    // Load the asset as a blob just to read ID3 tags out of it — the
-    // audio itself plays through the (not-yet-written) global player, but
-    // the cover art has to come from somewhere and the ID3 APIC frame is
-    // the most reliable. Until ID3 parsing lands, this just resolves the
-    // asset's own URL and does nothing with it beyond confirming it
-    // exists; the "no cover" fallback icon shows either way.
-    void (async () => {
-      try {
-        const url = await acquireBlobUrl(pin.assetPath)
-        if (!cancelled) setCover(url)
-      } catch {
-        if (!cancelled) setCoverFailed(true)
-      }
-    })()
-    return () => {
-      cancelled = true
-      releaseBlobUrl(pin.assetPath)
-    }
-  }, [pin.assetPath])
+    if (!activated) ref.current?.pause()
+  }, [activated])
 
-  const onPlayClick = () => {
-    setLoading(true)
-    // The global audio player lands in a follow-up delivery. Until then,
-    // this button tells the user what would happen rather than pretending
-    // to do something — a silent no-op is worse than an honest "скоро".
-    setTimeout(() => {
-      setLoading(false)
-      pushToast('Глобальный плеер появится в следующей версии', 'info')
-    }, 120)
+  const toggle = () => {
+    const el = ref.current
+    if (!el) return
+    if (el.paused) void el.play()
+    else el.pause()
   }
 
-  void activated
-  void coverFailed
+  const seek = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = ref.current
+    if (!el || !Number.isFinite(duration)) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+    el.currentTime = ratio * duration
+    setTime(el.currentTime)
+  }
+
+  const progress = Number.isFinite(duration) && duration > 0 ? (time / duration) * 100 : 0
 
   return (
     <div className={styles.audioWrap}>
-      {cover ? (
-        <img className={styles.audioCover} src={cover} alt={pin.fileName} />
-      ) : (
-        <div className={styles.audioCoverFallback}>
-          <Music size={28} />
-        </div>
-      )}
+      <div className={styles.audioCoverFallback}>
+        <Music size={28} />
+      </div>
+
       <div className={styles.audioTitle}>{pin.title || pin.fileName}</div>
       {pin.artist && <div className={styles.audioArtist}>{pin.artist}</div>}
-      <button className={styles.audioPlay} onClick={onPlayClick} title="Воспроизвести">
-        {loading ? <Loader2 size={16} className="spin" /> : <Play size={16} />}
-      </button>
+
+      <div className={styles.audioControls}>
+        <button
+          className={styles.audioPlay}
+          onClick={toggle}
+          title={playing ? 'Пауза' : 'Воспроизвести'}
+          aria-label={playing ? 'Пауза' : 'Воспроизвести'}
+        >
+          {playing ? <Pause size={16} /> : <Play size={16} />}
+        </button>
+
+        <div className={styles.audioBar} onPointerDown={seek} title="Перемотать">
+          <div className={styles.audioBarFill} style={{ width: `${progress}%` }} />
+        </div>
+
+        <span className={styles.audioTime}>
+          {formatTime(time)} / {formatTime(duration)}
+        </span>
+      </div>
+
+      <audio
+        ref={ref}
+        src={davUrl(pin.assetPath)}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+      />
     </div>
   )
 }

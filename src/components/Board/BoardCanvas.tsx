@@ -724,6 +724,25 @@ export function BoardCanvas() {
     setVaultPickerAt(world)
   }, [])
 
+  // "Put an existing vault file on the board". Files dropped from the OS
+  // are copied into the board's assets; this instead *references* a file
+  // already in the vault, which is the only way to pin audio, video or a
+  // PDF that's already there — previously unreachable from the board at
+  // all, since the file manager is a different tab you can't drag out of.
+  const [filePickerAt, setFilePickerAt] = useState<{ x: number; y: number } | null>(null)
+
+  const handleVaultFilePick = useCallback(
+    (entry: FileEntry) => {
+      const world = filePickerAt
+      setFilePickerAt(null)
+      if (!world) return
+      const current = useBoardStore.getState()
+      const z = (current.board?.pins ?? []).reduce((m, p) => Math.max(m, p.z), 0) + 1
+      current.addPin(pinFromVaultEntry(entry, { x: world.x - 140, y: world.y - 110, z }))
+    },
+    [filePickerAt],
+  )
+
   // Which shape is waiting for a picture, if any.
   const [imagePickerFor, setImagePickerFor] = useState<string | null>(null)
 
@@ -928,6 +947,7 @@ export function BoardCanvas() {
         onCreateLink={() => void createLinkAt(viewportCenterWorld(viewport, containerSize))}
         onCreateShape={(kind) => createShapeAt(viewportCenterWorld(viewport, containerSize), kind)}
         onFit={fitToPins}
+        onCreateVaultFile={() => setFilePickerAt(viewportCenterWorld(viewport, containerSize))}
       />
 
       {edgeMenu && (
@@ -940,6 +960,14 @@ export function BoardCanvas() {
             removeEdges([edgeMenu.id])
             setSelectedEdgeId(null)
           }}
+        />
+      )}
+
+      {filePickerAt && (
+        <VaultNotePicker
+          kind="any"
+          onPick={handleVaultFilePick}
+          onCancel={() => setFilePickerAt(null)}
         />
       )}
 

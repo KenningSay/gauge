@@ -19,7 +19,7 @@ interface Props {
   onCancel: () => void
   // Which files to offer. Defaults to markdown (the linked-note case); a
   // shape looking for a picture asks for images instead.
-  kind?: 'markdown' | 'image'
+  kind?: 'markdown' | 'image' | 'any'
   title?: string
 }
 
@@ -41,7 +41,12 @@ export function VaultNotePicker({ onPick, onCancel, kind = 'markdown', title }: 
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const pattern = kind === 'image' ? /\.(png|jpe?g|gif|webp|svg|avif)$/i : /\.(md|markdown|txt)$/i
+    const pattern =
+      kind === 'image'
+        ? /\.(png|jpe?g|gif|webp|svg|avif)$/i
+        : kind === 'any'
+          ? /./
+          : /\.(md|markdown|txt)$/i
     const md = (index ?? []).filter((e) => !e.isDir && pattern.test(e.name))
     const hits = q ? md.filter((e) => e.path.toLowerCase().includes(q)) : md
     // Newest first with no query: the file you want is usually one you
@@ -81,7 +86,14 @@ export function VaultNotePicker({ onPick, onCancel, kind = 'markdown', title }: 
             ref={inputRef}
             className={styles.input}
             value={query}
-            placeholder={title ?? (kind === 'image' ? 'Найти картинку в хранилище…' : 'Найти заметку в хранилище…')}
+            placeholder={
+              title ??
+              (kind === 'image'
+                ? 'Найти картинку в хранилище…'
+                : kind === 'any'
+                  ? 'Найти файл в хранилище…'
+                  : 'Найти заметку в хранилище…')
+            }
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKey}
           />

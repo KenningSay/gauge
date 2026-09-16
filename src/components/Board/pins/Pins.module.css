@@ -204,7 +204,7 @@
 }
 
 .audioTitle {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -213,12 +213,56 @@
 }
 
 .audioArtist {
-  font-size: 11px;
+  font-size: 14px;
   color: rgba(232, 234, 230, 0.6);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+}
+
+.audioControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 260px;
+}
+
+/* A click anywhere on the bar seeks, so it gets a generous height with the
+   visible track drawn inside it — a 4px strip is a miserable target. */
+.audioBar {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.audioBar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(232, 234, 230, 0.18);
+}
+
+.audioBarFill {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--tick);
+  transition: width 120ms linear;
+}
+
+.audioTime {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: rgba(232, 234, 230, 0.6);
+  white-space: nowrap;
 }
 
 .audioPlay {
@@ -232,7 +276,11 @@
   background: var(--tick);
   color: #0b0b0b;
   cursor: pointer;
+  flex: none;
+  transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
+
+.audioPlay:hover { transform: scale(1.08); }
 
 /* ---------- file ---------- */
 

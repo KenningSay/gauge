@@ -7,7 +7,7 @@
 // tools place theirs.
 
 import { useState } from 'react'
-import { StickyNote, FileText, Link as LinkIcon, Square, Circle, Diamond, Triangle, Maximize } from 'lucide-react'
+import { StickyNote, FileText, Link as LinkIcon, Square, Circle, Diamond, Triangle, Maximize, Paperclip } from 'lucide-react'
 import type { ShapeKind } from '../../api/board'
 import styles from './BoardToolbar.module.css'
 
@@ -20,6 +20,7 @@ interface Props {
   onCreateLink: () => void
   onCreateShape: (kind: ShapeKind) => void
   onFit: () => void
+  onCreateVaultFile: () => void
 }
 
 const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
@@ -29,7 +30,7 @@ const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
   { id: 'triangle', label: 'Треугольник', icon: <Triangle size={16} /> },
 ]
 
-export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onFit }: Props) {
+export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onFit, onCreateVaultFile }: Props) {
   const [shapesOpen, setShapesOpen] = useState(false)
 
   return (
@@ -67,6 +68,14 @@ export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCrea
           onClick={onCreateVaultNote}
         >
           <FileText size={17} />
+        </button>
+        <button
+          className={styles.btn}
+          title="Файл из хранилища (аудио, видео, PDF…)"
+          aria-label="Файл из хранилища"
+          onClick={onCreateVaultFile}
+        >
+          <Paperclip size={17} />
         </button>
         <button className={styles.btn} title="Ссылка" aria-label="Создать ссылку" onClick={onCreateLink}>
           <LinkIcon size={17} />
