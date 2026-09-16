@@ -1,0 +1,87 @@
+/* Top-centre of the canvas, in screen coordinates: the board moves under
+   it while you step through matches, so it must not live in the world
+   layer. */
+.wrap {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-lg);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-faint);
+}
+
+.input {
+  width: 220px;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.input:focus { outline: none; }
+.input::placeholder { color: var(--text-faint); }
+
+.count {
+  min-width: 56px;
+  padding: 0 6px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background-color 110ms ease, color 110ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (pointer: coarse), (max-width: 640px) {
+  .wrap {
+    left: max(8px, var(--safe-left));
+    right: max(8px, var(--safe-right));
+    top: max(8px, var(--safe-top));
+    transform: none;
+  }
+
+  .input { width: auto; flex: 1; min-width: 0; height: var(--tap); }
+  .btn { width: var(--tap); height: var(--tap); }
+}

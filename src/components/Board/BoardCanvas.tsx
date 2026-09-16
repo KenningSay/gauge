@@ -21,6 +21,7 @@ import { MAX_DECOR_PER_NOTE, clampPos } from '../../utils/decorGeo'
 import { EdgeContextMenu } from './EdgeContextMenu'
 import { BoardToolbar } from './BoardToolbar'
 import { NoteFormatBar } from './NoteFormatBar'
+import { BoardSearch } from './BoardSearch'
 import { FONT_BY_ID } from './pins/noteStyles'
 import {
   downloadBlob,
@@ -121,6 +122,10 @@ const GRID_PATTERN: Record<string, { image: (c: string) => string; size: number 
   },
 }
 
+// A stable identity: a fresh Set every render would make the search's
+// publish-matches effect fire for ever.
+const EMPTY_MATCHES: Set<string> = new Set()
+
 export function BoardCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   // The zoomed layer that holds the pins — what an export snapshots.
@@ -177,6 +182,8 @@ export function BoardCanvas() {
   // serialises what is mounted, and the board only mounts what is on
   // screen. Without this the picture is whatever happened to be in view.
   const [exporting, setExporting] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchMatches, setSearchMatches] = useState<Set<string>>(EMPTY_MATCHES)
   const windowed = useBoardVirtual({
     pins,
     viewport,
@@ -486,6 +493,13 @@ export function BoardCanvas() {
         return
       }
       const mod = e.ctrlKey || e.metaKey
+      if (mod && isKey(e, 'f')) {
+        // The browser's own find is no use here: most of the board is not
+        // in the DOM at any moment, and what is, is transformed off screen.
+        e.preventDefault()
+        setSearchOpen(true)
+        return
+      }
       if (mod && isKey(e, 'z') && !e.shiftKey) {
         e.preventDefault()
         undo()
@@ -1189,6 +1203,7 @@ export function BoardCanvas() {
             pin={pin}
             override={overrides?.get(pin.id)}
             selected={selected.has(pin.id)}
+            matched={searchMatches.has(pin.id)}
             onPointerDownBody={(e) => {
               armLongPress(e, (screen) => setMenu({ kind: 'pin', screen, pin }))
               beginPinDrag(e, pin)
@@ -1212,6 +1227,23 @@ export function BoardCanvas() {
             top: marqueeRect.y,
             width: marqueeRect.w,
             height: marqueeRect.h,
+          }}
+        />
+      )}
+
+      {searchOpen && (
+        <BoardSearch
+          pins={pins}
+          zoom={viewport.zoom}
+          container={containerSize}
+          onMatchesChange={setSearchMatches}
+          onJump={(v, id) => {
+            setViewport({ ...viewport, ...v })
+            selectOnly(id)
+          }}
+          onClose={() => {
+            setSearchOpen(false)
+            containerRef.current?.focus({ preventScroll: true })
           }}
         />
       )}

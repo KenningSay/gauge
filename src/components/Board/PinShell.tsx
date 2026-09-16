@@ -50,6 +50,8 @@ interface Props {
   // Starts pulling a connection out of one of the four ports.
   onPortPointerDown?: (e: React.PointerEvent, side: PortSide) => void
   children: React.ReactNode
+  // Lit while board search is open and this pin is one of the hits.
+  matched?: boolean
 }
 
 const PORTS: PortSide[] = ['top', 'right', 'bottom', 'left']
@@ -60,6 +62,7 @@ export function PinShell({
   pin,
   override,
   selected,
+  matched,
   onPointerDownBody,
   onPointerDownHandle,
   onContextMenu,
@@ -150,7 +153,7 @@ export function PinShell({
         // A shape is its own outline, so it opts out of the card chrome:
         // a rectangular drop shadow and a rectangular selection ring around
         // an ellipse look like a bug. Its shadow comes from the SVG path.
-        className={`${styles.shell} ${pin.type === 'shape' ? styles.shellShape : ''} ${selected ? styles.selected : ''} ${override ? styles.dragging : ''}`}
+        className={`${styles.shell} ${pin.type === 'shape' ? styles.shellShape : ''} ${selected ? styles.selected : ''} ${matched ? styles.matched : ''} ${override ? styles.dragging : ''}`}
         style={{
           transform: `translate(${x}px, ${y}px)${selected ? ' scale(1.02)' : ''}`,
           // `override` is only set while a drag or resize is live. The
