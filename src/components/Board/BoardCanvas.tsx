@@ -5,7 +5,7 @@ import { useUiStore } from '../../store/useUiStore'
 import { useFileStore } from '../../store/useFileStore'
 import { useBoardPanZoom, type ViewportState } from '../../hooks/useBoardPanZoom'
 import { useBoardVirtual } from '../../hooks/useBoardVirtual'
-import { rectsIntersect, resolvePush, type Rect } from '../../utils/boardGeo'
+import { boundsOf, rectsIntersect, resolvePush, type Rect } from '../../utils/boardGeo'
 import {
   looksLikeUrl,
   makeNotePin,
@@ -587,6 +587,51 @@ export function BoardCanvas() {
     [screenToWorld],
   )
 
+  // --- long-press = right-click, for touch --------------------------------
+  // Touch has no context menu gesture of its own, so on a phone every menu
+  // on this board was unreachable: no colours, no shapes, no delete, no AI
+  // actions. A press held still for half a second opens the same menu the
+  // right button does. Cancelled by any real movement, so it never fires
+  // during a pan or a drag.
+  const longPress = useRef<{ timer: number; x: number; y: number } | null>(null)
+
+  const cancelLongPress = useCallback(() => {
+    if (longPress.current) {
+      window.clearTimeout(longPress.current.timer)
+      longPress.current = null
+    }
+  }, [])
+
+  const armLongPress = useCallback(
+    (e: React.PointerEvent, open: (screen: { x: number; y: number }) => void) => {
+      if (e.pointerType !== 'touch') return
+      cancelLongPress()
+      const { clientX: x, clientY: y } = e
+      const timer = window.setTimeout(() => {
+        longPress.current = null
+        open({ x, y })
+      }, 500)
+      longPress.current = { timer, x, y }
+    },
+    [cancelLongPress],
+  )
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const lp = longPress.current
+      if (!lp) return
+      if (Math.abs(e.clientX - lp.x) > 10 || Math.abs(e.clientY - lp.y) > 10) cancelLongPress()
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', cancelLongPress)
+    window.addEventListener('pointercancel', cancelLongPress)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', cancelLongPress)
+      window.removeEventListener('pointercancel', cancelLongPress)
+    }
+  }, [cancelLongPress])
+
   // --- "Create note here" from the context menu ---
   const createNoteAt = useCallback(
     (world: { x: number; y: number }) => {
@@ -616,6 +661,48 @@ export function BoardCanvas() {
     },
     [promptDialog],
   )
+
+  // --- fit the board into view ---------------------------------------
+  // A board's viewport is saved with it, so opening one on a narrower
+  // screen than it was last used on can land entirely off-camera — from a
+  // phone that looks like an empty board with your work gone. Fit runs
+  // automatically in that case (once per board) and is on the toolbar for
+  // every other time.
+  const fitToPins = useCallback(() => {
+    const current = useBoardStore.getState().board
+    if (!current || current.pins.length === 0 || containerSize.w === 0) return
+    const bounds = boundsOf(current.pins.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })))
+    if (!bounds) return
+    const pad = 48
+    const zoom = Math.min(
+      3,
+      Math.max(0.15, Math.min(containerSize.w / (bounds.w + pad * 2), containerSize.h / (bounds.h + pad * 2))),
+    )
+    setViewport({
+      zoom,
+      x: bounds.x + bounds.w / 2 - containerSize.w / 2 / zoom,
+      y: bounds.y + bounds.h / 2 - containerSize.h / 2 / zoom,
+    })
+  }, [containerSize.w, containerSize.h, setViewport])
+
+  const autoFitted = useRef<string | null>(null)
+  useEffect(() => {
+    const id = board?.id
+    if (!id || containerSize.w === 0 || pins.length === 0) return
+    if (autoFitted.current === id) return
+    autoFitted.current = id
+    // Only when nothing is currently visible — a deliberate viewport the
+    // user left behind must be respected.
+    const anyVisible = pins.some(
+      (p) =>
+        p.x + p.w > viewport.x &&
+        p.x < viewport.x + containerSize.w / viewport.zoom &&
+        p.y + p.h > viewport.y &&
+        p.y < viewport.y + containerSize.h / viewport.zoom,
+    )
+    if (!anyVisible) fitToPins()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board?.id, containerSize.w, containerSize.h, pins.length])
 
   const createShapeAt = useCallback(
     (world: { x: number; y: number }, kind: ShapeKind) => {
@@ -737,6 +824,17 @@ export function BoardCanvas() {
       style={gridStyle}
       onPointerDown={onContainerPointerDown}
       onContextMenu={onContextMenuEmpty}
+      onPointerDownCapture={(e) => {
+        if (e.target !== containerRef.current) return
+        armLongPress(e, (screen) => {
+          const rect = containerRef.current!.getBoundingClientRect()
+          setMenu({
+            kind: 'empty',
+            screen,
+            world: screenToWorld(screen.x - rect.left, screen.y - rect.top),
+          })
+        })
+      }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
     >
@@ -782,7 +880,10 @@ export function BoardCanvas() {
             pin={pin}
             override={overrides?.get(pin.id)}
             selected={selected.has(pin.id)}
-            onPointerDownBody={(e) => beginPinDrag(e, pin)}
+            onPointerDownBody={(e) => {
+              armLongPress(e, (screen) => setMenu({ kind: 'pin', screen, pin }))
+              beginPinDrag(e, pin)
+            }}
             onPortPointerDown={(e, side) => beginWire(e, pin, side)}
             onPointerDownHandle={(e, handle) => beginPinResize(e, pin, handle)}
             onContextMenu={(e) => {
@@ -826,6 +927,7 @@ export function BoardCanvas() {
         onCreateVaultNote={() => createVaultNoteAt(viewportCenterWorld(viewport, containerSize))}
         onCreateLink={() => void createLinkAt(viewportCenterWorld(viewport, containerSize))}
         onCreateShape={(kind) => createShapeAt(viewportCenterWorld(viewport, containerSize), kind)}
+        onFit={fitToPins}
       />
 
       {edgeMenu && (

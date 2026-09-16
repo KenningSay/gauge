@@ -264,3 +264,41 @@
   outline-color: color-mix(in srgb, var(--signal) 55%, transparent);
   outline-offset: calc(4px / var(--zoom, 1));
 }
+
+/* ---------- touch targets ---------- */
+
+/* On a finger-driven device the handles and ports get much larger grab
+   areas while their visible dots stay the same size. 14px is comfortable
+   with a mouse and hopeless with a thumb; the visual would look clumsy if
+   it grew to match, so only the hit area does. Ports also stay visible,
+   since there's no hover on touch to reveal them. */
+@media (pointer: coarse) {
+  .handle_nw, .handle_ne, .handle_sw, .handle_se {
+    width: calc(34px / var(--zoom, 1));
+    height: calc(34px / var(--zoom, 1));
+  }
+  .handle_nw { top: calc(-17px / var(--zoom, 1)); left: calc(-17px / var(--zoom, 1)); }
+  .handle_ne { top: calc(-17px / var(--zoom, 1)); right: calc(-17px / var(--zoom, 1)); }
+  .handle_sw { bottom: calc(-17px / var(--zoom, 1)); left: calc(-17px / var(--zoom, 1)); }
+  .handle_se { bottom: calc(-17px / var(--zoom, 1)); right: calc(-17px / var(--zoom, 1)); }
+
+  .handle_n, .handle_s { height: calc(22px / var(--zoom, 1)); }
+  .handle_n { top: calc(-11px / var(--zoom, 1)); }
+  .handle_s { bottom: calc(-11px / var(--zoom, 1)); }
+  .handle_e, .handle_w { width: calc(22px / var(--zoom, 1)); }
+  .handle_e { right: calc(-11px / var(--zoom, 1)); }
+  .handle_w { left: calc(-11px / var(--zoom, 1)); }
+
+  .port {
+    width: calc(32px / var(--zoom, 1));
+    height: calc(32px / var(--zoom, 1));
+    opacity: 0.85;
+  }
+  .port_top    { top: calc(-16px / var(--zoom, 1)); margin-left: calc(-16px / var(--zoom, 1)); }
+  .port_bottom { bottom: calc(-16px / var(--zoom, 1)); margin-left: calc(-16px / var(--zoom, 1)); }
+  .port_left   { left: calc(-16px / var(--zoom, 1)); margin-top: calc(-16px / var(--zoom, 1)); }
+  .port_right  { right: calc(-16px / var(--zoom, 1)); margin-top: calc(-16px / var(--zoom, 1)); }
+
+  /* The drag tongue can't rely on hover either. */
+  .tongue { opacity: 0.7; }
+}
