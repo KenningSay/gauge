@@ -20,6 +20,7 @@ import { DECOR_MIME, TEMPLATE_MIME, decorById, templateById } from './TemplatePa
 import { MAX_DECOR_PER_NOTE, clampPos } from '../../utils/decorGeo'
 import { EdgeContextMenu } from './EdgeContextMenu'
 import { BoardToolbar } from './BoardToolbar'
+import { NoteFormatBar } from './NoteFormatBar'
 import { bestSides, edgePath, portPoint } from '../../utils/edgeGeo'
 import type { Edge, PortSide, ShapeKind } from '../../api/board'
 import { getTextContent } from '../../api/webdav'
@@ -996,6 +997,25 @@ export function BoardCanvas() {
     backgroundPosition: `${-viewport.x * viewport.zoom}px ${-viewport.y * viewport.zoom}px`,
   }
 
+  // The single selected note, with its box already through the viewport
+  // transform — the bar is chrome and lives in screen coordinates.
+  // Hidden while a drag or resize is in progress, because a toolbar that
+  // chases the note around is noise.
+  const formatTarget = (() => {
+    if (selected.size !== 1 || interaction) return null
+    const pin = pins.find((p) => p.id === Array.from(selected)[0])
+    if (!pin || pin.type !== 'note') return null
+    return {
+      pin,
+      rect: {
+        x: (pin.x - viewport.x) * viewport.zoom,
+        y: (pin.y - viewport.y) * viewport.zoom,
+        w: pin.w * viewport.zoom,
+        h: pin.h * viewport.zoom,
+      },
+    }
+  })()
+
   // Marquee box in screen coords for rendering.
   let marqueeRect: Rect | null = null
   if (interaction && interaction.kind === 'marquee') {
@@ -1102,6 +1122,17 @@ export function BoardCanvas() {
             width: marqueeRect.w,
             height: marqueeRect.h,
           }}
+        />
+      )}
+
+      {/* The formatting bar, for exactly one selected note. Not shown for a
+          multi-selection: the controls are toggles reading one note's
+          state, and showing one note's settings over five would lie. */}
+      {formatTarget && (
+        <NoteFormatBar
+          pin={formatTarget.pin}
+          rect={formatTarget.rect}
+          container={containerSize}
         />
       )}
 

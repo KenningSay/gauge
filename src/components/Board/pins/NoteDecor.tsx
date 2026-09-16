@@ -10,7 +10,7 @@
 // fraction of the note's box so it survives the note being resized, and
 // the glyph turns to face inward from whichever side it ends up on.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { Decor, DecorKind } from '../../../api/board'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { clampPos, clampSize, decorFlip, decorPos, decorSize } from '../../../utils/decorGeo'
@@ -18,6 +18,10 @@ import styles from './Pins.module.css'
 
 // Drawn in a 32×32 box.
 export function DecorGlyph({ kind }: { kind: DecorKind }) {
+  // SVG ids are document-global. A hardcoded one would repeat for every
+  // copy of the glyph on the board, and a mask referenced by a duplicated
+  // id resolves to whichever element the document happens to see first.
+  const uid = useId().replace(/:/g, '')
   switch (kind) {
     case 'clip':
       return (
@@ -173,10 +177,10 @@ export function DecorGlyph({ kind }: { kind: DecorKind }) {
     case 'hazardStrip':
       return (
         <svg viewBox="0 0 32 32" fill="none">
-          <mask id="hz" maskUnits="userSpaceOnUse" x="1" y="10" width="30" height="12">
+          <mask id={`hz-${uid}`} maskUnits="userSpaceOnUse" x="1" y="10" width="30" height="12">
             <rect x="1" y="10" width="30" height="12" fill="#fff" />
           </mask>
-          <g mask="url(#hz)" stroke="currentColor" strokeWidth="4">
+          <g mask={`url(#hz-${uid})`} stroke="currentColor" strokeWidth="4">
             <path d="M-2 24 8 8M6 24 16 8M14 24 24 8M22 24 32 8M30 24 40 8" />
           </g>
           <rect x="1" y="10" width="30" height="12" stroke="currentColor" strokeWidth="1.6" />
@@ -244,6 +248,155 @@ export function DecorGlyph({ kind }: { kind: DecorKind }) {
             <path d="M9 18.5a10 10 0 0 1 14 0" />
           </g>
           <circle cx="16" cy="25" r="2.6" fill="currentColor" />
+        </svg>
+      )
+
+    // --- the animated ones ---------------------------------------------
+
+    case 'pulseRing':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle
+            cx="16" cy="16" r="11"
+            stroke="currentColor" strokeWidth="2"
+            className={`${styles.animPart} ${styles.animPulse}`}
+          />
+          <circle
+            cx="16" cy="16" r="11"
+            stroke="currentColor" strokeWidth="2"
+            className={`${styles.animPart} ${styles.animPulseLate}`}
+          />
+          <circle cx="16" cy="16" r="4" fill="currentColor" />
+        </svg>
+      )
+    case 'soundWave':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          {[4, 9, 14, 19, 24].map((x, i) => (
+            <rect
+              key={x}
+              x={x} y="6" width="4" height="20" rx="1.5"
+              fill="currentColor"
+              className={`${styles.animPart} ${styles.animBar} ${
+                [styles.animBar, styles.animBar2, styles.animBar3, styles.animBar4, styles.animBar5][i]
+              }`}
+            />
+          ))}
+        </svg>
+      )
+    case 'orbit':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="11" stroke="currentColor" strokeWidth="1.6" opacity="0.45" />
+          <circle cx="16" cy="16" r="3" fill="currentColor" />
+          <g className={`${styles.animPart} ${styles.animSpin}`}>
+            <circle cx="27" cy="16" r="3.2" fill="currentColor" />
+          </g>
+        </svg>
+      )
+    case 'radar':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="1.6" opacity="0.5" />
+          <circle cx="16" cy="16" r="7" stroke="currentColor" strokeWidth="1.2" opacity="0.35" />
+          <g className={`${styles.animPart} ${styles.animSpin}`}>
+            <path d="M16 16 L29 16 A13 13 0 0 0 24.8 6.6 Z" fill="currentColor" opacity="0.55" />
+            <path d="M16 16 L29 16" stroke="currentColor" strokeWidth="2" />
+          </g>
+        </svg>
+      )
+    case 'spinnerArc':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="12" stroke="currentColor" strokeWidth="2.4" opacity="0.2" />
+          <g className={`${styles.animPart} ${styles.animSpinFast}`}>
+            <path
+              d="M16 4a12 12 0 0 1 12 12"
+              stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"
+            />
+          </g>
+        </svg>
+      )
+    case 'blinkDot':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="11" stroke="currentColor" strokeWidth="1.6" opacity="0.4" />
+          <circle cx="16" cy="16" r="6" fill="currentColor" className={styles.animBlink} />
+        </svg>
+      )
+    case 'scanBox':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect x="3" y="3" width="26" height="26" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M3 3h6M23 3h6M3 29h6M23 29h6" stroke="currentColor" strokeWidth="3" />
+          <rect
+            x="5" y="15" width="22" height="2"
+            fill="currentColor"
+            className={`${styles.animPart} ${styles.animScan}`}
+          />
+        </svg>
+      )
+    case 'loadDots':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="6" cy="16" r="4" fill="currentColor" className={`${styles.animPart} ${styles.animDot}`} />
+          <circle cx="16" cy="16" r="4" fill="currentColor" className={`${styles.animPart} ${styles.animDot} ${styles.animDot2}`} />
+          <circle cx="26" cy="16" r="4" fill="currentColor" className={`${styles.animPart} ${styles.animDot} ${styles.animDot3}`} />
+        </svg>
+      )
+    case 'heartbeat':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path
+            d="M1 16h6l3-8 4 16 3-10 3 5 3-3h8"
+            stroke="currentColor" strokeWidth="1.4" opacity="0.28"
+            strokeLinecap="round" strokeLinejoin="round"
+          />
+          <path
+            d="M1 16h6l3-8 4 16 3-10 3 5 3-3h8"
+            stroke="currentColor" strokeWidth="2.4"
+            strokeLinecap="round" strokeLinejoin="round"
+            className={styles.animTrace}
+          />
+        </svg>
+      )
+    case 'gearSpin':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <g className={`${styles.animPart} ${styles.animSpinSlow}`}>
+            <path
+              d="M16 3.5 18 7h4l1 4 3.4 2-1.4 3.8 1.4 3.8L23 22.6l-1 4h-4L16 30l-2-3.4h-4l-1-4-3.4-2L7 16.8 5.6 13 9 11l1-4h4L16 3.5Z"
+              fill="currentColor" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"
+            />
+            <circle cx="16" cy="16.5" r="4.6" fill="#000" fillOpacity="0.85" />
+          </g>
+        </svg>
+      )
+    case 'progressRing':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="3" opacity="0.2" />
+          <circle
+            cx="16" cy="16" r="10"
+            stroke="currentColor" strokeWidth="3" strokeLinecap="round"
+            transform="rotate(-90 16 16)"
+            className={styles.animSweep}
+          />
+        </svg>
+      )
+    case 'dataFall':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect x="2" y="2" width="28" height="28" stroke="currentColor" strokeWidth="1.2" opacity="0.3" />
+          <g className={styles.animFall}>
+            <path d="M8 2v6M8 11v4M8 18v7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
+          <g className={`${styles.animFall} ${styles.animFall2}`}>
+            <path d="M16 2v4M16 9v8M16 20v5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
+          <g className={`${styles.animFall} ${styles.animFall3}`}>
+            <path d="M24 2v9M24 14v3M24 20v6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
         </svg>
       )
   }
