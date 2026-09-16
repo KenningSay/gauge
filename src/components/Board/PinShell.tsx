@@ -134,7 +134,10 @@ export function PinShell({
     >
       <div
         ref={shellRef}
-        className={`${styles.shell} ${selected ? styles.selected : ''} ${override ? styles.dragging : ''}`}
+        // A shape is its own outline, so it opts out of the card chrome:
+        // a rectangular drop shadow and a rectangular selection ring around
+        // an ellipse look like a bug. Its shadow comes from the SVG path.
+        className={`${styles.shell} ${pin.type === 'shape' ? styles.shellShape : ''} ${selected ? styles.selected : ''} ${override ? styles.dragging : ''}`}
         style={{
           transform: `translate(${x}px, ${y}px)${selected ? ' scale(1.02)' : ''}`,
           // `override` is only set while a drag or resize is live. The

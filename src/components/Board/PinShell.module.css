@@ -241,3 +241,21 @@
 .port_bottom { bottom: calc(-9px / var(--zoom, 1)); left: 50%; margin-left: calc(-9px / var(--zoom, 1)); }
 .port_left   { left: calc(-9px / var(--zoom, 1)); top: 50%; margin-top: calc(-9px / var(--zoom, 1)); }
 .port_right  { right: calc(-9px / var(--zoom, 1)); top: 50%; margin-top: calc(-9px / var(--zoom, 1)); }
+
+/* ---------- shapes ---------- */
+
+/* Shapes carry no card surface: no elevation, and a much quieter selection
+   treatment, because a rectangle drawn around an ellipse reads as a glitch
+   rather than a selection. The outline itself brightens instead (see
+   ShapePin), and the handles still mark the bounds. */
+.shell.shellShape,
+.shell.shellShape:hover,
+.shell.shellShape.dragging {
+  box-shadow: none;
+}
+
+.shell.shellShape.selected {
+  box-shadow: none;
+  outline-color: color-mix(in srgb, var(--signal) 55%, transparent);
+  outline-offset: calc(4px / var(--zoom, 1));
+}

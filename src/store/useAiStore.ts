@@ -136,6 +136,9 @@ ${pin.text}`
     case 'audio':
       return `[Аудио] ${pin.title ?? pin.fileName}${pin.artist ? ` — ${pin.artist}` : ''}${pin.description ? `
 Описание: ${pin.description}` : ''}`
+    case 'shape':
+      return `[Фигура: ${pin.shape}]${pin.fileName ? ` с картинкой ${pin.fileName}` : ''}${pin.text ? `
+${pin.text}` : ''}`
   }
 }
 
@@ -157,6 +160,8 @@ function shortLabel(pin: Pin): string {
       return (pin.text.split('\n').find((l) => l.trim()) ?? 'пустая заметка').replace(/^#+\s*/, '').slice(0, 80)
     case 'link':
       return pin.title ?? pin.url
+    case 'shape':
+      return pin.text.split('\n')[0]?.slice(0, 80) || `фигура (${pin.shape})`
     default:
       return pin.fileName
   }

@@ -6,6 +6,7 @@ import { VideoPin } from './VideoPin'
 import { AudioPin } from './AudioPin'
 import { FilePin } from './FilePin'
 import { LinkPin } from './LinkPin'
+import { ShapePin } from './ShapePin'
 
 interface Props {
   pin: Pin
@@ -35,6 +36,7 @@ export function PinRenderer(props: Props) {
       {pin.type === 'audio' && <AudioPin pin={pin} />}
       {pin.type === 'file' && <FilePin pin={pin} />}
       {pin.type === 'link' && <LinkPin pin={pin} />}
+      {pin.type === 'shape' && <ShapePin pin={pin} />}
     </PinShell>
   )
 }

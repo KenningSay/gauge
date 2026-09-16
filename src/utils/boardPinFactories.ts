@@ -5,7 +5,7 @@
 // the board."
 
 import type { FileEntry } from '../api/types'
-import type { AudioPin, FilePin, ImagePin, LinkPin, NotePin, Pin, VideoPin } from '../api/board'
+import type { AudioPin, FilePin, ImagePin, LinkPin, NotePin, Pin, ShapeKind, ShapePin, VideoPin } from '../api/board'
 import { newId } from '../api/board'
 import { saveAsset } from '../api/board'
 
@@ -32,6 +32,24 @@ interface BaseArgs {
 function base(z: number) {
   const now = new Date().toISOString()
   return { id: newId(), createdAt: now, updatedAt: now, z }
+}
+
+export function makeShapePin(args: BaseArgs, shape: ShapeKind = 'rect'): ShapePin {
+  return {
+    ...base(args.z),
+    type: 'shape',
+    x: args.x,
+    y: args.y,
+    // Wider than a note: shapes are usually frames or callouts around
+    // something, not something to read.
+    w: 260,
+    h: 180,
+    shape,
+    fill: '#2dd4bf',
+    stroke: '#2dd4bf',
+    fillOpacity: 14,
+    text: '',
+  }
 }
 
 export function makeNotePin(args: BaseArgs, text = '', color = '#fbbf24'): NotePin {

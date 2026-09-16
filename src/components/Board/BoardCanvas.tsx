@@ -9,6 +9,7 @@ import { rectsIntersect, resolvePush, type Rect } from '../../utils/boardGeo'
 import {
   looksLikeUrl,
   makeNotePin,
+  makeShapePin,
   normalizeUrl,
   pinFromDroppedFile,
   pinFromVaultEntry,
@@ -16,7 +17,7 @@ import {
 import { collectDroppedEntries } from '../../utils/dropFolder'
 import { EdgeLayer } from './EdgeLayer'
 import { bestSides, edgePath, portPoint } from '../../utils/edgeGeo'
-import type { Edge, PortSide } from '../../api/board'
+import type { Edge, PortSide, ShapeKind } from '../../api/board'
 import { getTextContent } from '../../api/webdav'
 import type { FileEntry } from '../../api/types'
 import { VaultNotePicker } from './VaultNotePicker'
@@ -600,6 +601,17 @@ export function BoardCanvas() {
     [addPin, movePins, pins],
   )
 
+  const createShapeAt = useCallback(
+    (world: { x: number; y: number }, kind: ShapeKind) => {
+      const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
+      const pin = makeShapePin({ x: world.x - 130, y: world.y - 90, z }, kind)
+      addPin(pin)
+      // No push here: a shape is usually drawn *around* existing pins, so
+      // shoving them out of the way would defeat the point.
+    },
+    [addPin, pins],
+  )
+
   // --- "Note from the vault" (a linked .md file) ---
   // The picker is opened from here and resolves in the handler below; the
   // world position is remembered so the pin lands where the menu was.
@@ -608,6 +620,21 @@ export function BoardCanvas() {
   const createVaultNoteAt = useCallback((world: { x: number; y: number }) => {
     setVaultPickerAt(world)
   }, [])
+
+  // Which shape is waiting for a picture, if any.
+  const [imagePickerFor, setImagePickerFor] = useState<string | null>(null)
+
+  const handleShapeImagePick = useCallback(
+    (entry: FileEntry) => {
+      const id = imagePickerFor
+      setImagePickerFor(null)
+      if (!id) return
+      const store = useBoardStore.getState()
+      store.updatePin(id, 'assetPath', entry.path)
+      store.updatePin(id, 'fileName', entry.name)
+    },
+    [imagePickerFor],
+  )
 
   const handleVaultNotePick = useCallback(
     async (entry: FileEntry) => {
@@ -766,6 +793,16 @@ export function BoardCanvas() {
           onCreateNote={createNoteAt}
           onCreateLink={createLinkAt}
           onCreateVaultNote={createVaultNoteAt}
+          onCreateShape={createShapeAt}
+          onPickShapeImage={setImagePickerFor}
+        />
+      )}
+
+      {imagePickerFor && (
+        <VaultNotePicker
+          kind="image"
+          onPick={handleShapeImagePick}
+          onCancel={() => setImagePickerFor(null)}
         />
       )}
 

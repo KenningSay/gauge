@@ -73,7 +73,7 @@ export function templateAssetsDirFor(id: string): string {
 
 // ---------- Types ----------
 
-export type PinType = 'note' | 'image' | 'video' | 'audio' | 'file' | 'link'
+export type PinType = 'note' | 'image' | 'video' | 'audio' | 'file' | 'link' | 'shape'
 export type NoteTexture = 'plain' | 'grid' | 'ruled' | 'dots' | 'graph'
 
 interface PinBase {
@@ -148,7 +148,29 @@ export interface LinkPin extends PinBase {
   favicon?: string
 }
 
-export type Pin = NotePin | ImagePin | VideoPin | AudioPin | FilePin | LinkPin
+// A drawn shape you can put words or a picture inside — the frames,
+// callouts and groupings a board needs that a sticky note can't be. Text
+// and image are both optional: an empty shape is a valid frame, and a
+// shape with an image is a picture cropped to that outline.
+export type ShapeKind = 'rect' | 'ellipse' | 'diamond' | 'triangle'
+
+export interface ShapePin extends PinBase {
+  type: 'shape'
+  shape: ShapeKind
+  fill: string
+  stroke: string
+  // 0-100. A frame around other pins wants a transparent fill; a callout
+  // wants a solid one.
+  fillOpacity: number
+  text: string
+  textColor?: string
+  // Optional picture clipped to the shape, referenced the same way asset
+  // pins reference theirs.
+  assetPath?: string
+  fileName?: string
+}
+
+export type Pin = NotePin | ImagePin | VideoPin | AudioPin | FilePin | LinkPin | ShapePin
 
 export interface Viewport {
   x: number
