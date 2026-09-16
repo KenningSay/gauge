@@ -13,6 +13,19 @@ interface DialogState {
   resolve: (value: string | boolean | null) => void
 }
 
+export type ActiveTab = 'files' | 'boards'
+
+const TAB_STORAGE = 'gauge-active-tab'
+
+function loadTab(): ActiveTab {
+  try {
+    const v = localStorage.getItem(TAB_STORAGE)
+    return v === 'boards' ? 'boards' : 'files'
+  } catch {
+    return 'files'
+  }
+}
+
 interface UiStore {
   toasts: Toast[]
   pushToast: (message: string, type?: Toast['type']) => void
@@ -29,6 +42,14 @@ interface UiStore {
   sidebarOpen: boolean
   toggleSidebar: () => void
   closeSidebar: () => void
+
+  // Top-level "which half of the app am I in" switch. Chosen over a router
+  // for the same reason the file manager never had one: the two tabs don't
+  // need URLs, deep links, or back/forward — they need a fast in-place
+  // swap. Persisted so a reload after a session spent on boards returns
+  // to boards, not to the file list.
+  activeTab: ActiveTab
+  setActiveTab: (tab: ActiveTab) => void
 }
 
 let toastId = 0
@@ -75,4 +96,15 @@ export const useUiStore = create<UiStore>((set, get) => ({
   sidebarOpen: false,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   closeSidebar: () => set({ sidebarOpen: false }),
+
+  activeTab: loadTab(),
+  setActiveTab: (tab) => {
+    try {
+      localStorage.setItem(TAB_STORAGE, tab)
+    } catch {
+      // Private-mode localStorage — tab choice just doesn't persist across
+      // reloads. Not worth surfacing.
+    }
+    set({ activeTab: tab })
+  },
 }))

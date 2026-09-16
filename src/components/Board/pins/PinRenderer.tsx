@@ -1,0 +1,38 @@
+import type { Pin } from '../../../api/board'
+import { PinShell, type ResizeHandle } from '../PinShell'
+import { NotePin } from './NotePin'
+import { ImagePin } from './ImagePin'
+import { VideoPin } from './VideoPin'
+import { AudioPin } from './AudioPin'
+import { FilePin } from './FilePin'
+import { LinkPin } from './LinkPin'
+
+interface Props {
+  pin: Pin
+  override?: Partial<{ x: number; y: number; w: number; h: number }>
+  selected: boolean
+  onPointerDownBody: (e: React.PointerEvent) => void
+  onPointerDownHandle: (e: React.PointerEvent, handle: ResizeHandle) => void
+  onContextMenu: (e: React.MouseEvent) => void
+}
+
+export function PinRenderer(props: Props) {
+  const { pin, override, selected, onPointerDownBody, onPointerDownHandle, onContextMenu } = props
+  return (
+    <PinShell
+      pin={pin}
+      override={override}
+      selected={selected}
+      onPointerDownBody={onPointerDownBody}
+      onPointerDownHandle={onPointerDownHandle}
+      onContextMenu={onContextMenu}
+    >
+      {pin.type === 'note' && <NotePin pin={pin} />}
+      {pin.type === 'image' && <ImagePin pin={pin} />}
+      {pin.type === 'video' && <VideoPin pin={pin} />}
+      {pin.type === 'audio' && <AudioPin pin={pin} />}
+      {pin.type === 'file' && <FilePin pin={pin} />}
+      {pin.type === 'link' && <LinkPin pin={pin} />}
+    </PinShell>
+  )
+}

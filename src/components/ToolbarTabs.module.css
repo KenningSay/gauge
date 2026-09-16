@@ -1,0 +1,52 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated-2);
+  flex-shrink: 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.tabActive {
+  background: var(--bg-elevated);
+  color: var(--signal);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.tabLabel {
+  font-weight: 500;
+}
+
+@media (max-width: 520px) {
+  /* Icons only on very narrow screens — the labels make the toolbar's
+     main row too wide once the file actions are also present. */
+  .tabLabel {
+    display: none;
+  }
+  .tab {
+    padding: 5px 8px;
+  }
+}

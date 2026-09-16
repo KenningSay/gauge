@@ -1,0 +1,153 @@
+.shell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: var(--radius-md);
+  transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  will-change: transform;
+}
+
+.shell.selected {
+  /* A soft scale on the whole shell — cheap, GPU-composited, and the
+     "чуть подрастает" feel from the spec. */
+  transform-origin: center;
+  /* transform is set inline; the scale is applied via a child pseudo
+     layer so we don't fight the inline translate. */
+}
+
+/* ---------- glow layer ---------- */
+
+.glow {
+  position: absolute;
+  inset: -18px;
+  border-radius: 24px;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(251, 191, 36, 0.35) 0%,
+    rgba(251, 191, 36, 0.14) 45%,
+    rgba(251, 191, 36, 0) 72%
+  );
+  opacity: 0;
+  transition: opacity 200ms ease;
+  z-index: -1;
+}
+
+.shell.selected .glow {
+  opacity: 1;
+  animation: glow-breathe 2.8s ease-in-out infinite;
+}
+
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.04); }
+}
+
+/* ---------- tongue ---------- */
+
+.tongue {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(4px);
+  cursor: grab;
+  transition: transform 160ms ease, background-color 160ms ease;
+  z-index: 2;
+}
+
+.tongue:active { cursor: grabbing; }
+
+.tongueSelected {
+  transform: translateX(-50%) scale(1);
+  background: rgba(251, 191, 36, 0.55);
+  border-color: rgba(251, 191, 36, 0.85);
+}
+
+.tongueDots {
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    currentColor 0 2px,
+    transparent 2px 4px
+  );
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.tongueSelected .tongueDots {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+/* ---------- body ---------- */
+
+.body {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  z-index: 1;
+}
+
+.overlay:active { cursor: grabbing; }
+
+/* ---------- resize handles ---------- */
+
+.handle {
+  position: absolute;
+  background: transparent;
+  z-index: 3;
+}
+
+.handle_nw, .handle_ne, .handle_sw, .handle_se {
+  width: 14px;
+  height: 14px;
+}
+.handle_nw { top: -7px; left: -7px; cursor: nwse-resize; }
+.handle_ne { top: -7px; right: -7px; cursor: nesw-resize; }
+.handle_sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.handle_se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+
+.handle_n, .handle_s {
+  height: 8px;
+  left: 12px;
+  right: 12px;
+  cursor: ns-resize;
+}
+.handle_n { top: -4px; }
+.handle_s { bottom: -4px; }
+
+.handle_e, .handle_w {
+  width: 8px;
+  top: 12px;
+  bottom: 12px;
+  cursor: ew-resize;
+}
+.handle_e { right: -4px; }
+.handle_w { left: -4px; }
+
+/* Visual dot on the four corners — a subtle hint that a handle is
+   there without drawing a full border. */
+.handle_nw::after, .handle_ne::after, .handle_sw::after, .handle_se::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 2px;
+  background: var(--tick);
+  opacity: 0.65;
+}
