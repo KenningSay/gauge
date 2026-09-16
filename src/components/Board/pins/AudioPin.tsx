@@ -76,7 +76,12 @@ export function AudioPin({ pin }: { pin: AudioPinT }) {
         </button>
 
         <div className={styles.audioBar} onPointerDown={seek} title="Перемотать">
-          <div className={styles.audioBarFill} style={{ width: `${progress}%` }} />
+          {/* scaleX, not width: this moves on every timeupdate, and a width
+              that changes four times a second relays out the pin each time. */}
+          <div
+            className={styles.audioBarFill}
+            style={{ transform: `scaleX(${progress / 100})` }}
+          />
         </div>
 
         <span className={styles.audioTime}>

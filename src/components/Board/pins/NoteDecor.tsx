@@ -399,6 +399,291 @@ export function DecorGlyph({ kind }: { kind: DecorKind }) {
           </g>
         </svg>
       )
+
+    // --- animated, second set -----------------------------------------
+
+    case 'pulseGrid':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          {[0, 1, 2].map((row) =>
+            [0, 1, 2].map((col) => (
+              <rect
+                key={`${row}-${col}`}
+                x={5 + col * 8}
+                y={5 + row * 8}
+                width="6"
+                height="6"
+                rx="1"
+                fill="currentColor"
+                className={`${styles.animStep} ${
+                  [styles.animStep, styles.animStep2, styles.animStep3][(row + col) % 3]
+                }`}
+              />
+            )),
+          )}
+        </svg>
+      )
+    case 'scanRing':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="10.5" stroke="currentColor" strokeWidth="2" opacity="0.18" />
+          <circle
+            cx="16"
+            cy="16"
+            r="10.5"
+            stroke="currentColor"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            className={styles.animRingSweep}
+          />
+          <circle cx="16" cy="16" r="2.6" fill="currentColor" />
+        </svg>
+      )
+    case 'bounceArrow':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M16 3v12" stroke="currentColor" strokeWidth="2" opacity="0.4" strokeLinecap="round" />
+          <g className={`${styles.animPart} ${styles.animNudge}`}>
+            <path
+              d="M16 10v16M9 19l7 7 7-7"
+              stroke="currentColor"
+              strokeWidth="2.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
+        </svg>
+      )
+    case 'typingCaret':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M3 22h9M3 16h14M3 10h8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" opacity="0.55" />
+          <rect x="20" y="8" width="5" height="16" fill="currentColor" className={styles.animCaret} />
+        </svg>
+      )
+    case 'signalBars':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          {[
+            { x: 3, y: 21, h: 7 },
+            { x: 11, y: 16, h: 12 },
+            { x: 19, y: 11, h: 17 },
+            { x: 27, y: 6, h: 22 },
+          ].map((b, i) => (
+            <rect
+              key={b.x}
+              x={b.x - 1}
+              y={b.y}
+              width="5"
+              height={b.h}
+              rx="1.5"
+              fill="currentColor"
+              className={`${styles.animRise} ${
+                [styles.animRise, styles.animRise2, styles.animRise3, styles.animRise4][i]
+              }`}
+            />
+          ))}
+        </svg>
+      )
+    case 'hourglass':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <g className={`${styles.animPart} ${styles.animFlip}`}>
+            <path d="M8 3h16M8 29h16" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+            <path
+              d="M9 4c0 6 7 8 7 12s-7 6-7 12M23 4c0 6-7 8-7 12s7 6 7 12"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+            <path d="M12 24h8l-4-5-4 5Z" fill="currentColor" />
+          </g>
+        </svg>
+      )
+    case 'battery':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect x="2.5" y="9.5" width="24" height="13" rx="2.5" stroke="currentColor" strokeWidth="2" />
+          <path d="M29 14v4" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          <rect x="5" y="12" width="19" height="8" rx="1" fill="currentColor" className={styles.animFill} />
+        </svg>
+      )
+    case 'satellite':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M4 28a17 17 0 0 1 17-17l-2 6-5 2-2 5-8 4Z" fill="currentColor" />
+          <g stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round">
+            <path d="M18 11a12 12 0 0 1 4 4" className={`${styles.animPart} ${styles.animEmit}`} />
+            <path d="M20 6a18 18 0 0 1 6 6" className={`${styles.animPart} ${styles.animEmit} ${styles.animEmit2}`} />
+            <path d="M22 1a24 24 0 0 1 9 9" className={`${styles.animPart} ${styles.animEmit} ${styles.animEmit3}`} />
+          </g>
+        </svg>
+      )
+    case 'crosshairLock':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="3" fill="currentColor" />
+          <g className={`${styles.animPart} ${styles.animLock}`} stroke="currentColor" strokeWidth="2.4">
+            <path d="M4 10V4h6M28 10V4h-6M4 22v6h6M28 22v6h-6" strokeLinecap="round" />
+          </g>
+        </svg>
+      )
+    case 'barcodeScan':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path
+            d="M4 7v18M8 7v18M11 7v18M15 7v18M19 7v18M22 7v18M26 7v18"
+            stroke="currentColor"
+            strokeWidth="2"
+            opacity="0.5"
+          />
+          <rect x="15" y="4" width="2.5" height="24" fill="currentColor" className={styles.animScanBar} />
+        </svg>
+      )
+    case 'dnaHelix':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M16 3v26" stroke="currentColor" strokeWidth="1.4" opacity="0.3" />
+          {[7, 16, 25].map((y, i) => (
+            <g key={y}>
+              <circle
+                cx="16"
+                cy={y}
+                r="3.4"
+                fill="currentColor"
+                className={`${styles.animPart} ${i % 2 === 0 ? styles.animHelixA : styles.animHelixB}`}
+              />
+              <circle
+                cx="16"
+                cy={y}
+                r="3.4"
+                fill="currentColor"
+                opacity="0.45"
+                className={`${styles.animPart} ${i % 2 === 0 ? styles.animHelixB : styles.animHelixA}`}
+              />
+            </g>
+          ))}
+        </svg>
+      )
+    case 'compass':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="12.5" stroke="currentColor" strokeWidth="2" />
+          <path d="M16 1.5v3M16 27.5v3M1.5 16h3M27.5 16h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <g className={`${styles.animPart} ${styles.animWobble}`}>
+            <path d="m16 7 3.2 9-3.2 9-3.2-9L16 7Z" fill="currentColor" />
+          </g>
+        </svg>
+      )
+    case 'magnet':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path
+            d="M7 26V15a9 9 0 0 1 18 0v11h-6V15a3 3 0 0 0-6 0v11H7Z"
+            fill="currentColor"
+          />
+          <path d="M7 21h6M19 21h6" stroke="#000" strokeOpacity="0.75" strokeWidth="2.4" />
+          <g stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round">
+            <path d="M3 9a16 16 0 0 1 26 0" className={`${styles.animPart} ${styles.animField}`} />
+            <path d="M6 4a22 22 0 0 1 20 0" className={`${styles.animPart} ${styles.animField} ${styles.animField2}`} />
+          </g>
+        </svg>
+      )
+    case 'hexPulse':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="m16 5 9.5 5.5v11L16 27l-9.5-5.5v-11L16 5Z" stroke="currentColor" strokeWidth="1.6" opacity="0.28" />
+          <g className={`${styles.animPart} ${styles.animHexOut}`}>
+            <path d="m16 5 9.5 5.5v11L16 27l-9.5-5.5v-11L16 5Z" stroke="currentColor" strokeWidth="2.4" />
+          </g>
+          <g className={`${styles.animPart} ${styles.animHexOut} ${styles.animHexOut2}`}>
+            <path d="m16 5 9.5 5.5v11L16 27l-9.5-5.5v-11L16 5Z" stroke="currentColor" strokeWidth="2.4" />
+          </g>
+          <circle cx="16" cy="16" r="2.4" fill="currentColor" />
+        </svg>
+      )
+    case 'sparkFlicker':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M16 2v7M16 23v7M2 16h7M23 16h7M6 6l5 5M21 21l5 5M26 6l-5 5M11 21l-5 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" opacity="0.35" />
+          <g className={styles.animFlicker}>
+            <circle cx="16" cy="16" r="5.5" fill="currentColor" />
+            <circle cx="16" cy="16" r="9" stroke="currentColor" strokeWidth="1.6" opacity="0.6" />
+          </g>
+        </svg>
+      )
+    case 'metronome':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M11 28h10l-3-22h-4l-3 22Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M8 28h16" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+          <g style={{ transformBox: 'fill-box', transformOrigin: '50% 100%' }} className={styles.animSwing}>
+            <path d="M16 8v17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+            <rect x="13.5" y="11" width="5" height="3.5" fill="currentColor" />
+          </g>
+        </svg>
+      )
+    case 'elevator':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect x="4.5" y="2.5" width="23" height="27" rx="2.5" stroke="currentColor" strokeWidth="1.8" opacity="0.4" />
+          {[0, 1, 2].map((i) => (
+            <path
+              key={i}
+              d="M16 20l-5 5h10l-5-5Z"
+              fill="currentColor"
+              className={`${styles.animPart} ${styles.animCycleUp} ${
+                [styles.animCycleUp, styles.animCycleUp2, styles.animCycleUp3][i]
+              }`}
+            />
+          ))}
+        </svg>
+      )
+    case 'clickRipple':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle
+            cx="13"
+            cy="13"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="2"
+            className={`${styles.animPart} ${styles.animRipple}`}
+          />
+          <path d="M8 4l14 11-6 1.6L13.4 23 8 4Z" fill="currentColor" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        </svg>
+      )
+    case 'shieldScan':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M16 2.5 28 7v9c0 7.5-5 12-12 14C9 28 4 23.5 4 16V7l12-4.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <rect
+            x="6"
+            y="15"
+            width="20"
+            height="2.4"
+            fill="currentColor"
+            className={`${styles.animPart} ${styles.animShieldSweep}`}
+          />
+        </svg>
+      )
+    case 'countdownRing':
+      return (
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="3" opacity="0.18" />
+          <circle
+            cx="16"
+            cy="16"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            transform="rotate(-90 16 16)"
+            className={styles.animDeplete}
+          />
+          <circle cx="16" cy="16" r="3" fill="currentColor" />
+        </svg>
+      )
   }
 }
 

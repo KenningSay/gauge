@@ -50,3 +50,12 @@
     padding: 5px 8px;
   }
 }
+/* The section tabs collapse to icons on a phone, which is right; an
+   icon-only tab still has to be a finger's worth of target. */
+@media (pointer: coarse), (max-width: 640px) {
+  .tab {
+    min-width: var(--tap);
+    min-height: var(--tap);
+    justify-content: center;
+  }
+}

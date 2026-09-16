@@ -258,10 +258,15 @@
 
 .audioBarFill {
   position: relative;
+  width: 100%;
   height: 4px;
   border-radius: 2px;
   background: var(--tick);
-  transition: width 120ms linear;
+  /* Full width, scaled down from the left, rather than a width that
+     changes: the fill moves on every timeupdate and a width relaid the pin
+     on each one. */
+  transform-origin: left center;
+  transition: transform 120ms linear;
 }
 
 .audioTime {
@@ -1870,4 +1875,257 @@
   font-size: 16px;
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
+}
+
+/* --- animated decorations, second set ---------------------------------
+   Same contract as the first: CSS keyframes on SVG parts, no timers, so
+   the cost of one is the cost of a hundred and the reduced-motion block
+   at the end of this file stops all of them.
+
+   These reach past transform and opacity where it stays cheap — a
+   stroke-dashoffset sweep, a clip-path wipe, a filter glow — because a
+   HUD that only ever slides is a HUD that looks like a slideshow. */
+
+.animStep { animation: decorStep 1.5s steps(3, end) infinite; }
+.animStep2 { animation-delay: 0.5s; }
+.animStep3 { animation-delay: 1s; }
+
+@keyframes decorStep {
+  0%, 32% { opacity: 1; }
+  33%, 100% { opacity: 0.18; }
+}
+
+/* A gap running round a ring: the dash is the ring, the offset walks it. */
+.animRingSweep {
+  stroke-dasharray: 54 12;
+  animation: decorRingSweep 2.6s linear infinite;
+}
+
+@keyframes decorRingSweep {
+  to { stroke-dashoffset: -66; }
+}
+
+.animNudge { animation: decorNudge 1.4s cubic-bezier(0.23, 1, 0.32, 1) infinite; }
+
+@keyframes decorNudge {
+  0%, 60%, 100% { transform: translateY(-2px); }
+  30% { transform: translateY(3px); }
+}
+
+/* A caret, so it blinks like a caret: hard on, hard off, no fade. */
+.animCaret { animation: decorCaret 1.1s steps(1, end) infinite; }
+
+@keyframes decorCaret {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.animRise { animation: decorRise 1.8s ease-in-out infinite; }
+.animRise2 { animation-delay: 0.18s; }
+.animRise3 { animation-delay: 0.36s; }
+.animRise4 { animation-delay: 0.54s; }
+
+@keyframes decorRise {
+  0%, 12% { opacity: 0.2; }
+  30%, 70% { opacity: 1; }
+  88%, 100% { opacity: 0.2; }
+}
+
+.animFlip { animation: decorFlip 2.8s cubic-bezier(0.77, 0, 0.175, 1) infinite; }
+
+@keyframes decorFlip {
+  0%, 42% { transform: rotate(0deg); }
+  50%, 92% { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* A fill that rises: a clip-path wipe rather than a height, so it never
+   touches layout. */
+.animFill { animation: decorFill 2.6s ease-in-out infinite; }
+
+@keyframes decorFill {
+  0% { clip-path: inset(100% 0 0 0); }
+  55%, 75% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(100% 0 0 0); }
+}
+
+.animEmit { animation: decorEmit 2s ease-out infinite; }
+.animEmit2 { animation-delay: 0.45s; }
+.animEmit3 { animation-delay: 0.9s; }
+
+@keyframes decorEmit {
+  0% { opacity: 0; transform: scale(0.5); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+
+.animLock { animation: decorLock 2.4s cubic-bezier(0.23, 1, 0.32, 1) infinite; }
+
+@keyframes decorLock {
+  0%, 10% { transform: scale(1.35); opacity: 0.35; }
+  45%, 80% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0.35; }
+}
+
+/* The scanning line on a barcode, with the glow it would actually throw. */
+.animScanBar {
+  animation: decorScanBar 1.9s cubic-bezier(0.77, 0, 0.175, 1) infinite alternate;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+@keyframes decorScanBar {
+  from { transform: translateX(-9px); }
+  to { transform: translateX(9px); }
+}
+
+.animHelixA { animation: decorHelixA 2.2s ease-in-out infinite; }
+.animHelixB { animation: decorHelixB 2.2s ease-in-out infinite; }
+
+@keyframes decorHelixA {
+  0%, 100% { transform: translateX(-7px) scale(1); }
+  50% { transform: translateX(7px) scale(0.6); }
+}
+
+@keyframes decorHelixB {
+  0%, 100% { transform: translateX(7px) scale(0.6); }
+  50% { transform: translateX(-7px) scale(1); }
+}
+
+.animWobble { animation: decorWobble 3.4s cubic-bezier(0.77, 0, 0.175, 1) infinite; }
+
+@keyframes decorWobble {
+  0%, 100% { transform: rotate(-14deg); }
+  35% { transform: rotate(12deg); }
+  55% { transform: rotate(-5deg); }
+  75% { transform: rotate(3deg); }
+}
+
+.animField { animation: decorField 1.7s ease-out infinite; }
+.animField2 { animation-delay: 0.35s; }
+
+@keyframes decorField {
+  0% { opacity: 0.85; transform: scale(0.7); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+.animHexOut { animation: decorHexOut 2.1s cubic-bezier(0.23, 1, 0.32, 1) infinite; }
+.animHexOut2 { animation-delay: 0.7s; }
+
+@keyframes decorHexOut {
+  0% { transform: scale(0.35); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* Deliberately irregular: a spark that flickers on a metronome is a lamp. */
+.animFlicker { animation: decorFlicker 1.6s steps(1, end) infinite; }
+
+@keyframes decorFlicker {
+  0%, 7% { opacity: 1; }
+  8%, 13% { opacity: 0.15; }
+  14%, 19% { opacity: 1; }
+  20%, 46% { opacity: 0.15; }
+  47%, 52% { opacity: 1; }
+  53%, 100% { opacity: 0.15; }
+}
+
+.animSwing { animation: decorSwing 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+
+@keyframes decorSwing {
+  from { transform: rotate(-26deg); }
+  to { transform: rotate(26deg); }
+}
+
+.animCycleUp { animation: decorCycleUp 1.5s linear infinite; }
+.animCycleUp2 { animation-delay: 0.5s; }
+.animCycleUp3 { animation-delay: 1s; }
+
+@keyframes decorCycleUp {
+  0% { transform: translateY(9px); opacity: 0; }
+  25%, 60% { opacity: 1; }
+  100% { transform: translateY(-9px); opacity: 0; }
+}
+
+.animRipple { animation: decorRipple 1.8s cubic-bezier(0.23, 1, 0.32, 1) infinite; }
+
+@keyframes decorRipple {
+  0%, 45% { transform: scale(0.2); opacity: 0; }
+  55% { opacity: 0.9; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+.animShieldSweep { animation: decorShieldSweep 2.3s ease-in-out infinite; }
+
+@keyframes decorShieldSweep {
+  0%, 100% { transform: translateY(-9px); opacity: 0; }
+  20%, 80% { opacity: 1; }
+  50% { transform: translateY(9px); }
+}
+
+.animDeplete {
+  stroke-dasharray: 63;
+  animation: decorDeplete 3.2s linear infinite;
+}
+
+@keyframes decorDeplete {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 63; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animStep,
+  .animRingSweep,
+  .animNudge,
+  .animCaret,
+  .animRise,
+  .animFlip,
+  .animFill,
+  .animEmit,
+  .animLock,
+  .animScanBar,
+  .animHelixA,
+  .animHelixB,
+  .animWobble,
+  .animField,
+  .animHexOut,
+  .animFlicker,
+  .animSwing,
+  .animCycleUp,
+  .animRipple,
+  .animShieldSweep,
+  .animDeplete {
+    animation: none;
+  }
+}
+
+/* --- touch --------------------------------------------------------------
+   The controls that live on a pin: the audio transport, and the handles on
+   a pinned decoration. Both were sized for a cursor. The decoration
+   handles have to stay small enough not to swallow the 30px glyph they
+   belong to, so they grow to the practical maximum rather than to 44 and
+   gain their reach from a transparent halo instead. */
+
+@media (pointer: coarse), (max-width: 640px) {
+  .audioPlay {
+    width: var(--tap);
+    height: var(--tap);
+  }
+
+  .decorGrip,
+  .decorRemove {
+    width: 22px;
+    height: 22px;
+  }
+
+  .decorGrip::after,
+  .decorRemove::after {
+    content: '';
+    position: absolute;
+    inset: -11px;
+  }
+
+  .reaction {
+    min-height: 32px;
+    padding: 4px 10px;
+  }
 }

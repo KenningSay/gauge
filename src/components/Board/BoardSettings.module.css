@@ -204,3 +204,7 @@
   font-size: 16px;
   color: var(--text-faint);
 }
+
+@media (pointer: coarse), (max-width: 640px) {
+  .trigger { width: var(--tap); height: var(--tap); }
+}

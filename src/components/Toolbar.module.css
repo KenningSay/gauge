@@ -130,3 +130,22 @@
   padding: 1px 6px;
   font-size: 13px;
 }
+
+/* --- touch --------------------------------------------------------------
+   The app header: the section tabs collapse to icons on a phone, which is
+   right, but an icon-only tab still has to be a finger's worth of target. */
+
+@media (pointer: coarse), (max-width: 640px) {
+  .iconBtn {
+    width: var(--tap);
+    height: var(--tap);
+  }
+
+  /* A notch eats the left of a landscape phone, and the status bar the top
+     of a standalone install. */
+  .wrap {
+    padding-top: max(0px, var(--safe-top));
+    padding-left: max(10px, var(--safe-left));
+    padding-right: max(10px, var(--safe-right));
+  }
+}

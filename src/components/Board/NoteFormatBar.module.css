@@ -136,3 +136,44 @@
   outline-offset: 1px;
   border-radius: 3px;
 }
+
+/* --- touch --------------------------------------------------------------
+   Eighteen controls do not fit across a phone. They wrap on desktop, which
+   is fine over a wide canvas and wrong over a 390px one: a four-row bar
+   covers the note it formats. On a phone it becomes one row that scrolls,
+   pinned above the toolbar rather than chasing the note. */
+
+@media (pointer: coarse), (max-width: 640px) {
+  .bar {
+    position: fixed;
+    left: max(8px, var(--safe-left));
+    right: max(8px, var(--safe-right));
+    top: auto !important;
+    bottom: calc(var(--tap) + 26px + var(--safe-bottom));
+    transform: none;
+    max-width: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .bar::-webkit-scrollbar { display: none; }
+
+  .btn,
+  .step {
+    width: var(--tap);
+    height: var(--tap);
+    flex: 0 0 auto;
+  }
+
+  .select,
+  .stepper {
+    height: var(--tap);
+    flex: 0 0 auto;
+  }
+
+  .num { height: calc(var(--tap) - 8px); }
+
+  .sep { flex: 0 0 auto; }
+}
