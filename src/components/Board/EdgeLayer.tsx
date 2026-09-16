@@ -18,6 +18,9 @@ interface Props {
   selectedEdgeId: string | null
   onSelectEdge: (id: string | null) => void
   onContextMenuEdge?: (id: string, e: React.MouseEvent) => void
+  // Double-clicking a wire labels it — the same "double-click to edit"
+  // gesture pins use.
+  onLabelEdge?: (id: string) => void
   // Drawn while the user is pulling a new connection out of a port.
   pending?: { path: string } | null
 }
@@ -29,6 +32,7 @@ export function EdgeLayer({
   selectedEdgeId,
   onSelectEdge,
   onContextMenuEdge,
+  onLabelEdge,
   pending,
 }: Props) {
   const rects = new Map<string, Rect>()
@@ -69,6 +73,10 @@ export function EdgeLayer({
                 e.stopPropagation()
                 onSelectEdge(edge.id)
                 onContextMenuEdge?.(edge.id, e)
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                onLabelEdge?.(edge.id)
               }}
             />
             <path

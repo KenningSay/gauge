@@ -21,7 +21,7 @@ import {
   Triangle,
   Image as ImageIcon,
 } from 'lucide-react'
-import type { CustomAction, NotePin as NotePinT, NoteTexture, Pin, ShapeKind } from '../../api/board'
+import type { CustomAction, NotePin as NotePinT, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import { readableOn } from './pins/NotePin'
@@ -222,6 +222,9 @@ function PinMenuItems({ pin, onClose, onPickShapeImage }: { pin: Pin; onClose: (
       {pin.type === 'note' && (
         <ColorSubmenu pin={pin} />
       )}
+      {pin.type === 'shape' && (
+        <ShapeColorSubmenu pin={pin} />
+      )}
       {(pin.type === 'image' || pin.type === 'video' || pin.type === 'audio' || pin.type === 'file') && (
         <MenuItem icon={<StickyNote size={13} />} onClick={handleDescription}>
           Описание
@@ -387,6 +390,10 @@ const NOTE_COLORS = [
 
 const TEXT_COLORS = ['#16150f', '#f4f3ef', '#7f1d1d', '#1e3a8a']
 
+// Shapes get the accent-forward set: these read as structure (frames,
+// groupings, callouts) rather than as sticky notes.
+const SHAPE_COLORS = ['#2dd4bf', '#fbbf24', '#f87171', '#a855f7', '#60a5fa', '#4ade80', '#f472b6', '#94a3b8']
+
 // Paper textures. Already supported by the renderer and stored per note —
 // there was simply no way to pick one.
 const NOTE_TEXTURES: Array<{ id: NoteTexture; label: string }> = [
@@ -396,6 +403,77 @@ const NOTE_TEXTURES: Array<{ id: NoteTexture; label: string }> = [
   { id: 'dots', label: 'Точки' },
   { id: 'graph', label: 'Миллиметровка' },
 ]
+
+function ShapeColorSubmenu({ pin }: { pin: ShapePinT }) {
+  const [open, setOpen] = useState(false)
+  const updatePin = useBoardStore((s) => s.updatePin)
+
+  // Outline and fill move together by default: two colours to pick for
+  // every shape is tedious, and a differently-coloured outline is the rare
+  // case. The opacity slider is what actually distinguishes a frame (a few
+  // percent) from a filled callout.
+  const setColor = (value: string) => {
+    updatePin(pin.id, 'fill', value)
+    updatePin(pin.id, 'stroke', value)
+  }
+
+  return (
+    <div className={styles.submenuWrap}>
+      <button className={styles.item} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className={styles.itemIcon}><Palette size={13} /></span>
+        Цвет и заливка
+        <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
+      </button>
+      {open && (
+        <div className={styles.submenu}>
+          <div className={styles.swatchLabel}>Цвет</div>
+          <div className={styles.swatches}>
+            {SHAPE_COLORS.map((c) => (
+              <button
+                key={c}
+                className={`${styles.swatch} ${pin.fill.toLowerCase() === c ? styles.swatchActive : ''}`}
+                style={{ background: c }}
+                title={c}
+                aria-label={`Цвет ${c}`}
+                onClick={() => setColor(c)}
+              />
+            ))}
+            <label className={styles.swatchCustom} title="Свой цвет">
+              <Pipette size={12} />
+              <input type="color" value={pin.fill} onChange={(e) => setColor(e.target.value)} />
+            </label>
+          </div>
+
+          <div className={styles.swatchLabel}>Заливка</div>
+          <div className={styles.fillRow}>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={2}
+              value={pin.fillOpacity}
+              onChange={(e) => updatePin(pin.id, 'fillOpacity', Number(e.target.value))}
+            />
+            <span className={styles.fillValue}>{pin.fillOpacity}%</span>
+          </div>
+
+          <div className={styles.swatchLabel}>Форма</div>
+          <div className={styles.textureChips}>
+            {SHAPES.map((sh) => (
+              <button
+                key={sh.id}
+                className={`${styles.textureChip} ${pin.shape === sh.id ? styles.textureChipActive : ''}`}
+                onClick={() => updatePin(pin.id, 'shape', sh.id)}
+              >
+                {sh.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function ColorSubmenu({ pin }: { pin: NotePinT }) {
   const [open, setOpen] = useState(false)

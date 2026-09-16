@@ -176,3 +176,23 @@
   color: var(--signal);
   background: var(--bg-selected);
 }
+
+.fillRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 8px;
+}
+
+.fillRow input[type='range'] {
+  flex: 1;
+  accent-color: var(--signal);
+}
+
+.fillValue {
+  min-width: 34px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}

@@ -16,6 +16,8 @@ import {
 } from '../../utils/boardPinFactories'
 import { collectDroppedEntries } from '../../utils/dropFolder'
 import { EdgeLayer } from './EdgeLayer'
+import { EdgeContextMenu } from './EdgeContextMenu'
+import { BoardToolbar } from './BoardToolbar'
 import { bestSides, edgePath, portPoint } from '../../utils/edgeGeo'
 import type { Edge, PortSide, ShapeKind } from '../../api/board'
 import { getTextContent } from '../../api/webdav'
@@ -601,6 +603,20 @@ export function BoardCanvas() {
     [addPin, movePins, pins],
   )
 
+  const [edgeMenu, setEdgeMenu] = useState<{ id: string; screen: { x: number; y: number } } | null>(null)
+
+  const labelEdge = useCallback(
+    async (id: string) => {
+      const edge = (useBoardStore.getState().board?.edges ?? []).find((e) => e.id === id)
+      if (!edge) return
+      const value = await promptDialog('Подпись связи', edge.label ?? '')
+      if (value === null) return
+      // An empty string clears the label rather than drawing an empty one.
+      useBoardStore.getState().updateEdge(id, 'label', value.trim() || undefined)
+    },
+    [promptDialog],
+  )
+
   const createShapeAt = useCallback(
     (world: { x: number; y: number }, kind: ShapeKind) => {
       const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
@@ -741,6 +757,10 @@ export function BoardCanvas() {
           overrides={overrides ?? undefined}
           selectedEdgeId={selectedEdgeId}
           onSelectEdge={setSelectedEdgeId}
+          onLabelEdge={(id) => void labelEdge(id)}
+          onContextMenuEdge={(id, e) =>
+            setEdgeMenu({ id, screen: { x: e.clientX, y: e.clientY } })
+          }
           pending={
             interaction?.kind === 'wire'
               ? {
@@ -795,6 +815,29 @@ export function BoardCanvas() {
           onCreateVaultNote={createVaultNoteAt}
           onCreateShape={createShapeAt}
           onPickShapeImage={setImagePickerFor}
+        />
+      )}
+
+      {/* Creating from the toolbar drops things into the middle of what the
+          user is looking at, since there's no click position to use. */}
+      <BoardToolbar
+        hasEdges={edges.length > 0}
+        onCreateNote={() => createNoteAt(viewportCenterWorld(viewport, containerSize))}
+        onCreateVaultNote={() => createVaultNoteAt(viewportCenterWorld(viewport, containerSize))}
+        onCreateLink={() => void createLinkAt(viewportCenterWorld(viewport, containerSize))}
+        onCreateShape={(kind) => createShapeAt(viewportCenterWorld(viewport, containerSize), kind)}
+      />
+
+      {edgeMenu && (
+        <EdgeContextMenu
+          edgeId={edgeMenu.id}
+          screen={edgeMenu.screen}
+          onClose={() => setEdgeMenu(null)}
+          onLabel={() => void labelEdge(edgeMenu.id)}
+          onDelete={() => {
+            removeEdges([edgeMenu.id])
+            setSelectedEdgeId(null)
+          }}
         />
       )}
 
