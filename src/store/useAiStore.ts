@@ -13,6 +13,7 @@ import { newId, type ChatMessage, type Pin } from '../api/board'
 import { useBoardStore } from './useBoardStore'
 import { useUiStore } from './useUiStore'
 import { makeNotePin } from '../utils/boardPinFactories'
+import { resolvePush } from '../utils/boardGeo'
 
 // The proxy is the default on purpose: it keeps the DeepSeek key on the
 // server (nginx injects it, see nginx.conf.template's /ai/ location) so a
@@ -25,11 +26,27 @@ const KEY_STORAGE = 'gauge-ai-key'
 const ENDPOINT_STORAGE = 'gauge-ai-endpoint'
 const MODEL_STORAGE = 'gauge-ai-model'
 
-export const DEFAULT_SYSTEM_PROMPT =
-  'Ты — ассистент внутри доски-мудборда файлового менеджера Gauge. ' +
-  'Пользователь работает с пинами: заметками, картинками, видео, файлами и ссылками. ' +
-  'Отвечай кратко и по делу, на русском языке. ' +
-  'Если тебе передан контекст доски — опирайся на него, не выдумывай содержимое пинов.'
+export const DEFAULT_SYSTEM_PROMPT = [
+  'Ты — ассистент внутри доски-мудборда файлового менеджера Gauge.',
+  'Пользователь работает с пинами: заметками, картинками, видео, файлами и ссылками.',
+  'Отвечай кратко и по делу, на русском языке.',
+  'Если тебе передан контекст доски — опирайся на него, не выдумывай содержимое пинов.',
+  '',
+  'Ты умеешь менять доску. Для этого добавь в КОНЕЦ ответа блок (кроме него ничего в блоке быть не должно):',
+  '',
+  'Создать заметки:',
+  '```gauge:notes',
+  '[{"text":"текст заметки в markdown","color":"#fbbf24"}]',
+  '```',
+  '',
+  'Переставить существующие пины (id бери из контекста доски):',
+  '```gauge:layout',
+  '[{"id":"...","x":0,"y":0}]',
+  '```',
+  '',
+  'Правила: блок добавляй только когда пользователь явно просит что-то сделать на доске.',
+  'Перед блоком одной строкой скажи, что делаешь. Не пересказывай содержимое блока текстом.',
+].join('\n')
 
 // sessionStorage, not localStorage: same rule as the WebDAV credential —
 // a key typed into this browser dies with the tab. See the security notes
@@ -90,30 +107,172 @@ interface AiState {
     pins: Pin[],
     resultType: 'note' | 'apply' | 'chat',
   ) => Promise<void>
+  // Asks the model for a layout and applies it. Returns how many pins moved.
+  arrangeBoard: (instruction?: string) => Promise<number>
 }
 
 // One pin rendered as plain text for the model. Deliberately lossy: the
 // model gets what a human would read off the card, not the JSON — geometry,
 // z-order and ids are noise that would eat tokens for nothing. Asset pins
 // can't send their bytes, so they send what's known about the file.
-function pinToText(pin: Pin): string {
+// What a pin looks like to the model: what a human would read off the card,
+// plus its id and geometry. Geometry was left out at first as noise — wrong
+// call. "Tidy the board up", "what sits next to what", "group these" are all
+// questions about the layout, and without coordinates the model can only
+// answer in generalities. Asset pins can't send their bytes, so they send
+// what is known about the file.
+function pinBody(pin: Pin): string {
   switch (pin.type) {
     case 'note':
-      return `[Заметка]\n${pin.text}`
+      return `[Заметка]${pin.sourcePath ? ` (файл ${pin.sourcePath})` : ''}
+${pin.text}`
     case 'link':
       return `[Ссылка] ${pin.title ? `${pin.title} — ` : ''}${pin.url}`
     case 'image':
     case 'video':
     case 'file':
-      return `[${pin.type === 'image' ? 'Картинка' : pin.type === 'video' ? 'Видео' : 'Файл'}] ${pin.fileName}${pin.description ? `\nОписание: ${pin.description}` : ''}`
+      return `[${pin.type === 'image' ? 'Картинка' : pin.type === 'video' ? 'Видео' : 'Файл'}] ${pin.fileName}${pin.description ? `
+Описание: ${pin.description}` : ''}`
     case 'audio':
-      return `[Аудио] ${pin.title ?? pin.fileName}${pin.artist ? ` — ${pin.artist}` : ''}${pin.description ? `\nОписание: ${pin.description}` : ''}`
+      return `[Аудио] ${pin.title ?? pin.fileName}${pin.artist ? ` — ${pin.artist}` : ''}${pin.description ? `
+Описание: ${pin.description}` : ''}`
   }
+}
+
+function pinToText(pin: Pin): string {
+  const geom = `id=${pin.id} x=${Math.round(pin.x)} y=${Math.round(pin.y)} w=${Math.round(pin.w)} h=${Math.round(pin.h)}`
+  return `${pinBody(pin)}
+(${geom})`
 }
 
 function pinsToContext(pins: Pin[]): string {
   if (pins.length === 0) return ''
   return pins.map(pinToText).join('\n\n')
+}
+
+// One line of identification per pin for the layout prompt.
+function shortLabel(pin: Pin): string {
+  switch (pin.type) {
+    case 'note':
+      return (pin.text.split('\n').find((l) => l.trim()) ?? 'пустая заметка').replace(/^#+\s*/, '').slice(0, 80)
+    case 'link':
+      return pin.title ?? pin.url
+    default:
+      return pin.fileName
+  }
+}
+
+// Models wrap JSON in prose or a ```json fence often enough that trusting a
+// bare JSON.parse would make this feature fail at random. Take the outermost
+// array and validate every entry against pins that actually exist — a
+// hallucinated id must not silently move the wrong card.
+export function parseLayout(raw: string, pins: Pin[]): Array<{ id: string; x: number; y: number }> {
+  const start = raw.indexOf('[')
+  const end = raw.lastIndexOf(']')
+  if (start === -1 || end <= start) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw.slice(start, end + 1))
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+
+  const byId = new Map(pins.map((p) => [p.id, p]))
+  const moves: Array<{ id: string; x: number; y: number }> = []
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue
+    const { id, x, y } = item as { id?: unknown; x?: unknown; y?: unknown }
+    if (typeof id !== 'string' || !byId.has(id)) continue
+    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) continue
+    const pin = byId.get(id)!
+    if (Math.round(x) === Math.round(pin.x) && Math.round(y) === Math.round(pin.y)) continue
+    // Clamp to a sane world range: a stray exponent shouldn't fling a pin
+    // somewhere the user can't scroll back to.
+    moves.push({ id, x: clamp(Math.round(x), -50000, 50000), y: clamp(Math.round(y), -50000, 50000) })
+  }
+  return moves
+}
+
+// Runs the fenced action blocks a reply may end with. Returns the text
+// with those blocks removed, so the chat shows the sentence and not the
+// JSON behind it.
+function applyActionBlocks(text: string): { cleaned: string; applied: boolean } {
+  const boardStore = useBoardStore.getState()
+  const ui = useUiStore.getState()
+  const board = boardStore.board
+  if (!board) return { cleaned: text, applied: false }
+
+  let applied = false
+  const cleaned = text.replace(/```gauge:(notes|layout)\s*([\s\S]*?)```/g, (_match, kind: string, body: string) => {
+    if (kind === 'notes') {
+      const created = createNotesFromJson(body)
+      if (created > 0) {
+        applied = true
+        ui.pushToast(`AI добавил заметок: ${created}`)
+      }
+    } else {
+      const moves = parseLayout(body, useBoardStore.getState().board?.pins ?? [])
+      if (moves.length > 0) {
+        useBoardStore.getState().movePins(moves)
+        applied = true
+        ui.pushToast(`AI переставил ${moves.length} пин(ов) — Ctrl+Z вернёт как было`)
+      }
+    }
+    return ''
+  })
+
+  return { cleaned: cleaned.trimEnd(), applied }
+}
+
+function createNotesFromJson(body: string): number {
+  const start = body.indexOf('[')
+  const end = body.lastIndexOf(']')
+  if (start === -1 || end <= start) return 0
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body.slice(start, end + 1))
+  } catch {
+    return 0
+  }
+  if (!Array.isArray(parsed)) return 0
+
+  const store = useBoardStore.getState()
+  const board = store.board
+  if (!board) return 0
+
+  // Lay new notes out in a row starting near the top-left of what the user
+  // is currently looking at, then let the usual push resolve any overlap.
+  const vp = board.viewport
+  let z = board.pins.reduce((m, p) => Math.max(m, p.z), 0)
+  let created = 0
+  parsed.forEach((item, i) => {
+    if (!item || typeof item !== 'object') return
+    const { text, color } = item as { text?: unknown; color?: unknown }
+    if (typeof text !== 'string' || !text.trim()) return
+    const pin = makeNotePin(
+      {
+        x: Math.round(vp.x + 80 + (i % 4) * 240),
+        y: Math.round(vp.y + 80 + Math.floor(i / 4) * 210),
+        z: ++z,
+      },
+      text,
+      typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : '#fbbf24',
+    )
+    const current = useBoardStore.getState()
+    current.addPin(pin)
+    const others = (current.board?.pins ?? [])
+      .filter((p) => p.id !== pin.id)
+      .map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h }))
+    const pushed = resolvePush(others, pin, 24)
+    if (pushed.length) current.movePins(pushed)
+    created++
+  })
+  return created
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v))
 }
 
 function config(state: AiState): AiConfig {
@@ -247,7 +406,18 @@ export const useAiStore = create<AiState>((set, get) => ({
       // A stop mid-stream aborts the fetch, which streamChat swallows —
       // so "was it cancelled" is decided here, by the signal, not by a
       // thrown error.
-      if (controller.signal.aborted) patch({ interrupted: true })
+      if (controller.signal.aborted) {
+        patch({ interrupted: true })
+      } else {
+        // The model can ask for board changes in a fenced block; run them
+        // and strip the block from what's displayed, so the chat reads as
+        // prose and the board just changes.
+        const { cleaned, applied } = applyActionBlocks(content)
+        if (applied) {
+          content = cleaned
+          patch({ content: cleaned })
+        }
+      }
     } catch (e) {
       patch({ error: errorText(e) })
       useUiStore.getState().pushToast(errorText(e), 'error')
@@ -278,6 +448,64 @@ export const useAiStore = create<AiState>((set, get) => ({
       set({ balance: null })
     } finally {
       set({ balanceLoading: false })
+    }
+  },
+
+  arrangeBoard: async (instruction) => {
+    const state = get()
+    const ui = useUiStore.getState()
+    const boardStore = useBoardStore.getState()
+    const board = boardStore.board
+    if (!board || board.pins.length === 0) return 0
+
+    // A compact table rather than the full pin text: laying out a board is
+    // a geometry problem, and sending every note's body would spend a lot of
+    // tokens to answer a question about rectangles. One short label per pin
+    // is enough for the model to group things sensibly.
+    const table = board.pins
+      .map((p) => [p.id, p.type, JSON.stringify(shortLabel(p)), `w=${Math.round(p.w)}`, `h=${Math.round(p.h)}`].join('\t'))
+      .join('\n')
+
+    const prompt = [
+      'Ты раскладываешь пины на бесконечной доске. Ниже таблица: id, тип, подпись, ширина, высота.',
+      '',
+      table,
+      '',
+      'Разложи их аккуратно: сгруппируй по смыслу, выровняй в колонки и ряды с одинаковыми отступами',
+      '(зазор между пинами 32-48 px), между группами оставь больше места, ничего не должно перекрываться.',
+      'Начинай от точки (0, 0) и веди вправо и вниз. Размеры пинов не меняй.',
+      instruction ? `Дополнительное пожелание пользователя: ${instruction}` : '',
+      '',
+      'Верни ТОЛЬКО JSON-массив вида [{"id":"...","x":123,"y":456}] без пояснений и без markdown-обёртки.',
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    try {
+      const result = await complete(config(state), [
+        { role: 'system', content: 'Ты помощник-раскладчик. Отвечаешь строго JSON, без комментариев.' },
+        { role: 'user', content: prompt },
+      ])
+      set((s) => ({
+        sessionUsage: {
+          promptTokens: s.sessionUsage.promptTokens + result.promptTokens,
+          completionTokens: s.sessionUsage.completionTokens + result.completionTokens,
+          costUsd: s.sessionUsage.costUsd + result.costUsd,
+        },
+      }))
+
+      const moves = parseLayout(result.content, board.pins)
+      if (moves.length === 0) {
+        ui.pushToast('AI не вернул раскладку — попробуй ещё раз', 'error')
+        return 0
+      }
+      // One batch, so Ctrl+Z undoes the whole rearrangement at once.
+      boardStore.movePins(moves)
+      ui.pushToast(`AI переставил ${moves.length} пин(ов) — Ctrl+Z вернёт как было`)
+      return moves.length
+    } catch (e) {
+      ui.pushToast(errorText(e), 'error')
+      return 0
     }
   },
 

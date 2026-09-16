@@ -620,7 +620,15 @@ function ChatInput({ onSendRequest }: { onSendRequest: () => void }) {
     // Context pins are those currently selected — the model sees them
     // appended to the message via the store's serialization. In "board"
     // mode, the store will append every pin instead.
-    const ctxIds = contextMode === 'selection' ? Array.from(selected) : []
+    // Two fixes in one line. "Whole board" used to send an empty list — the
+    // store doesn't know which mode the panel is in, so the model was asked
+    // about a board it had never been shown. And "selection" with nothing
+    // selected also sent nothing, which is how you get "I can't see your
+    // board" in reply to "tidy it up": falling back to the whole board is
+    // what the user meant.
+    const allIds = (board?.pins ?? []).map((p) => p.id)
+    const ctxIds =
+      contextMode === 'selection' && selected.size > 0 ? Array.from(selected) : allIds
     await sendMessage(t, ctxIds)
   }
 
@@ -644,7 +652,9 @@ function ChatInput({ onSendRequest }: { onSendRequest: () => void }) {
   // it's obvious what's being sent.
   const contextLabel = (() => {
     if (contextMode === 'board') return `вся доска · ${boardPinCount}`
-    if (selectedCount === 0) return 'выделенное · ничего'
+    // Says what will actually be sent, not what the mode is called: with
+    // nothing selected the request falls back to the whole board.
+    if (selectedCount === 0) return `вся доска · ${boardPinCount}`
     return `выделенное · ${selectedCount}`
   })()
 

@@ -70,6 +70,8 @@ A second tab next to the file manager: an infinite canvas you drop things onto. 
 
 A chat panel lives inside the boards tab, and pin right-click menus grow an **AI** submenu (improve/fix/shorten/expand text, summarize, find connections, tag). Answers land back on the board as notes, or rewrite the note you ran them on.
 
+The chat sees the board — every pin's text plus its position and size — so "what's on this board?" and "tidy this up" are answerable questions. It can also change the board: ask it to write some notes and they appear, ask it to arrange things and the pins move (as one step, so `Ctrl Z` puts them back). It does this by ending a reply with a fenced `gauge:notes` or `gauge:layout` block that the app executes and hides; ids that don't exist and coordinates that aren't finite are discarded rather than trusted.
+
 Two ways to reach DeepSeek:
 
 - **Server-side proxy (recommended, and the default).** Set `DEEPSEEK_API_KEY` on the container; nginx injects the `Authorization` header at `/ai/`. The key never reaches the browser. **Protect that endpoint** — it spends your balance and the shipped template doesn't authenticate it. Gauge forwards the browser's WebDAV credential on every `/ai/` request for exactly this reason, so if the same server also hosts your WebDAV share, put its `auth_basic` on `/ai/` too and strangers get a 401.
