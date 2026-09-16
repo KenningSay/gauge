@@ -103,18 +103,20 @@ function pinFromPath(
     fileSize: size,
     mimeType: mime,
   }
-  if (IMAGE_EXT.has(e) || mime.startsWith('image/')) {
-    const p: ImagePin = { ...common, type: 'image' }
-    return p
-  }
-  if (VIDEO_EXT.has(e) || mime.startsWith('video/')) {
-    const p: VideoPin = { ...common, type: 'video' }
-    return p
-  }
-  if (AUDIO_EXT.has(e) || mime.startsWith('audio/')) {
-    const p: AudioPin = { ...common, type: 'audio' }
-    return p
-  }
+  // Extension first, MIME only as a fallback. Servers routinely report
+  // .m4a as video/mp4 (it is an MPEG-4 container), and trusting the MIME
+  // turned a voice memo into a video pin: a black rectangle with no
+  // picture and no way to play it. The extension is the user's own
+  // statement of what the file is.
+  if (IMAGE_EXT.has(e)) return { ...common, type: 'image' } as ImagePin
+  // Audio before video for the same reason — the two overlap on MPEG-4.
+  if (AUDIO_EXT.has(e)) return { ...common, type: 'audio' } as AudioPin
+  if (VIDEO_EXT.has(e)) return { ...common, type: 'video' } as VideoPin
+
+  if (mime.startsWith('image/')) return { ...common, type: 'image' } as ImagePin
+  if (mime.startsWith('audio/')) return { ...common, type: 'audio' } as AudioPin
+  if (mime.startsWith('video/')) return { ...common, type: 'video' } as VideoPin
+
   const p: FilePin = { ...common, type: 'file' }
   return p
 }
