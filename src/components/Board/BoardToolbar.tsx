@@ -7,7 +7,7 @@
 // tools place theirs.
 
 import { useState } from 'react'
-import { StickyNote, FileText, Link as LinkIcon, Square, Circle, Diamond, Triangle } from 'lucide-react'
+import { StickyNote, FileText, Link as LinkIcon, Square, Circle, Diamond, Triangle, Maximize } from 'lucide-react'
 import type { ShapeKind } from '../../api/board'
 import styles from './BoardToolbar.module.css'
 
@@ -19,6 +19,7 @@ interface Props {
   onCreateVaultNote: () => void
   onCreateLink: () => void
   onCreateShape: (kind: ShapeKind) => void
+  onFit: () => void
 }
 
 const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
@@ -28,7 +29,7 @@ const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
   { id: 'triangle', label: 'Треугольник', icon: <Triangle size={16} /> },
 ]
 
-export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape }: Props) {
+export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onFit }: Props) {
   const [shapesOpen, setShapesOpen] = useState(false)
 
   return (
@@ -81,6 +82,12 @@ export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCrea
           onClick={() => setShapesOpen((v) => !v)}
         >
           <Square size={17} />
+        </button>
+
+        <span className={styles.sep} />
+
+        <button className={styles.btn} title="Показать всю доску" aria-label="Показать всю доску" onClick={onFit}>
+          <Maximize size={17} />
         </button>
       </div>
 
