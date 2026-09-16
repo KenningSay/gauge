@@ -10,14 +10,17 @@ import {
   Download,
   StickyNote,
   Link as LinkIcon,
+  FileText,
+  Unlink,
   Sparkles,
   ChevronRight,
   Pipette,
 } from 'lucide-react'
-import type { CustomAction, NotePin as NotePinT, Pin } from '../../api/board'
+import type { CustomAction, NotePin as NotePinT, NoteTexture, Pin } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import { readableOn } from './pins/NotePin'
+import { putTextContent } from '../../api/webdav'
 import { useAiStore } from '../../store/useAiStore'
 import { useUiStore } from '../../store/useUiStore'
 import { downloadEntry } from '../../utils/download'
@@ -32,9 +35,10 @@ interface Props {
   onClose: () => void
   onCreateNote: (world: { x: number; y: number }) => void
   onCreateLink: (world: { x: number; y: number }) => void
+  onCreateVaultNote: (world: { x: number; y: number }) => void
 }
 
-export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink }: Props) {
+export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, onCreateVaultNote }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState(target.screen)
 
@@ -85,6 +89,10 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink }: 
             onCreateNote(target.world)
             onClose()
           }}
+          onCreateVaultNote={() => {
+            onCreateVaultNote(target.world)
+            onClose()
+          }}
           onCreateLink={() => {
             onCreateLink(target.world)
             onClose()
@@ -98,6 +106,7 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink }: 
 function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
   const store = useBoardStore
   const promptDialog = useUiStore((s) => s.promptDialog)
+  const pushToast = useUiStore((s) => s.pushToast)
   const maxZ = () => {
     const board = store.getState().board
     return board ? board.pins.reduce((m, p) => Math.max(m, p.z), 0) : 0
@@ -126,6 +135,37 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
 
   const handleDelete = () => {
     store.getState().removePins([pin.id])
+    onClose()
+  }
+
+  // Turns a board-owned note into a real vault file: writes the .md, then
+  // links the pin to it. After this the note is editable from Obsidian, the
+  // file manager, or any other WebDAV client — which is the whole reason to
+  // keep boards inside the vault rather than beside it.
+  const handleSaveAsMd = async () => {
+    if (pin.type !== 'note') return
+    const firstLine = (pin.text.split('\n').find((l) => l.trim()) ?? 'Заметка')
+      .replace(/^#+\s*/, '')
+      .slice(0, 60)
+      .trim()
+    const suggested = `/${sanitizeName(firstLine || 'Заметка')}.md`
+    const target = await promptDialog('Путь в хранилище', suggested)
+    if (!target) return
+    const path = target.endsWith('.md') ? target : `${target}.md`
+    try {
+      await putTextContent(path, pin.text)
+      store.getState().updatePin(pin.id, 'sourcePath', path)
+      pushToast(`Сохранено в ${path}`)
+    } catch (e) {
+      pushToast(`Не удалось сохранить: ${e instanceof Error ? e.message : String(e)}`, 'error')
+    }
+    onClose()
+  }
+
+  const handleUnlink = () => {
+    if (pin.type !== 'note') return
+    store.getState().updatePin(pin.id, 'sourcePath', undefined)
+    pushToast('Связь с файлом убрана, текст остался на доске', 'info')
     onClose()
   }
 
@@ -178,6 +218,16 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
           Открыть в новой вкладке
         </MenuItem>
       )}
+      {pin.type === 'note' && !pin.sourcePath && (
+        <MenuItem icon={<FileText size={13} />} onClick={handleSaveAsMd}>
+          Сохранить в хранилище (.md)…
+        </MenuItem>
+      )}
+      {pin.type === 'note' && pin.sourcePath && (
+        <MenuItem icon={<Unlink size={13} />} onClick={handleUnlink}>
+          Отвязать от файла
+        </MenuItem>
+      )}
       {pin.type !== 'link' && pin.type !== 'note' && (
         <MenuItem icon={<Download size={13} />} onClick={handleDownload}>Скачать</MenuItem>
       )}
@@ -192,24 +242,19 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
 }
 
 function EmptyMenuItems({
-  onClose,
   onCreateNote,
   onCreateLink,
+  onCreateVaultNote,
 }: {
   onClose: () => void
   onCreateNote: () => void
   onCreateLink: () => void
+  onCreateVaultNote: () => void
 }) {
-  const store = useBoardStore
-  const paste = () => {
-    const clip = store.getState()
-    void clip
-    onClose()
-  }
-  void paste
   return (
     <>
       <MenuItem icon={<StickyNote size={13} />} onClick={onCreateNote}>Создать заметку здесь</MenuItem>
+      <MenuItem icon={<FileText size={13} />} onClick={onCreateVaultNote}>Заметка из хранилища (.md)…</MenuItem>
       <MenuItem icon={<LinkIcon size={13} />} onClick={onCreateLink}>Создать ссылку здесь</MenuItem>
     </>
   )
@@ -278,6 +323,16 @@ const NOTE_COLORS = [
 
 const TEXT_COLORS = ['#16150f', '#f4f3ef', '#7f1d1d', '#1e3a8a']
 
+// Paper textures. Already supported by the renderer and stored per note —
+// there was simply no way to pick one.
+const NOTE_TEXTURES: Array<{ id: NoteTexture; label: string }> = [
+  { id: 'plain', label: 'Гладкая' },
+  { id: 'ruled', label: 'Линейка' },
+  { id: 'grid', label: 'Клетка' },
+  { id: 'dots', label: 'Точки' },
+  { id: 'graph', label: 'Миллиметровка' },
+]
+
 function ColorSubmenu({ pin }: { pin: NotePinT }) {
   const [open, setOpen] = useState(false)
   const updatePin = useBoardStore((s) => s.updatePin)
@@ -315,6 +370,19 @@ function ColorSubmenu({ pin }: { pin: NotePinT }) {
             </label>
           </div>
 
+          <div className={styles.swatchLabel}>Бумага</div>
+          <div className={styles.textureChips}>
+            {NOTE_TEXTURES.map((t) => (
+              <button
+                key={t.id}
+                className={`${styles.textureChip} ${pin.texture === t.id ? styles.textureChipActive : ''}`}
+                onClick={() => updatePin(pin.id, 'texture', t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
           <div className={styles.swatchLabel}>Текст</div>
           <div className={styles.swatches}>
             <button
@@ -348,6 +416,12 @@ function ColorSubmenu({ pin }: { pin: NotePinT }) {
       )}
     </div>
   )
+}
+
+// WebDAV rejects these outright and davUrl refuses path segments, so a
+// note titled "TODO: 12/09" would otherwise fail to save with a raw error.
+function sanitizeName(name: string): string {
+  return name.replace(/[\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim()
 }
 
 // A module-level constant, not an inline `?? []`: a fresh array literal in

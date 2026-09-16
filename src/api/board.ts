@@ -101,6 +101,12 @@ export interface NotePin extends PinBase {
   // background's luminance, which is right for almost every colour — the
   // field exists for the cases where it isn't.
   textColor?: string
+  // When set, this note is a *view onto a vault file* rather than text
+  // owned by the board — the same split Obsidian Canvas draws between a
+  // text card and a note card. `text` still holds the last content read,
+  // so a board renders instantly and survives the file being unreachable,
+  // but the file is the source of truth and edits are written back to it.
+  sourcePath?: string
   opacity: number // 0-100, 100 = fully opaque
   texture: NoteTexture
 }

@@ -56,7 +56,9 @@ Most WebDAV clients are either a clunky OS-level network drive or a paid cloud d
 
 A second tab next to the file manager: an infinite canvas you drop things onto. It stores everything as plain JSON on the same WebDAV server — no extra service, no database.
 
-- **Pins**: notes (markdown, colour, opacity), images, video and audio, arbitrary files, and links (rendered as an iframe once you click into them, a favicon card otherwise)
+- **Pins**: notes (markdown, colour, paper texture, opacity), images, video and audio, arbitrary files, and links (rendered as an iframe once you click into them, a favicon card otherwise)
+- **Notes come in two kinds**, the same split Obsidian Canvas draws: a plain note owns its text inside the board file, while a *linked* note is a view onto a real `.md` in your vault — it renders that file, and editing it on the board writes the file back. Right-click empty space for "Заметка из хранилища (.md)…" to place one, or right-click an existing note to save it into the vault and link it from then on. A badge on the pin shows which file it's bound to
+- Selection is a hairline outline that follows the pin's own shape, with round corner handles; both are divided by the canvas zoom so they stay crisp at any scale
 - Drag by the body or the tab on top, resize from eight handles, marquee-select with `Alt`+drag, right-click for layering/duplicate/colour/delete
 - **Undo/redo** (`Ctrl Z` / `Ctrl Shift Z`) over an unbounded op-log, persisted with the board — closing the tab doesn't reset your history
 - Drop files from your OS to copy them into the board's own assets folder; drag them in from the file manager tab to *reference* the vault file instead of duplicating it
