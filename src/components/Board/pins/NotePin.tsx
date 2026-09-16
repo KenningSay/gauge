@@ -1,17 +1,62 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import { rehypeNoteHighlight } from '../../../utils/noteHighlight'
 import { FileText, AlertCircle } from 'lucide-react'
 import type { NotePin as NotePinT } from '../../../api/board'
-import { FONT_CLASS, HUD_STYLES, STYLE_CLASS, readableOn } from './noteStyles'
+import { FONT_BY_ID, HUD_STYLES, STYLE_CLASS, readableOn } from './noteStyles'
+import { editorShortcut } from '../../../utils/editorShortcuts'
+import { textFormatStyle } from '../../../utils/textFormat'
 import { getTextContent, putTextContent } from '../../../api/webdav'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { usePinActivation } from '../PinShell'
 import { NoteDecor } from './NoteDecor'
+import { MermaidBlock } from './MermaidBlock'
+import { KatexBlock } from './KatexBlock'
 import styles from './Pins.module.css'
 import shell from '../PinShell.module.css'
 
 
+
+// Module-level constants: passing fresh array literals would make
+// react-markdown rebuild its processor on every keystroke.
+const REMARK_PLUGINS = [remarkGfm, remarkMath]
+const REHYPE_PLUGINS = [rehypeNoteHighlight] as never[]
+
+const MARKDOWN_COMPONENTS = {
+  // Three things arrive as <code>, and only one of them is code.
+  //
+  // remark-math marks a formula as `code.language-math.math-inline` (or
+  // .math-display) with the raw TeX as its text — that is the shape
+  // rehype-katex looks for, and the reason the first attempt at this
+  // matched on <span> and silently did nothing.
+  code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+    if (className?.includes('math-display')) {
+      return <KatexBlock tex={String(children).trim()} display />
+    }
+    if (className?.includes('math-inline')) {
+      return <KatexBlock tex={String(children).trim()} display={false} />
+    }
+    if (className?.includes('language-mermaid')) {
+      return <MermaidBlock chart={String(children).trimEnd()} />
+    }
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    )
+  },
+  // Links in a note open in a new tab — following one in place would
+  // navigate the whole board away.
+  a({ href, children }: { href?: string; children?: React.ReactNode }) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    )
+  },
+}
 
 export function NotePin({ pin }: { pin: NotePinT }) {
   const { activated, setActivated } = usePinActivation()
@@ -110,13 +155,26 @@ export function NotePin({ pin }: { pin: NotePinT }) {
   // A heads-up panel set in a humanist sans looks like a mistake, so the
   // HUD family defaults to mono — but an explicit choice still wins.
   const font = pin.font ?? (isHud ? 'mono' : 'default')
+  // Applied to the rendered markdown and to the textarea alike, so what you
+  // type looks like what you get. It has to go on those two elements rather
+  // than on the wrapper: .noteBody sets its own font-size, and inheritance
+  // would lose to it.
+  const textStyle = textFormatStyle(pin)
+  const fontDef = FONT_BY_ID.get(font)
+  if (fontDef) textStyle.fontFamily = fontDef.css
+  // A script face at 16px reads as a footnote beside a grotesque at 16px,
+  // so the faces that are drawn small get a nudge — but only until the
+  // note is given a size of its own, which must then win outright.
+  if (fontDef?.scale && pin.fontSize === undefined) {
+    textStyle.fontSize = Math.round((isHud ? 15 : 16) * fontDef.scale)
+  }
 
   return (
     <div
       // Decorations measure themselves against this element, and find it by
       // the attribute rather than by walking up a fixed number of parents.
       data-decor-host=""
-      className={`${styles.root} ${STYLE_CLASS[style]} ${isHud ? styles.hudBase : ''} ${FONT_CLASS[font]}`}
+      className={`${styles.root} ${STYLE_CLASS[style]} ${isHud ? styles.hudBase : ''}`}
       style={{
         background: hexWithOpacity(pin.color, pin.opacity),
         borderRadius: 'var(--radius-md)',
@@ -136,6 +194,7 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         <textarea
           ref={areaRef}
           className={styles.noteEditor}
+          style={textStyle}
           value={draft}
           spellCheck={false}
           onChange={(e) => setDraft(e.target.value)}
@@ -145,6 +204,16 @@ export function NotePin({ pin }: { pin: NotePinT }) {
               e.preventDefault()
               setDraft(pin.text)
               setActivated(false)
+              return
+            }
+            const edit = editorShortcut(e, draft, e.currentTarget.selectionStart, e.currentTarget.selectionEnd)
+            if (edit) {
+              e.preventDefault()
+              setDraft(edit.text)
+              // The selection has to be restored after React has written
+              // the new value, or the caret jumps to the end.
+              const el = e.currentTarget
+              requestAnimationFrame(() => el.setSelectionRange(edit.start, edit.end))
             }
           }}
         />
@@ -152,10 +221,18 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         <div
           className={styles.noteBody}
           data-texture={pin.texture}
+          data-valign={pin.valign}
+          style={textStyle}
           onDoubleClick={() => setActivated(true)}
         >
           <div className={styles.noteMarkdown}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{pin.text || '_Пустая заметка_'}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={REMARK_PLUGINS}
+              rehypePlugins={REHYPE_PLUGINS}
+              components={MARKDOWN_COMPONENTS}
+            >
+              {pin.text || '_Пустая заметка_'}
+            </ReactMarkdown>
           </div>
         </div>
       )}

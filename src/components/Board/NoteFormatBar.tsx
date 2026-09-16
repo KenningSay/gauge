@@ -1,0 +1,270 @@
+// The formatting bar that floats above a selected note.
+//
+// Everything about a note's text that isn't the text itself lives here:
+// typeface, size, weight and slant, decoration, case, both alignments,
+// leading and tracking. It sits above the note in screen coordinates
+// rather than inside the zoomed world layer, so it stays the same size
+// whatever the zoom is — a toolbar that shrinks with the board is useless
+// at 30%.
+
+import { useEffect, useRef, useState } from 'react'
+import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+  AlignVerticalJustifyStart,
+  Baseline,
+  Bold,
+  CaseUpper,
+  Italic,
+  Minus,
+  Plus,
+  RotateCcw,
+  Strikethrough,
+  Underline,
+  Type,
+} from 'lucide-react'
+import type { NotePin as NotePinT, TextAlign, TextVAlign } from '../../api/board'
+import { useBoardStore } from '../../store/useBoardStore'
+import { FONT_BY_ID, FONT_GROUPS, HUD_STYLES, NOTE_FONTS } from './pins/noteStyles'
+import {
+  clampFontSize,
+  clampLetterSpacing,
+  clampLineHeight,
+  hasTextFormat,
+  stepFontSize,
+} from '../../utils/textFormat'
+import styles from './NoteFormatBar.module.css'
+
+interface Props {
+  pin: NotePinT
+  // The note's box on screen, already through the viewport transform.
+  rect: { x: number; y: number; w: number; h: number }
+  container: { w: number; h: number }
+}
+
+// What the size box shows when the note has never been given a size: the
+// value the stylesheet is actually using, so stepping up from it lands
+// somewhere sensible instead of jumping to 16 first.
+function effectiveSize(pin: NotePinT): number {
+  if (pin.fontSize !== undefined) return pin.fontSize
+  const base = HUD_STYLES.has(pin.style ?? 'sticky') ? 15 : 16
+  const scale = pin.font ? FONT_BY_ID.get(pin.font)?.scale : undefined
+  return Math.round(base * (scale ?? 1))
+}
+
+const BAR_HEIGHT = 44
+const GAP = 10
+
+export function NoteFormatBar({ pin, rect, container }: Props) {
+  const updatePin = useBoardStore((s) => s.updatePin)
+  const barRef = useRef<HTMLDivElement | null>(null)
+  const [width, setWidth] = useState(0)
+
+  // Measured rather than assumed: the bar wraps on a narrow canvas, and a
+  // guessed width would centre it wrongly the moment it did.
+  useEffect(() => {
+    if (barRef.current) setWidth(barRef.current.offsetWidth)
+  }, [pin.id, pin.font, pin.fontSize])
+
+  const set = (field: string, value: unknown) => updatePin(pin.id, field, value)
+  // Clicking the active option again clears it, so there is always a way
+  // back to "whatever the style says" without hunting for a reset.
+  const toggle = (field: string, value: unknown, current: unknown) =>
+    set(field, current === value ? undefined : value)
+
+  const size = effectiveSize(pin)
+  const lineHeight = pin.lineHeight ?? 1.55
+  const tracking = pin.letterSpacing ?? 0
+  const font = pin.font ?? (HUD_STYLES.has(pin.style ?? 'sticky') ? 'mono' : 'default')
+
+  // Above the note by preference; below it when the note is near the top
+  // edge, so the bar can never end up off-screen where it can't be used.
+  const above = rect.y - BAR_HEIGHT - GAP >= 0
+  const top = above ? rect.y - BAR_HEIGHT - GAP : Math.min(rect.y + rect.h + GAP, container.h - BAR_HEIGHT - 4)
+  const half = (width || 520) / 2
+  const left = Math.min(Math.max(rect.x + rect.w / 2, half + 8), Math.max(half + 8, container.w - half - 8))
+
+  const alignBtn = (value: TextAlign, icon: React.ReactNode, label: string) => (
+    <button
+      type="button"
+      className={`${styles.btn} ${pin.align === value ? styles.on : ''}`}
+      title={label}
+      aria-label={label}
+      aria-pressed={pin.align === value}
+      onClick={() => toggle('align', value, pin.align)}
+    >
+      {icon}
+    </button>
+  )
+
+  const valignBtn = (value: TextVAlign, icon: React.ReactNode, label: string) => (
+    <button
+      type="button"
+      className={`${styles.btn} ${pin.valign === value ? styles.on : ''}`}
+      title={label}
+      aria-label={label}
+      aria-pressed={pin.valign === value}
+      onClick={() => toggle('valign', value, pin.valign)}
+    >
+      {icon}
+    </button>
+  )
+
+  const markBtn = (field: 'bold' | 'italic' | 'underline' | 'strike' | 'uppercase', icon: React.ReactNode, label: string) => (
+    <button
+      type="button"
+      className={`${styles.btn} ${pin[field] ? styles.on : ''}`}
+      title={label}
+      aria-label={label}
+      aria-pressed={Boolean(pin[field])}
+      onClick={() => set(field, pin[field] ? undefined : true)}
+    >
+      {icon}
+    </button>
+  )
+
+  return (
+    <div
+      ref={barRef}
+      className={styles.bar}
+      style={{ left, top }}
+      // The bar lives over the canvas: without this, touching it starts a
+      // marquee or deselects the very note being formatted.
+      onPointerDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.stopPropagation()}
+    >
+      <select
+        className={styles.select}
+        value={font}
+        title="Шрифт"
+        aria-label="Шрифт"
+        style={{ fontFamily: FONT_BY_ID.get(font)?.css }}
+        onChange={(e) => set('font', e.target.value === 'default' ? undefined : e.target.value)}
+      >
+        {FONT_GROUPS.map((group) => (
+          <optgroup key={group} label={group}>
+            {NOTE_FONTS.filter((f) => f.group === group).map((f) => (
+              <option key={f.id} value={f.id} style={{ fontFamily: f.css }}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+
+      <div className={styles.stepper} title="Размер текста">
+        <button
+          type="button"
+          className={styles.step}
+          aria-label="Меньше"
+          onClick={() => set('fontSize', stepFontSize(size, -1))}
+        >
+          <Minus size={13} />
+        </button>
+        <input
+          className={styles.num}
+          type="number"
+          min={8}
+          max={200}
+          value={size}
+          aria-label="Размер текста"
+          onChange={(e) => set('fontSize', clampFontSize(Number(e.target.value)))}
+        />
+        <button
+          type="button"
+          className={styles.step}
+          aria-label="Больше"
+          onClick={() => set('fontSize', stepFontSize(size, 1))}
+        >
+          <Plus size={13} />
+        </button>
+      </div>
+
+      <div className={styles.sep} />
+
+      {markBtn('bold', <Bold size={15} />, 'Жирный')}
+      {markBtn('italic', <Italic size={15} />, 'Курсив')}
+      {markBtn('underline', <Underline size={15} />, 'Подчёркнутый')}
+      {markBtn('strike', <Strikethrough size={15} />, 'Зачёркнутый')}
+      {markBtn('uppercase', <CaseUpper size={15} />, 'ЗАГЛАВНЫМИ')}
+
+      <div className={styles.sep} />
+
+      {alignBtn('left', <AlignLeft size={15} />, 'По левому краю')}
+      {alignBtn('center', <AlignCenter size={15} />, 'По центру')}
+      {alignBtn('right', <AlignRight size={15} />, 'По правому краю')}
+      {alignBtn('justify', <AlignJustify size={15} />, 'По ширине')}
+
+      <div className={styles.sep} />
+
+      {valignBtn('top', <AlignVerticalJustifyStart size={15} />, 'Прижать вверх')}
+      {valignBtn('middle', <AlignVerticalJustifyCenter size={15} />, 'По центру по высоте')}
+      {valignBtn('bottom', <AlignVerticalJustifyEnd size={15} />, 'Прижать вниз')}
+
+      <div className={styles.sep} />
+
+      <div className={styles.stepper} title="Межстрочный интервал">
+        <span className={styles.stepIcon}><Baseline size={14} /></span>
+        <input
+          className={styles.num}
+          type="number"
+          step={0.05}
+          min={0.8}
+          max={3}
+          value={lineHeight}
+          aria-label="Межстрочный интервал"
+          onChange={(e) => set('lineHeight', clampLineHeight(Number(e.target.value)))}
+        />
+      </div>
+
+      <div className={styles.stepper} title="Межбуквенный интервал, сотые em">
+        <span className={styles.stepIcon}><Type size={14} /></span>
+        <input
+          className={styles.num}
+          type="number"
+          step={1}
+          min={-10}
+          max={50}
+          value={tracking}
+          aria-label="Межбуквенный интервал"
+          onChange={(e) => set('letterSpacing', clampLetterSpacing(Number(e.target.value)))}
+        />
+      </div>
+
+      {hasTextFormat(pin) && (
+        <>
+          <div className={styles.sep} />
+          <button
+            type="button"
+            className={styles.btn}
+            title="Сбросить форматирование"
+            aria-label="Сбросить форматирование"
+            onClick={() => {
+              for (const f of [
+                'fontSize',
+                'align',
+                'valign',
+                'lineHeight',
+                'letterSpacing',
+                'bold',
+                'italic',
+                'underline',
+                'strike',
+                'uppercase',
+              ]) {
+                set(f, undefined)
+              }
+            }}
+          >
+            <RotateCcw size={15} />
+          </button>
+        </>
+      )}
+    </div>
+  )
+}

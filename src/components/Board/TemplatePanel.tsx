@@ -50,8 +50,28 @@ export const DECOR_ITEMS: Array<{ id: DecorKind; label: string; color: string }>
   { id: 'wifi', label: 'Сигнал Wi-Fi', color: '#2dd4bf' },
 ]
 
+// The moving ones, kept in their own list so the panel can offer them as
+// their own section — you go looking for "something that moves", not for
+// "a circle" and then hope it turns out to spin.
+export const ANIMATED_DECOR_ITEMS: Array<{ id: DecorKind; label: string; color: string }> = [
+  { id: 'pulseRing', label: 'Пульс', color: '#fbbf24' },
+  { id: 'soundWave', label: 'Эквалайзер', color: '#2dd4bf' },
+  { id: 'orbit', label: 'Орбита', color: '#fbbf24' },
+  { id: 'radar', label: 'Радар', color: '#4ade80' },
+  { id: 'spinnerArc', label: 'Загрузка', color: '#e8eae6' },
+  { id: 'blinkDot', label: 'Мигалка', color: '#f97316' },
+  { id: 'scanBox', label: 'Сканер', color: '#2dd4bf' },
+  { id: 'loadDots', label: 'Точки', color: '#e8eae6' },
+  { id: 'heartbeat', label: 'Пульсометр', color: '#4ade80' },
+  { id: 'gearSpin', label: 'Шестерня', color: '#cbd5e1' },
+  { id: 'progressRing', label: 'Прогресс', color: '#fbbf24' },
+  { id: 'dataFall', label: 'Поток', color: '#4ade80' },
+]
+
+const ALL_DECOR = [...DECOR_ITEMS, ...ANIMATED_DECOR_ITEMS]
+
 export function decorById(id: string): { kind: DecorKind; color: string } | null {
-  const found = DECOR_ITEMS.find((d) => d.id === id)
+  const found = ALL_DECOR.find((d) => d.id === id)
   return found ? { kind: found.id, color: found.color } : null
 }
 
@@ -238,6 +258,31 @@ export function TemplatePanel() {
     <div className={styles.wrap}>
       <div className={styles.head}>
         {restyleTarget ? 'Применить к выбранной заметке' : 'Клик добавит заметку на доску'}
+      </div>
+
+      <div className={styles.group}>
+        <div className={styles.groupTitle}>Анимации — перетащи на заметку</div>
+        <div className={styles.decorGrid}>
+          {ANIMATED_DECOR_ITEMS.map((d) => (
+            <button
+              key={d.id}
+              className={styles.decorCell}
+              title={`${d.label} — перетащи на заметку`}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DECOR_MIME, d.id)
+                e.dataTransfer.setData('text/plain', d.label)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+              onClick={() => attachTo(restyleTarget?.id, d.id)}
+            >
+              <span className={styles.decorGlyph} style={{ color: d.color }}>
+                <DecorPreview kind={d.id} />
+              </span>
+              <span className={styles.cellLabel}>{d.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className={styles.group}>

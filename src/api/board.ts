@@ -148,19 +148,91 @@ export type NoteStyle =
   | 'octagon'
   | 'stencil'
 
+// How a note's text is set. Everything here is optional and absent means
+// "whatever the style says" — a note written before any of this existed
+// must keep looking exactly as it did.
+export type TextAlign = 'left' | 'center' | 'right' | 'justify'
+export type TextVAlign = 'top' | 'middle' | 'bottom'
+
+export interface NoteTextFormat {
+  fontSize?: number
+  align?: TextAlign
+  valign?: TextVAlign
+  // A multiplier, not pixels, so it survives a change of font size.
+  lineHeight?: number
+  // In hundredths of an em, so the stored value stays a round number.
+  letterSpacing?: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  strike?: boolean
+  uppercase?: boolean
+}
+
 // The typeface a note is set in. `default` means "whatever the app uses",
 // which is what every note written before this existed gets; the HUD styles
 // fall back to `mono` instead, since a heads-up panel in a humanist sans
 // looks like a mistake.
 export type NoteFont =
   | 'default'
+  | 'inter'
+  | 'montserrat'
+  | 'roboto'
+  | 'openSans'
+  | 'ptSans'
+  | 'firaSans'
+  | 'manrope'
+  | 'nunito'
+  | 'raleway'
+  | 'round'
+  | 'golos'
+  | 'onest'
+  | 'ubuntu'
+  | 'condensed'
+  | 'comfortaa'
+  | 'serif'
+  | 'ptSerif'
+  | 'playfair'
+  | 'merriweather'
+  | 'bitter'
+  | 'cormorant'
+  | 'alice'
+  | 'literata'
   | 'mono'
+  | 'plexMono'
+  | 'firaCode'
+  | 'sourceCode'
+  | 'robotoMono'
+  | 'ubuntuMono'
+  | 'martianMono'
   | 'tech'
   | 'techno'
-  | 'condensed'
-  | 'serif'
+  | 'exo2'
+  | 'geologica'
+  | 'unbounded'
+  | 'tektur'
+  | 'russoOne'
+  | 'rubikMono'
+  | 'pixelify'
+  | 'yeseva'
   | 'hand'
-  | 'round'
+  | 'pacifico'
+  | 'amatic'
+  | 'badScript'
+  | 'marck'
+  | 'orbitron'
+  | 'audiowide'
+  | 'michroma'
+  | 'chakra'
+  | 'shareTech'
+  | 'vt323'
+  | 'silkscreen'
+  | 'pressStart'
+  | 'majorMono'
+  | 'syneMono'
+  | 'monoton'
+  | 'bungee'
+  | 'righteous'
 
 // Small things pinned onto a note: a paperclip over the corner, a pushpin,
 // a star, a folded ribbon. Each one remembers which corner it was dropped
@@ -190,6 +262,21 @@ export type DecorKind =
   | 'crosshair'
   | 'diamondStack'
   | 'wifi'
+  // The animated ones. They run on CSS keyframes rather than on a timer,
+  // so they cost nothing when the note is off-screen and they stop dead
+  // for anyone who has asked their system for less motion.
+  | 'pulseRing'
+  | 'soundWave'
+  | 'orbit'
+  | 'radar'
+  | 'spinnerArc'
+  | 'blinkDot'
+  | 'scanBox'
+  | 'loadDots'
+  | 'heartbeat'
+  | 'gearSpin'
+  | 'progressRing'
+  | 'dataFall'
 
 export type DecorCorner = 'tl' | 'tr' | 'bl' | 'br'
 
@@ -217,6 +304,18 @@ export interface NotePin extends PinBase {
   color: string
   style?: NoteStyle
   font?: NoteFont
+  // Flat rather than nested: updatePin takes a single key, and a nested
+  // object would mean read-modify-write on every toggle.
+  fontSize?: number
+  align?: TextAlign
+  valign?: TextVAlign
+  lineHeight?: number
+  letterSpacing?: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  strike?: boolean
+  uppercase?: boolean
   // Absent on notes that have nothing pinned to them.
   decor?: Decor[]
   // Optional override. Left unset, the note picks black or white from the

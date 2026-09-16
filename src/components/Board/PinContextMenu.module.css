@@ -1,15 +1,38 @@
 .menu {
   position: fixed;
   z-index: 5000;
-  min-width: 200px;
+  min-width: 232px;
   padding: 4px;
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
   animation: menu-in 120ms ease-out;
-  font-size: 13px;
+  font-size: 16px;
+
+  /* The menu grew submenus — colours, fonts, AI actions — and with all of
+     them open it is taller than the window. It used to simply run off the
+     bottom edge with no way to reach what was down there. */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  /* Reaching the end of the menu must not hand the scroll on to the board
+     behind it, which would pan the canvas out from under the menu. */
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
+
+.menu::-webkit-scrollbar { width: 10px; }
+.menu::-webkit-scrollbar-track { background: transparent; }
+
+.menu::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--border);
+}
+
+.menu::-webkit-scrollbar-thumb:hover { background-color: var(--text-faint); }
 
 @keyframes menu-in {
   from { opacity: 0; transform: translateY(-4px) scale(0.98); }
@@ -21,13 +44,13 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border: none;
   background: transparent;
   color: var(--text);
   text-align: left;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 16px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background-color 100ms ease;
@@ -83,13 +106,23 @@
   animation: menu-in 100ms ease-out;
 }
 
+/* The open submenu's own scroll, for the long ones. Without it a submenu
+   with thirty entries makes the whole menu that tall and everything below
+   it — Delete, most of all — becomes unreachable without scrolling past
+   the lot. */
+.submenuScroll {
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
 /* ---------- colour picker ---------- */
 
 .swatchLabel {
-  padding: 6px 10px 2px;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  padding: 7px 10px 3px;
+  font-size: 16px;
   color: var(--text-dim);
 }
 
@@ -121,7 +154,7 @@
   background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1;
 }
@@ -164,7 +197,7 @@
   background: transparent;
   color: var(--text-dim);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
@@ -193,7 +226,7 @@
   min-width: 34px;
   text-align: right;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-dim);
 }
 
@@ -203,4 +236,12 @@
 .itemActive {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+/* A quiet line at the foot of a submenu saying where the rest of it is. */
+.hint {
+  padding: 6px 10px 8px;
+  font-size: 16px;
+  color: var(--text-faint);
+  line-height: 1.3;
 }

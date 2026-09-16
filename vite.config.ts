@@ -13,6 +13,20 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     base: './',
+    build: {
+      rollupOptions: {
+        output: {
+          // Both the note renderer and mermaid pull in KaTeX, and they
+          // resolve it through different entry points, so it was landing
+          // in the bundle twice — half a megabyte of the same typesetter.
+          // Naming the chunk collapses them into one shared file.
+          manualChunks(id: string) {
+            if (id.includes('node_modules/katex')) return 'katex'
+            if (id.includes('node_modules/@fontsource')) return 'fonts'
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         // The AI panel talks to a same-origin /ai/ that nginx provides in a

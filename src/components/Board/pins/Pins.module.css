@@ -1525,28 +1525,6 @@
   z-index: 2;
 }
 
-/* --- note fonts -------------------------------------------------------
-   Set on the note wrapper so the rendered markdown and the textarea agree —
-   they inherit, and the textarea only does because the theme resets input
-   font-family to `inherit`. Everything here is self-hosted and has a
-   cyrillic subset; see src/styles/fonts.ts. */
-
-.fontMono { font-family: var(--font-note-mono); }
-.fontTech { font-family: var(--font-note-tech); }
-.fontTechno { font-family: var(--font-note-techno); }
-.fontCondensed { font-family: var(--font-note-condensed); }
-.fontSerif { font-family: var(--font-note-serif); }
-.fontRound { font-family: var(--font-note-round); }
-
-/* Caveat is drawn far smaller than its point size, so it needs a bump or
-   it reads as a footnote next to every other option. */
-.fontHand { font-family: var(--font-note-hand); }
-.fontHand .noteBody,
-.fontHand .noteEditor {
-  font-size: 22px;
-  line-height: 1.35;
-}
-
 /* --- pinned decorations ----------------------------------------------
 
    Positioned by the fraction of the note it was dropped at, centred on
@@ -1625,3 +1603,220 @@
 }
 
 .decorRemove:hover { background: #b91c1c; }
+
+/* --- vertical alignment of the note's text ---------------------------
+   Only takes effect when the note asks for it, so an unformatted note
+   keeps the plain block layout it has always had. `safe` matters: with
+   plain centring, text taller than the note overflows past the top edge
+   where it can never be scrolled back into view. */
+
+.noteBody[data-valign] {
+  display: flex;
+  flex-direction: column;
+}
+
+.noteBody[data-valign='middle'] { justify-content: safe center; }
+.noteBody[data-valign='bottom'] { justify-content: safe flex-end; }
+
+/* --- animated decorations --------------------------------------------
+
+   All of it is CSS keyframes on SVG parts, never a timer: an animation on
+   an off-screen note costs the compositor nothing, and a hundred of them
+   still cost nothing, which a hundred requestAnimationFrame loops would
+   not.
+
+   SVG needs `transform-box: fill-box` for `transform-origin: center` to
+   mean the shape's own centre rather than the viewport's origin — without
+   it every rotation swings the glyph out of frame. */
+
+.animPart {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.animSpinSlow { animation: decorSpin 6s linear infinite; }
+.animSpin { animation: decorSpin 2.4s linear infinite; }
+.animSpinFast { animation: decorSpin 1.1s linear infinite; }
+
+@keyframes decorSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* A ring thrown outward and faded — the VPN-indicator pulse. */
+.animPulse { animation: decorPulse 1.9s ease-out infinite; }
+.animPulseLate { animation: decorPulse 1.9s ease-out infinite; animation-delay: 0.95s; }
+
+@keyframes decorPulse {
+  0% { transform: scale(0.35); opacity: 0.9; }
+  70% { opacity: 0.12; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+/* Equaliser bars. Scaled rather than resized: height on an SVG rect is a
+   layout property and animating it forces a reflow every frame. */
+.animBar { animation: decorBar 0.9s ease-in-out infinite alternate; }
+.animBar2 { animation-delay: 0.15s; }
+.animBar3 { animation-delay: 0.3s; }
+.animBar4 { animation-delay: 0.45s; }
+.animBar5 { animation-delay: 0.6s; }
+
+@keyframes decorBar {
+  from { transform: scaleY(0.25); }
+  to { transform: scaleY(1); }
+}
+
+.animBlink { animation: decorBlink 1.4s steps(1, end) infinite; }
+
+@keyframes decorBlink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0.15; }
+}
+
+.animScan { animation: decorScan 2.1s ease-in-out infinite alternate; }
+
+@keyframes decorScan {
+  from { transform: translateY(-8px); }
+  to { transform: translateY(8px); }
+}
+
+.animDot { animation: decorDot 1.3s ease-in-out infinite; }
+.animDot2 { animation-delay: 0.18s; }
+.animDot3 { animation-delay: 0.36s; }
+
+@keyframes decorDot {
+  0%, 70%, 100% { transform: scale(0.55); opacity: 0.35; }
+  35% { transform: scale(1); opacity: 1; }
+}
+
+/* The trace draws itself, waits, and starts again — dash length and gap
+   both equal the path length, so the gap pushes the drawn part off the
+   end instead of erasing it backwards. */
+.animTrace {
+  stroke-dasharray: 44;
+  animation: decorTrace 1.8s linear infinite;
+}
+
+@keyframes decorTrace {
+  from { stroke-dashoffset: 44; }
+  to { stroke-dashoffset: -44; }
+}
+
+.animSweep {
+  stroke-dasharray: 63;
+  animation: decorSweep 2.2s ease-in-out infinite;
+}
+
+@keyframes decorSweep {
+  0% { stroke-dashoffset: 63; }
+  50% { stroke-dashoffset: 8; }
+  100% { stroke-dashoffset: -63; }
+}
+
+.animFall { animation: decorFall 1.6s linear infinite; }
+.animFall2 { animation-delay: 0.5s; animation-duration: 2.1s; }
+.animFall3 { animation-delay: 0.9s; animation-duration: 1.3s; }
+
+@keyframes decorFall {
+  from { transform: translateY(-14px); }
+  to { transform: translateY(14px); }
+}
+
+/* Someone who has asked the system for reduced motion has asked for it
+   everywhere. The glyphs stay — they read perfectly well still — they
+   just stop moving. */
+@media (prefers-reduced-motion: reduce) {
+  .animSpinSlow,
+  .animSpin,
+  .animSpinFast,
+  .animPulse,
+  .animPulseLate,
+  .animBar,
+  .animBlink,
+  .animScan,
+  .animDot,
+  .animTrace,
+  .animSweep,
+  .animFall {
+    animation: none;
+  }
+}
+
+/* --- markdown power-ups inside a note --------------------------------
+   Code highlighting, KaTeX formulas and mermaid diagrams. The highlight
+   palette is written here rather than pulled from a highlight.js theme:
+   every published theme assumes a page background, and a note can be any
+   colour the user likes — these are keyed to the note's own text colour so
+   they read on a yellow sticky and on an ink-dark HUD plate alike. */
+
+.noteMarkdown pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.32);
+  font-family: var(--font-note-mono);
+  font-size: 0.88em;
+  line-height: 1.45;
+}
+
+.noteMarkdown :not(pre) > code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.18);
+  font-family: var(--font-note-mono);
+  font-size: 0.9em;
+}
+
+.noteMarkdown :global(.hljs-comment),
+.noteMarkdown :global(.hljs-quote) { opacity: 0.55; font-style: italic; }
+.noteMarkdown :global(.hljs-keyword),
+.noteMarkdown :global(.hljs-selector-tag),
+.noteMarkdown :global(.hljs-built_in) { color: #fbbf24; }
+.noteMarkdown :global(.hljs-string),
+.noteMarkdown :global(.hljs-attr),
+.noteMarkdown :global(.hljs-regexp) { color: #4ade80; }
+.noteMarkdown :global(.hljs-number),
+.noteMarkdown :global(.hljs-literal) { color: #2dd4bf; }
+.noteMarkdown :global(.hljs-title),
+.noteMarkdown :global(.hljs-function),
+.noteMarkdown :global(.hljs-section) { color: #f97316; }
+.noteMarkdown :global(.hljs-variable),
+.noteMarkdown :global(.hljs-template-variable) { color: #cbd5e1; }
+.noteMarkdown :global(.hljs-type),
+.noteMarkdown :global(.hljs-class) { color: #a7f3d0; }
+.noteMarkdown :global(.hljs-deletion) { color: #fca5a5; }
+.noteMarkdown :global(.hljs-addition) { color: #86efac; }
+
+/* KaTeX sets its own font size in em, which compounds badly once a note
+   is scaled up; pinning it keeps a formula the same size as its text. */
+.noteMarkdown :global(.katex) { font-size: 1.05em; }
+.noteMarkdown :global(.katex-display) { margin: 10px 0; overflow-x: auto; overflow-y: hidden; }
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaidPending {
+  padding: 10px 12px;
+  border: 1px dashed rgba(232, 234, 230, 0.25);
+  border-radius: var(--radius-sm);
+  font-size: 0.85em;
+  opacity: 0.6;
+}
+
+.mermaidError {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(185, 28, 28, 0.18);
+  color: #fca5a5;
+  font-size: 0.8em;
+  white-space: pre-wrap;
+}

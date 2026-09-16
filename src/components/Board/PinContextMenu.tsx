@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowUpToLine,
   ArrowDownToLine,
@@ -24,10 +24,11 @@ import {
   Type,
   Check,
 } from 'lucide-react'
-import type { CustomAction, NotePin as NotePinT, NoteStyle, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
+import type { CustomAction, NoteFont, NotePin as NotePinT, NoteStyle, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
-import { HUD_STYLES, NOTE_FONTS, readableOn } from './pins/noteStyles'
+import { FONT_BY_ID, HUD_STYLES, NOTE_FONTS, readableOn } from './pins/noteStyles'
+import { frequentFonts } from '../../utils/textFormat'
 import { putTextContent } from '../../api/webdav'
 import { useAiStore } from '../../store/useAiStore'
 import { useUiStore } from '../../store/useUiStore'
@@ -52,20 +53,49 @@ interface Props {
 export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, onCreateVaultNote, onCreateShape, onPickShapeImage }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState(target.screen)
+  // Which submenu is open, held here rather than inside each submenu.
+  //
+  // Two things depend on that. One: only one opens at a time, so the menu
+  // stays a menu instead of growing into a wall. Two — the reason it had
+  // to move — a submenu holding its own `open` state re-rendered only
+  // itself, so the effect that keeps the menu on screen never ran and the
+  // menu grew straight off the bottom edge.
+  const [openSub, setOpenSub] = useState<string | null>(null)
+  const submenu = (name: string) => ({
+    open: openSub === name,
+    onToggle: () => setOpenSub((v) => (v === name ? null : name)),
+  })
 
-  // Clamp to the viewport — a menu near the right/bottom edge would
-  // otherwise render partially off-screen. useLayoutEffect so the
-  // adjustment happens before paint, avoiding a visible jump.
+  // Clamp to the viewport — a menu near the right or bottom edge would
+  // otherwise render partly off-screen. useLayoutEffect so it happens
+  // before paint and there is no visible jump.
+  //
+  // It has to re-run whenever the menu changes height, not just when it
+  // opens: every submenu expands inline, so the menu that fitted when it
+  // appeared is half off the bottom of the screen the moment you open
+  // "Цвет". The first version measured once, which is why the useful part
+  // of the menu could end up somewhere unreachable.
+  // Deliberately no dependency array: this has to re-measure after *every*
+  // render, because every submenu expands inline and changes the menu's
+  // height. Measuring once on open — which is what it used to do — left
+  // the menu hanging off the bottom of the window the moment you opened
+  // "Цвет", with no way to reach Delete underneath.
+  //
+  // Returning the previous object unchanged is what stops this looping:
+  // setState with the same reference does not schedule another render.
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    const maxX = window.innerWidth - r.width - 8
-    const maxY = window.innerHeight - r.height - 8
-    setPos({
-      x: Math.min(target.screen.x, maxX),
-      y: Math.min(target.screen.y, maxY),
-    })
+    const x = Math.max(8, Math.min(target.screen.x, window.innerWidth - r.width - 8))
+    const y = Math.max(8, Math.min(target.screen.y, window.innerHeight - r.height - 8))
+    setPos((prev) => (prev.x === x && prev.y === y ? prev : { x, y }))
+  })
+
+  useEffect(() => {
+    const onResize = () => setPos({ ...target.screen })
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [target.screen])
 
   useEffect(() => {
@@ -92,7 +122,12 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, on
       onContextMenu={(e) => e.preventDefault()}
     >
       {target.kind === 'pin' ? (
-        <PinMenuItems pin={target.pin} onClose={onClose} onPickShapeImage={onPickShapeImage} />
+        <PinMenuItems
+          pin={target.pin}
+          onClose={onClose}
+          onPickShapeImage={onPickShapeImage}
+          submenu={submenu}
+        />
       ) : (
         <EmptyMenuItems
           onClose={onClose}
@@ -118,7 +153,22 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, on
   )
 }
 
-function PinMenuItems({ pin, onClose, onPickShapeImage }: { pin: Pin; onClose: () => void; onPickShapeImage: (pinId: string) => void }) {
+interface SubmenuControl {
+  open: boolean
+  onToggle: () => void
+}
+
+function PinMenuItems({
+  pin,
+  onClose,
+  onPickShapeImage,
+  submenu,
+}: {
+  pin: Pin
+  onClose: () => void
+  onPickShapeImage: (pinId: string) => void
+  submenu: (name: string) => SubmenuControl
+}) {
   const store = useBoardStore
   const promptDialog = useUiStore((s) => s.promptDialog)
   const pushToast = useUiStore((s) => s.pushToast)
@@ -223,13 +273,13 @@ function PinMenuItems({ pin, onClose, onPickShapeImage }: { pin: Pin; onClose: (
       <div className={styles.divider} />
       <MenuItem icon={<Copy size={13} />} onClick={handleDuplicate}>Дублировать</MenuItem>
       {pin.type === 'note' && (
-        <ColorSubmenu pin={pin} />
+        <ColorSubmenu pin={pin} {...submenu('color')} />
       )}
       {pin.type === 'note' && (
-        <FontSubmenu pin={pin} />
+        <FontSubmenu pin={pin} {...submenu('font')} />
       )}
       {pin.type === 'shape' && (
-        <ShapeColorSubmenu pin={pin} />
+        <ShapeColorSubmenu pin={pin} {...submenu('shapeColor')} />
       )}
       {(pin.type === 'image' || pin.type === 'video' || pin.type === 'audio' || pin.type === 'file') && (
         <MenuItem icon={<StickyNote size={13} />} onClick={handleDescription}>
@@ -289,7 +339,7 @@ function PinMenuItems({ pin, onClose, onPickShapeImage }: { pin: Pin; onClose: (
         <MenuItem icon={<Download size={13} />} onClick={handleDownload}>Скачать</MenuItem>
       )}
       <div className={styles.divider} />
-      <AiSubmenu pin={pin} onClose={onClose} />
+      <AiSubmenu pin={pin} onClose={onClose} {...submenu('ai')} />
       <div className={styles.divider} />
       <MenuItem icon={<Trash2 size={13} />} danger onClick={handleDelete}>
         Удалить
@@ -331,7 +381,7 @@ function EmptyMenuItems({
           <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
         </button>
         {shapesOpen && (
-          <div className={styles.submenu}>
+          <div className={`${styles.submenu} ${styles.submenuScroll}`}>
             {SHAPES.map((s) => (
               <MenuItem key={s.id} icon={s.icon} onClick={() => onCreateShape(s.id)}>
                 {s.label}
@@ -434,8 +484,7 @@ const NOTE_TEXTURES: Array<{ id: NoteTexture; label: string }> = [
   { id: 'graph', label: 'Миллиметровка' },
 ]
 
-function ShapeColorSubmenu({ pin }: { pin: ShapePinT }) {
-  const [open, setOpen] = useState(false)
+function ShapeColorSubmenu({ pin, open, onToggle }: { pin: ShapePinT } & SubmenuControl) {
   const updatePin = useBoardStore((s) => s.updatePin)
 
   // Outline and fill move together by default: two colours to pick for
@@ -449,13 +498,13 @@ function ShapeColorSubmenu({ pin }: { pin: ShapePinT }) {
 
   return (
     <div className={styles.submenuWrap}>
-      <button className={styles.item} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <button className={styles.item} onClick={onToggle} aria-expanded={open}>
         <span className={styles.itemIcon}><Palette size={13} /></span>
         Цвет и заливка
         <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
       </button>
       {open && (
-        <div className={styles.submenu}>
+        <div className={`${styles.submenu} ${styles.submenuScroll}`}>
           <div className={styles.swatchLabel}>Цвет</div>
           <div className={styles.swatches}>
             {SHAPE_COLORS.map((c) => (
@@ -505,41 +554,59 @@ function ShapeColorSubmenu({ pin }: { pin: ShapePinT }) {
   )
 }
 
+// The five offered before a board has a habit of its own: the app's font,
+// a mono, a condensed, a serif and a hand — one of each kind, so the
+// shortlist is useful rather than five flavours of grotesque.
+const FONT_FALLBACK = ['default', 'mono', 'condensed', 'serif', 'hand']
+
 // Which typeface the note is set in. Every row is rendered in the font it
 // names, because a list of font names in one font tells you nothing.
-function FontSubmenu({ pin }: { pin: NotePinT }) {
-  const [open, setOpen] = useState(false)
+function FontSubmenu({ pin, open, onToggle }: { pin: NotePinT } & SubmenuControl) {
   const updatePin = useBoardStore((s) => s.updatePin)
+  const pins = useBoardStore((s) => s.board?.pins)
   const current = pin.font ?? (HUD_STYLES.has(pin.style ?? 'sticky') ? 'mono' : 'default')
+
+  // Five, not fifty-nine: the catalogue belongs in the floating bar, where
+  // there is a dropdown for it. Which five is decided by what this board
+  // already uses, plus the current one so the tick is always visible.
+  const shortlist = useMemo(() => {
+    const used = (pins ?? []).filter((p) => p.type === 'note').map((p) => p.font)
+    const ids = frequentFonts([...used, current], FONT_FALLBACK)
+    return ids.map((id) => FONT_BY_ID.get(id as NoteFont)).filter((f) => f !== undefined)
+  }, [pins, current])
 
   return (
     <div className={styles.submenuWrap}>
-      <button className={styles.item} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <button className={styles.item} onClick={onToggle} aria-expanded={open}>
         <span className={styles.itemIcon}><Type size={13} /></span>
         Шрифт
         <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
       </button>
       {open && (
-        <div className={styles.submenu}>
-          {NOTE_FONTS.map((f) => (
+        <div className={`${styles.submenu} ${styles.submenuScroll}`}>
+          {shortlist.map((f) => (
             <button
               key={f.id}
               className={`${styles.item} ${current === f.id ? styles.itemActive : ''}`}
               style={{ fontFamily: f.css }}
-              onClick={() => updatePin(pin.id, 'font', f.id)}
+              onClick={() => updatePin(pin.id, 'font', f.id === 'default' ? undefined : f.id)}
             >
-              <span className={styles.itemIcon}>{current === f.id ? <Check size={13} /> : null}</span>
+              <span className={styles.itemIcon}>
+                {current === f.id ? <Check size={13} /> : null}
+              </span>
               {f.label}
             </button>
           ))}
+          <div className={styles.hint}>
+            Все {NOTE_FONTS.length} — в панели над заметкой
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function ColorSubmenu({ pin }: { pin: NotePinT }) {
-  const [open, setOpen] = useState(false)
+function ColorSubmenu({ pin, open, onToggle }: { pin: NotePinT } & SubmenuControl) {
   const updatePin = useBoardStore((s) => s.updatePin)
 
   // Changes apply live and stay open — picking a colour is a "try it and
@@ -550,13 +617,13 @@ function ColorSubmenu({ pin }: { pin: NotePinT }) {
 
   return (
     <div className={styles.submenuWrap}>
-      <button className={styles.item} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <button className={styles.item} onClick={onToggle} aria-expanded={open}>
         <span className={styles.itemIcon}><Palette size={13} /></span>
         Цвет
         <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
       </button>
       {open && (
-        <div className={styles.submenu}>
+        <div className={`${styles.submenu} ${styles.submenuScroll}`}>
           <div className={styles.swatchLabel}>Фон</div>
           <div className={styles.swatches}>
             {NOTE_COLORS.map((c) => (
@@ -647,8 +714,7 @@ function sanitizeName(name: string): string {
 // think the slice changed and re-render forever.
 const NO_ACTIONS: CustomAction[] = []
 
-function AiSubmenu({ pin, onClose }: { pin: Pin; onClose: () => void }) {
-  const [open, setOpen] = useState(false)
+function AiSubmenu({ pin, onClose, open, onToggle }: { pin: Pin; onClose: () => void } & SubmenuControl) {
   const applyContentAction = useAiStore((s) => s.applyContentAction)
   const customActions = useBoardStore((s) => s.board?.customActions) ?? NO_ACTIONS
 
@@ -661,13 +727,13 @@ function AiSubmenu({ pin, onClose }: { pin: Pin; onClose: () => void }) {
 
   return (
     <div className={styles.submenuWrap}>
-      <button className={styles.item} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <button className={styles.item} onClick={onToggle} aria-expanded={open}>
         <span className={styles.itemIcon}><Sparkles size={13} /></span>
         AI
         <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
       </button>
       {open && (
-        <div className={styles.submenu}>
+        <div className={`${styles.submenu} ${styles.submenuScroll}`}>
           {actions.map((a) => (
             <MenuItem key={a.id} icon={<Sparkles size={13} />} onClick={() => run(a.id, a.prompt, a.resultType)}>
               {a.label}
