@@ -21,11 +21,13 @@ import {
   Triangle,
   Image as ImageIcon,
   Eraser,
+  Type,
+  Check,
 } from 'lucide-react'
 import type { CustomAction, NotePin as NotePinT, NoteStyle, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
-import { readableOn } from './pins/NotePin'
+import { HUD_STYLES, NOTE_FONTS, readableOn } from './pins/noteStyles'
 import { putTextContent } from '../../api/webdav'
 import { useAiStore } from '../../store/useAiStore'
 import { useUiStore } from '../../store/useUiStore'
@@ -222,6 +224,9 @@ function PinMenuItems({ pin, onClose, onPickShapeImage }: { pin: Pin; onClose: (
       <MenuItem icon={<Copy size={13} />} onClick={handleDuplicate}>Дублировать</MenuItem>
       {pin.type === 'note' && (
         <ColorSubmenu pin={pin} />
+      )}
+      {pin.type === 'note' && (
+        <FontSubmenu pin={pin} />
       )}
       {pin.type === 'shape' && (
         <ShapeColorSubmenu pin={pin} />
@@ -494,6 +499,39 @@ function ShapeColorSubmenu({ pin }: { pin: ShapePinT }) {
               </button>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Which typeface the note is set in. Every row is rendered in the font it
+// names, because a list of font names in one font tells you nothing.
+function FontSubmenu({ pin }: { pin: NotePinT }) {
+  const [open, setOpen] = useState(false)
+  const updatePin = useBoardStore((s) => s.updatePin)
+  const current = pin.font ?? (HUD_STYLES.has(pin.style ?? 'sticky') ? 'mono' : 'default')
+
+  return (
+    <div className={styles.submenuWrap}>
+      <button className={styles.item} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className={styles.itemIcon}><Type size={13} /></span>
+        Шрифт
+        <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
+      </button>
+      {open && (
+        <div className={styles.submenu}>
+          {NOTE_FONTS.map((f) => (
+            <button
+              key={f.id}
+              className={`${styles.item} ${current === f.id ? styles.itemActive : ''}`}
+              style={{ fontFamily: f.css }}
+              onClick={() => updatePin(pin.id, 'font', f.id)}
+            >
+              <span className={styles.itemIcon}>{current === f.id ? <Check size={13} /> : null}</span>
+              {f.label}
+            </button>
+          ))}
         </div>
       )}
     </div>

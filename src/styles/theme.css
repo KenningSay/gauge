@@ -1,8 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* The webfonts are imported from src/styles/fonts.ts, not from Google —
+   see the note there. */
 
 :root {
   --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SFMono-Regular', monospace;
+
+  /* The fonts a note can be set to. Kept here rather than in the note's
+     own stylesheet so the picker and the note read the same list. */
+  --font-note-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  --font-note-tech: 'Jura', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-note-techno: 'Play', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-note-condensed: 'Oswald', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-note-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --font-note-hand: 'Caveat', 'Segoe Script', cursive;
+  --font-note-round: 'Rubik', 'IBM Plex Sans', system-ui, sans-serif;
 
   --radius-sm: 6px;
   --radius-md: 10px;

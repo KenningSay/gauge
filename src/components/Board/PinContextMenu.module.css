@@ -196,3 +196,11 @@
   font-size: 12px;
   color: var(--text-dim);
 }
+
+/* The row for the option that is already in force. Marked with a tick
+   rather than a highlight alone, so it survives being read at a glance in
+   a menu where every row is set in a different typeface. */
+.itemActive {
+  background: var(--bg-hover);
+  color: var(--text);
+}

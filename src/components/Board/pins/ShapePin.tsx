@@ -13,7 +13,7 @@ import type { ShapeKind, ShapePin as ShapePinT } from '../../../api/board'
 import { acquireBlobUrl, releaseBlobUrl } from '../../../utils/blobCache'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { usePinActivation } from '../PinShell'
-import { readableOn } from './NotePin'
+import { readableOn } from './noteStyles'
 import styles from './Pins.module.css'
 
 // Geometry in a 0-100 box, stretched by preserveAspectRatio="none" — the

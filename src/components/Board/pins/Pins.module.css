@@ -871,44 +871,36 @@
 
 /* --- HUD family -------------------------------------------------------
    Monochrome, technical, drawn the way the reference sheets draw it: hard
-   chamfers instead of rounded corners, hairline rules, hazard stripes, and
-   a monospace voice. These override the note's own colour with an ink-dark
-   plate, because the look depends on contrast rather than on hue — the
-   note's colour survives as the accent line. */
+   chamfers instead of rounded corners, hairline rules, hazard stripes,
+   leader lines and a monospace voice. These override the note's own colour
+   with an ink-dark plate, because the look depends on contrast rather than
+   on hue — the note's colour survives as the accent.
 
-/* These keep the note's own colour as `currentColor` — it's the accent the
-   brackets, stripes and indicators are drawn in — while the text itself is
-   set light below. The plate is dark regardless, which is why the
-   backgrounds are !important: the note's colour arrives as an inline style
-   and would otherwise win. */
-.styleHud,
-.styleHudBracket,
-.styleTerminal,
-.styleHazard,
-.styleScan,
-.styleDither,
-.styleBarcode,
-.styleChip {
-  border-radius: 0;
+   Every one of them paints on `.hudPlate`, a separate layer stretched over
+   the note, rather than on the note itself. Two reasons: a chamfered plate
+   needs `clip-path`, and a clip-path on the note would cut off anything
+   pinned to its corners; and drawing on a layer of its own leaves the
+   note's own ::before/::after free, so a style can afford a lit tab AND a
+   hatched wedge AND a frame without running out of pseudo-elements. */
+
+.hudBase {
+  /* The note's colour arrives as an inline style and the radius with it,
+     so both have to be shouted down — the plate paints the background. */
+  background: transparent !important;
+  border-radius: 0 !important;
 }
 
-.styleHud .noteBody,
-.styleHudBracket .noteBody,
-.styleTerminal .noteBody,
-.styleHazard .noteBody,
-.styleScan .noteBody,
-.styleDither .noteBody,
-.styleBarcode .noteBody,
-.styleChip .noteBody,
-.styleHud .noteEditor,
-.styleHudBracket .noteEditor,
-.styleTerminal .noteEditor,
-.styleHazard .noteEditor,
-.styleScan .noteEditor,
-.styleDither .noteEditor,
-.styleBarcode .noteEditor,
-.styleChip .noteEditor {
-  font-family: var(--font-mono);
+.hudPlate {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.hudBase .noteBody,
+.hudBase .noteEditor {
+  position: relative;
+  z-index: 1;
   font-size: 15px;
   letter-spacing: 0.01em;
   /* Explicit, so it doesn't inherit the accent colour from the plate. */
@@ -917,13 +909,13 @@
 
 /* Chamfered plate: corners cut at 45°, a hairline inset rule, and the
    note's own colour as a bar down the left. */
-.styleHud {
-  background: #14140f !important;
+.styleHud .hudPlate {
+  background: #14140f;
   clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
   box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.35);
 }
 
-.styleHud::before {
+.styleHud .hudPlate::after {
   content: '';
   position: absolute;
   left: 0;
@@ -932,35 +924,32 @@
   width: 4px;
   background: currentColor;
   opacity: 0.9;
-  pointer-events: none;
 }
 
 /* Corner brackets only — the frame implied by four L-shapes. */
-.styleHudBracket {
-  background: #14140f !important;
-}
+.styleHudBracket .hudPlate { background: #14140f; }
 
-.styleHudBracket::before,
-.styleHudBracket::after {
+.styleHudBracket .hudPlate::before,
+.styleHudBracket .hudPlate::after {
   content: '';
   position: absolute;
   width: 26px;
   height: 26px;
   border: 2px solid rgba(232, 234, 230, 0.75);
-  pointer-events: none;
 }
 
-.styleHudBracket::before { top: 6px; left: 6px; border-right: none; border-bottom: none; }
-.styleHudBracket::after { bottom: 6px; right: 6px; border-left: none; border-top: none; }
+.styleHudBracket .hudPlate::before { top: 6px; left: 6px; border-right: none; border-bottom: none; }
+.styleHudBracket .hudPlate::after { bottom: 6px; right: 6px; border-left: none; border-top: none; }
 
 /* Terminal readout: a title bar with a window dot row, and a caret. */
-.styleTerminal {
-  background: #0d0f0c !important;
-  padding-top: 24px;
+.styleTerminal { padding-top: 24px; }
+
+.styleTerminal .hudPlate {
+  background: #0d0f0c;
   box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.28);
 }
 
-.styleTerminal::before {
+.styleTerminal .hudPlate::before {
   content: '';
   position: absolute;
   top: 0;
@@ -969,73 +958,59 @@
   height: 20px;
   background: rgba(232, 234, 230, 0.1);
   border-bottom: 1px solid rgba(232, 234, 230, 0.2);
-  pointer-events: none;
 }
 
-.styleTerminal::after {
+.styleTerminal .hudPlate::after {
   content: '';
   position: absolute;
   top: 8px;
   left: 8px;
   width: 26px;
   height: 4px;
-  background: repeating-linear-gradient(
-    90deg,
-    currentColor 0 4px,
-    transparent 4px 9px
-  );
+  background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 9px);
   opacity: 0.9;
-  pointer-events: none;
 }
 
 /* Hazard tape along the bottom edge. */
-.styleHazard {
-  background: #14140f !important;
-  padding-bottom: 20px;
+.styleHazard { padding-bottom: 20px; }
+
+.styleHazard .hudPlate {
+  background: #14140f;
   box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.3);
 }
 
-.styleHazard::after {
+.styleHazard .hudPlate::after {
   content: '';
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   height: 14px;
-  background: repeating-linear-gradient(
-    -45deg,
-    currentColor 0 8px,
-    transparent 8px 16px
-  );
+  background: repeating-linear-gradient(-45deg, currentColor 0 8px, transparent 8px 16px);
   opacity: 0.85;
-  pointer-events: none;
 }
 
 /* CRT scan lines over an ink plate. */
-.styleScan {
-  background: #101310 !important;
+.styleScan .hudPlate {
+  background: #101310;
   box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.25);
 }
 
-.styleScan::before {
+.styleScan .hudPlate::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    rgba(232, 234, 230, 0.07) 0 1px,
-    transparent 1px 3px
-  );
-  pointer-events: none;
+  background: repeating-linear-gradient(rgba(232, 234, 230, 0.07) 0 1px, transparent 1px 3px);
 }
 
 /* Dithered plate: the pixel-fade from the reference, as two dot grids of
    different sizes fading across the card. */
-.styleDither {
-  background: #101010 !important;
+.styleDither .hudPlate {
+  background: #101010;
   box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.25);
 }
 
-.styleDither::before {
+.styleDither .hudPlate::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -1046,17 +1021,17 @@
   background-position: 0 0, 3px 3px;
   -webkit-mask-image: linear-gradient(135deg, #000 0%, transparent 62%);
   mask-image: linear-gradient(135deg, #000 0%, transparent 62%);
-  pointer-events: none;
 }
 
 /* A barcode strip across the bottom, uneven on purpose. */
-.styleBarcode {
-  background: #14140f !important;
-  padding-bottom: 24px;
+.styleBarcode { padding-bottom: 24px; }
+
+.styleBarcode .hudPlate {
+  background: #14140f;
   box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.3);
 }
 
-.styleBarcode::after {
+.styleBarcode .hudPlate::after {
   content: '';
   position: absolute;
   left: 12px;
@@ -1067,17 +1042,16 @@
     repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 5px),
     repeating-linear-gradient(90deg, transparent 0 9px, currentColor 9px 12px, transparent 12px 21px);
   opacity: 0.9;
-  pointer-events: none;
 }
 
 /* Status chip: a pill with a notched left end and a lit indicator. */
-.styleChip {
-  background: #14140f !important;
+.styleChip .hudPlate {
+  background: #14140f;
   clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
   box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.35);
 }
 
-.styleChip::before {
+.styleChip .hudPlate::before {
   content: '';
   position: absolute;
   left: 16px;
@@ -1088,24 +1062,515 @@
   border-radius: 50%;
   background: currentColor;
   box-shadow: 0 0 10px currentColor;
-  pointer-events: none;
 }
 
 .styleChip .noteBody,
 .styleChip .noteEditor { padding-left: 36px; }
 
-/* --- pinned decorations ---------------------------------------------- */
+/* --- HUD family, second pass ------------------------------------------
+   The parts of the reference sheets the first pass left on the table: the
+   outlined frames with a lit tab, the callout leader lines, hex plates,
+   waveforms, and the pixel-UI panels with their screws and level meters.
 
-/* Sits astride the corner it was dropped on — half on the note, half off,
-   the way a real clip or pin does. Never takes pointer events, so it can't
-   get in the way of dragging or editing the note underneath. */
+   The outlined ones are all built the same way — the plate is filled with
+   the accent and its ::before is inset by the line width and filled with
+   ink, so the accent survives only as an outline that follows whatever
+   clip-path both share. It costs nothing and it chamfers correctly, which
+   a border cannot do. */
+
+/* VR frame: cut corners, a lit tab hanging off the top edge, a hatched
+   wedge in the bottom-left. The tab is the thing that makes the reference
+   read as a heads-up display rather than a box, so it glows. */
+.styleVrFrame { padding-top: 12px; }
+
+.styleVrFrame .hudPlate {
+  background: currentColor;
+  clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
+}
+
+.styleVrFrame .hudPlate::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background: #0b0d0b;
+  clip-path: polygon(17px 0, 100% 0, 100% calc(100% - 17px), calc(100% - 17px) 100%, 0 100%, 0 17px);
+}
+
+.styleVrFrame .hudPlate::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  width: 46px;
+  height: 10px;
+  background: repeating-linear-gradient(-45deg, currentColor 0 4px, transparent 4px 8px);
+  opacity: 0.9;
+}
+
+.styleVrFrame::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  width: 62px;
+  height: 9px;
+  transform: translateX(-50%);
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 9px 100%);
+  box-shadow: 0 0 22px 4px currentColor;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* VR panel: the same family seen side-on — a segmented accent rail down
+   the left edge with a dotted gutter beside it. */
+.styleVrPanel .hudPlate {
+  background: #0b0d0b;
+  clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px);
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.3);
+}
+
+.styleVrPanel .hudPlate::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 28px;
+  bottom: 14px;
+  width: 9px;
+  background: repeating-linear-gradient(currentColor 0 7px, transparent 7px 12px);
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.styleVrPanel .hudPlate::after {
+  content: '';
+  position: absolute;
+  left: 23px;
+  top: 28px;
+  bottom: 14px;
+  width: 3px;
+  background: repeating-linear-gradient(rgba(232, 234, 230, 0.55) 0 3px, transparent 3px 8px);
+}
+
+.styleVrPanel .noteBody,
+.styleVrPanel .noteEditor { padding-left: 38px; }
+
+/* Callout: the leader line from the annotation sheets — a rule that runs
+   out of the top-left corner and ends in a dot, plus ticks on the other
+   two corners so the card still reads as a frame. */
+.styleCallout { padding-top: 26px; }
+
+.styleCallout .hudPlate {
+  background: #0e100e;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.22);
+}
+
+.styleCallout .hudPlate::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  left: 12px;
+  width: 58%;
+  height: 2px;
+  background: currentColor;
+}
+
+.styleCallout .hudPlate::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: calc(12px + 58%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.styleCallout::before,
+.styleCallout::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.styleCallout::before { top: 5px; right: 5px; border-left: none; border-bottom: none; }
+.styleCallout::after { bottom: 5px; left: 5px; border-right: none; border-top: none; }
+
+/* Rounded HUD frame: soft corners with two of them cut square, and a tick
+   on each side — the big empty frames the sheets use to hold readouts. */
+.styleRoundFrame .hudPlate {
+  background: currentColor;
+  border-radius: 16px;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+}
+
+.styleRoundFrame .hudPlate::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background: #0d0f0d;
+  border-radius: 14px;
+  clip-path: polygon(0 0, calc(100% - 19px) 0, 100% 19px, 100% 100%, 19px 100%, 0 calc(100% - 19px));
+}
+
+.styleRoundFrame .hudPlate::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -1px;
+  right: -1px;
+  height: 22px;
+  transform: translateY(-50%);
+  background:
+    linear-gradient(currentColor, currentColor) left center / 4px 100% no-repeat,
+    linear-gradient(currentColor, currentColor) right center / 4px 100% no-repeat;
+}
+
+/* Hex plate: the elongated hexagon, pointed at both ends. */
+.styleHexFrame .hudPlate {
+  background: currentColor;
+  clip-path: polygon(20px 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 20px 100%, 0 50%);
+}
+
+.styleHexFrame .hudPlate::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background: #0c0e0c;
+  clip-path: polygon(20px 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 20px 100%, 0 50%);
+}
+
+.styleHexFrame .hudPlate::after {
+  content: '';
+  position: absolute;
+  left: 26px;
+  right: 26px;
+  top: 10px;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, currentColor 0 10px, transparent 10px 16px);
+  opacity: 0.75;
+}
+
+.styleHexFrame .noteBody,
+.styleHexFrame .noteEditor { padding: 24px 30px; }
+
+/* Hatched bars top and bottom — the thick striped rectangles that open and
+   close nearly every layout on the sheets. */
+.styleStripeBar { padding: 24px 0; }
+
+.styleStripeBar .hudPlate {
+  background: #101210;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.25);
+}
+
+.styleStripeBar .hudPlate::before,
+.styleStripeBar .hudPlate::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18px;
+  background: repeating-linear-gradient(-45deg, currentColor 0 5px, transparent 5px 11px);
+  opacity: 0.85;
+}
+
+.styleStripeBar .hudPlate::before { top: 0; }
+.styleStripeBar .hudPlate::after { bottom: 0; }
+
+/* Label plate: a solid accent bar across the top with a cut end, the way
+   the sheets set a title against the panel it belongs to. */
+.styleLabelBar { padding-top: 30px; }
+
+.styleLabelBar .hudPlate {
+  background: #101210;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.28);
+}
+
+.styleLabelBar .hudPlate::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 62%;
+  height: 18px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+.styleLabelBar .hudPlate::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  width: 26%;
+  height: 8px;
+  background: repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 7px);
+  opacity: 0.8;
+}
+
+/* Waveform: bars of three different heights, unioned out of three mask
+   layers. A repeating gradient can only make one height, so each band is
+   its own layer and they add together — which is also why the periods are
+   coprime, so the result doesn't fall into an obvious pattern. */
+.styleWaveform { padding-bottom: 42px; }
+
+.styleWaveform .hudPlate {
+  background: #0c0e0c;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.25);
+}
+
+.styleWaveform .hudPlate::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  height: 28px;
+  background: currentColor;
+  -webkit-mask-image:
+    repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 11px),
+    repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 17px);
+  -webkit-mask-size: 100% 34%, 100% 62%, 100% 100%;
+  -webkit-mask-position: 0 50%, 0 50%, 0 50%;
+  -webkit-mask-repeat: no-repeat;
+  mask-image:
+    repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 11px),
+    repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 17px);
+  mask-size: 100% 34%, 100% 62%, 100% 100%;
+  mask-position: 0 50%, 0 50%, 0 50%;
+  mask-repeat: no-repeat;
+}
+
+/* Arrow tab: the plate itself is cut into an arrow and a stack of chevrons
+   sits in the notch. */
+.styleArrowTab .hudPlate {
+  background: #12140f;
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 50%, calc(100% - 22px) 100%, 0 100%);
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.3);
+}
+
+.styleArrowTab .hudPlate::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 16px;
+  height: 22px;
+  transform: translateY(-50%);
+  background: currentColor;
+  clip-path: polygon(0 0, 55% 0, 100% 50%, 55% 100%, 0 100%, 45% 50%);
+}
+
+.styleArrowTab .noteBody,
+.styleArrowTab .noteEditor { padding-left: 34px; padding-right: 34px; }
+
+/* Pixel window: the retro-UI panel — hard double border, a dashed title
+   rule, no radius anywhere, and the mint cast the pixel sheet uses. */
+.stylePixelWindow { padding-top: 26px; }
+
+.stylePixelWindow .hudPlate {
+  background: #12181a;
+  box-shadow:
+    inset 0 0 0 2px currentColor,
+    inset 0 0 0 5px #12181a,
+    inset 0 0 0 7px rgba(232, 234, 230, 0.35);
+}
+
+.stylePixelWindow .hudPlate::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: 11px;
+  right: 11px;
+  height: 8px;
+  background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 8px);
+  opacity: 0.85;
+}
+
+.stylePixelWindow .noteBody,
+.stylePixelWindow .noteEditor { padding: 6px 16px 16px; }
+
+/* Screw plate: the settings panel from the pixel sheet — a double inset
+   rule and a screw head in each corner, all four painted as one layer of
+   four radial gradients. */
+.styleScrewPlate .hudPlate {
+  background: #14140f;
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 234, 230, 0.5),
+    inset 0 0 0 6px #14140f,
+    inset 0 0 0 7px rgba(232, 234, 230, 0.25);
+}
+
+.styleScrewPlate .hudPlate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle 5px at center, currentColor 0 65%, transparent 66%),
+    radial-gradient(circle 5px at center, currentColor 0 65%, transparent 66%),
+    radial-gradient(circle 5px at center, currentColor 0 65%, transparent 66%),
+    radial-gradient(circle 5px at center, currentColor 0 65%, transparent 66%);
+  background-size: 12px 12px;
+  background-position: 6px 6px, calc(100% - 6px) 6px, 6px calc(100% - 6px), calc(100% - 6px) calc(100% - 6px);
+  background-repeat: no-repeat;
+}
+
+.styleScrewPlate .noteBody,
+.styleScrewPlate .noteEditor { padding: 22px; }
+
+/* Level meters: two segmented bars along the bottom, filled to different
+   points, straight off the MUSIC / SFX panel. */
+.styleMeter { padding-bottom: 46px; }
+
+.styleMeter .hudPlate {
+  background: #101310;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.3);
+}
+
+.styleMeter .hudPlate::before,
+.styleMeter .hudPlate::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  height: 12px;
+  background: repeating-linear-gradient(90deg, currentColor 0 7px, transparent 7px 10px);
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.4);
+}
+
+.styleMeter .hudPlate::before { bottom: 28px; width: calc(72% - 14px); }
+.styleMeter .hudPlate::after { bottom: 10px; width: calc(44% - 14px); }
+
+/* Octagon: the chamfered button from the pixel sheet blown up to a card,
+   with a double ring and the text centred inside it. */
+.styleOctagon .hudPlate {
+  background: currentColor;
+  clip-path: polygon(22px 0, calc(100% - 22px) 0, 100% 22px, 100% calc(100% - 22px), calc(100% - 22px) 100%, 22px 100%, 0 calc(100% - 22px), 0 22px);
+}
+
+.styleOctagon .hudPlate::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: #0f120f;
+  clip-path: polygon(20px 0, calc(100% - 20px) 0, 100% 20px, 100% calc(100% - 20px), calc(100% - 20px) 100%, 20px 100%, 0 calc(100% - 20px), 0 20px);
+}
+
+.styleOctagon .hudPlate::after {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border: 2px solid currentColor;
+  opacity: 0.45;
+  clip-path: polygon(15px 0, calc(100% - 15px) 0, 100% 15px, 100% calc(100% - 15px), calc(100% - 15px) 100%, 15px 100%, 0 calc(100% - 15px), 0 15px);
+}
+
+.styleOctagon .noteBody,
+.styleOctagon .noteEditor {
+  padding: 30px;
+  text-align: center;
+}
+
+/* Stencil: a heavy broken rule across the top, a hazard wedge cut into the
+   top-right corner, and a registration mark below — the decal-sheet voice. */
+.styleStencil { padding-top: 30px; }
+
+.styleStencil .hudPlate {
+  background: #101010;
+  box-shadow: inset 0 0 0 1px rgba(232, 234, 230, 0.22);
+}
+
+.styleStencil .hudPlate::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 54%;
+  height: 6px;
+  background:
+    linear-gradient(currentColor, currentColor) left center / 62% 100% no-repeat,
+    linear-gradient(currentColor, currentColor) right center / 30% 100% no-repeat;
+}
+
+.styleStencil .hudPlate::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 54px;
+  height: 30px;
+  background: repeating-linear-gradient(-45deg, currentColor 0 6px, transparent 6px 12px);
+  clip-path: polygon(30px 0, 100% 0, 100% 100%, 0 100%);
+  opacity: 0.9;
+}
+
+.styleStencil::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  width: 44px;
+  height: 10px;
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat;
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* --- note fonts -------------------------------------------------------
+   Set on the note wrapper so the rendered markdown and the textarea agree —
+   they inherit, and the textarea only does because the theme resets input
+   font-family to `inherit`. Everything here is self-hosted and has a
+   cyrillic subset; see src/styles/fonts.ts. */
+
+.fontMono { font-family: var(--font-note-mono); }
+.fontTech { font-family: var(--font-note-tech); }
+.fontTechno { font-family: var(--font-note-techno); }
+.fontCondensed { font-family: var(--font-note-condensed); }
+.fontSerif { font-family: var(--font-note-serif); }
+.fontRound { font-family: var(--font-note-round); }
+
+/* Caveat is drawn far smaller than its point size, so it needs a bump or
+   it reads as a footnote next to every other option. */
+.fontHand { font-family: var(--font-note-hand); }
+.fontHand .noteBody,
+.fontHand .noteEditor {
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+/* --- pinned decorations ----------------------------------------------
+
+   Positioned by the fraction of the note it was dropped at, centred on
+   that point, so it keeps its place when the note is resized. Unlike the
+   rest of the note's ornament these take pointer events: they can be
+   picked up, moved, resized and taken off one at a time. */
+
 .decor {
   position: absolute;
-  width: 30px;
-  height: 30px;
-  pointer-events: none;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
   z-index: 3;
+  cursor: grab;
+  /* Otherwise dragging one on a touchscreen pans the board instead. */
+  touch-action: none;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+
+.decor:active { cursor: grabbing; }
+
+.decorGlyphBox {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .decor svg {
@@ -1114,7 +1579,49 @@
   display: block;
 }
 
-.decorTl { top: -14px; left: -10px; }
-.decorTr { top: -14px; right: -10px; transform: scaleX(-1); }
-.decorBl { bottom: -14px; left: -10px; transform: scaleY(-1); }
-.decorBr { bottom: -14px; right: -10px; transform: scale(-1, -1); }
+.decorActive::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 1px dashed rgba(251, 191, 36, 0.9);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Both handles are sized in viewport pixels rather than board units, so
+   they stay grabbable when the board is zoomed out — a handle that scales
+   with the note is unusable at 30%. */
+.decorGrip {
+  position: absolute;
+  right: -9px;
+  bottom: -9px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: #fbbf24;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.decorRemove {
+  position: absolute;
+  right: -11px;
+  top: -11px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: #1b1a18;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.9);
+  color: #e8eae6;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.decorRemove:hover { background: #b91c1c; }
