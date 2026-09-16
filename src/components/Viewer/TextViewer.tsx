@@ -6,6 +6,7 @@ import { getTextContent, putTextContent } from '../../api/webdav'
 import type { FileEntry } from '../../api/types'
 import styles from './TextViewer.module.css'
 import mdStyles from './Markdown.module.css'
+import { hasMod, isKey } from '../../utils/keys'
 
 export function TextViewer({ entry }: { entry: FileEntry }) {
   const isMarkdown = entry.name.toLowerCase().endsWith('.md')
@@ -46,7 +47,7 @@ export function TextViewer({ entry }: { entry: FileEntry }) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if (hasMod(e) && isKey(e, 's')) {
         e.preventDefault()
         save()
       }

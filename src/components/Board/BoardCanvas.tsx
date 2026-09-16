@@ -27,6 +27,7 @@ import { runPool } from '../../utils/pool'
 import { PinRenderer } from './pins/PinRenderer'
 import { PinContextMenu, type PinMenuTarget } from './PinContextMenu'
 import styles from './BoardCanvas.module.css'
+import { isKey } from '../../utils/keys'
 
 type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 
@@ -120,6 +121,7 @@ export function BoardCanvas() {
   const setViewport = useBoardStore((s) => s.setViewport)
   const addPin = useBoardStore((s) => s.addPin)
   const addEdge = useBoardStore((s) => s.addEdge)
+  const activePinId = useBoardStore((s) => s.activePinId)
   const removeEdges = useBoardStore((s) => s.removeEdges)
   const edges = useBoardStore((s) => s.board?.edges) ?? NO_EDGES
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
@@ -427,12 +429,12 @@ export function BoardCanvas() {
         return
       }
       const mod = e.ctrlKey || e.metaKey
-      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      if (mod && isKey(e, 'z') && !e.shiftKey) {
         e.preventDefault()
         undo()
         return
       }
-      if ((mod && e.key.toLowerCase() === 'y') || (mod && e.shiftKey && e.key.toLowerCase() === 'z')) {
+      if ((mod && isKey(e, 'y')) || (mod && e.shiftKey && isKey(e, 'z'))) {
         e.preventDefault()
         redo()
         return
@@ -461,7 +463,7 @@ export function BoardCanvas() {
         clearSelection()
         return
       }
-      if (mod && e.key.toLowerCase() === 'a') {
+      if (mod && isKey(e, 'a')) {
         e.preventDefault()
         selectMany(pins.map((p) => p.id))
         return
@@ -728,6 +730,16 @@ export function BoardCanvas() {
     })
   }, [containerSize.w, containerSize.h, setViewport])
 
+  // When a pin stops being edited, put focus back on the board. Otherwise
+  // it stays on the unmounted textarea's old position — i.e. nowhere — and
+  // the first Ctrl+Z or Delete after editing goes to no one.
+  const wasEditing = useRef(false)
+  useEffect(() => {
+    const editing = activePinId !== null
+    if (wasEditing.current && !editing) containerRef.current?.focus({ preventScroll: true })
+    wasEditing.current = editing
+  }, [activePinId, containerRef])
+
   const autoFitted = useRef<string | null>(null)
   useEffect(() => {
     const id = board?.id
@@ -886,6 +898,10 @@ export function BoardCanvas() {
       className={styles.canvas}
       style={gridStyle}
       onPointerDown={onContainerPointerDown}
+      // Focusable so the board can take focus back when a pin's editor
+      // closes. Without it focus lands on <body>, which works by accident
+      // today and would break the moment anything else claims it.
+      tabIndex={-1}
       onContextMenu={onContextMenuEmpty}
       onPointerDownCapture={(e) => {
         if (e.target !== containerRef.current) return
