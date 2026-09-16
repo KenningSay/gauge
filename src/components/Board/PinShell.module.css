@@ -3,8 +3,21 @@
   top: 0;
   left: 0;
   border-radius: var(--radius-md);
-  transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  /* Two separate easings on purpose: position follows the cursor with a
+     short overshoot, while the selection ring fades in on a plain curve —
+     a springy shadow reads as jitter. */
+  transition:
+    transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1.1),
+    box-shadow 180ms ease;
   will-change: transform;
+  animation: pin-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+/* Appearing pins ease in rather than popping — the difference between a
+   board that feels built and one that feels assembled. */
+@keyframes pin-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .shell.selected {
@@ -12,6 +25,16 @@
      (an inline transform would otherwise win over anything set here). This
      rule only has to own the origin; the transition is on .shell. */
   transform-origin: center;
+  /* A crisp ring does the work the glow can't: the glow sits behind an
+     opaque pin, so only its outer halo is ever visible, and on a dark
+     board that halo alone is easy to miss. */
+  box-shadow:
+    0 0 0 2px var(--tick),
+    0 6px 28px rgba(251, 191, 36, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell { animation: none; transition: none; }
 }
 
 /* ---------- glow layer ---------- */
@@ -23,9 +46,9 @@
   pointer-events: none;
   background: radial-gradient(
     ellipse at center,
-    rgba(251, 191, 36, 0.35) 0%,
-    rgba(251, 191, 36, 0.14) 45%,
-    rgba(251, 191, 36, 0) 72%
+    rgba(251, 191, 36, 0.55) 0%,
+    rgba(251, 191, 36, 0.3) 55%,
+    rgba(251, 191, 36, 0) 85%
   );
   opacity: 0;
   transition: opacity 200ms ease;
@@ -38,8 +61,12 @@
 }
 
 @keyframes glow-breathe {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50% { opacity: 0.9; transform: scale(1.04); }
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell.selected .glow { animation: none; opacity: 0.85; }
 }
 
 /* ---------- tongue ---------- */

@@ -96,6 +96,7 @@ export function BoardCanvas() {
   const clearSelection = useBoardStore((s) => s.clearSelection)
 
   const pushToast = useUiStore((s) => s.pushToast)
+  const promptDialog = useUiStore((s) => s.promptDialog)
 
   const { screenToWorld } = useBoardPanZoom({
     viewport,
@@ -264,6 +265,16 @@ export function BoardCanvas() {
         )
       }
     }
+    // Snapping is applied on commit, not during the drag: the pin follows
+    // the cursor exactly while you hold it and settles onto the grid when
+    // you let go. Snapping live makes a slow drag feel like it's fighting
+    // you. Off by default, so this is the identity function unless the
+    // board asked for it.
+    const snap = (v: number) => {
+      const step = settings?.snapEnabled ? settings.snapStep : 0
+      return step > 0 ? Math.round(v / step) * step : v
+    }
+
     const onUp = (e: PointerEvent) => {
       if (e.pointerId !== interaction.pointerId) return
       if (interaction.kind === 'drag') {
@@ -273,7 +284,7 @@ export function BoardCanvas() {
           for (const id of ids) {
             const s = startPositions.get(id)
             if (!s) continue
-            moves.push({ id, x: s.x + delta.dx, y: s.y + delta.y })
+            moves.push({ id, x: snap(s.x + delta.dx), y: snap(s.y + delta.y) })
           }
           movePins(moves)
         }
@@ -287,7 +298,7 @@ export function BoardCanvas() {
             moves.push({ id, x: current.x, y: current.y })
           }
           if (moves.length) movePins(moves)
-          resizePin(id, { w: current.w, h: current.h })
+          resizePin(id, { w: snap(current.w), h: snap(current.h) })
         }
       } else if (interaction.kind === 'marquee') {
         const { startWorld, currentWorld } = interaction
@@ -413,8 +424,15 @@ export function BoardCanvas() {
     async (e: React.DragEvent) => {
       e.preventDefault()
       if (!board) return
-      const dropped = await collectDroppedEntries(e.dataTransfer)
-      if (!dropped || dropped.length === 0) return
+      // collectDroppedEntries returns null when the Entries API isn't
+      // available (it's what makes dropping a *folder* work). Falling back
+      // to the plain file list matters: without it the drop silently did
+      // nothing at all, which is exactly how a "drag and drop doesn't work"
+      // bug report looks.
+      const dropped =
+        (await collectDroppedEntries(e.dataTransfer)) ??
+        Array.from(e.dataTransfer.files).map((file) => ({ relPath: [file.name], file }))
+      if (dropped.length === 0) return
       const rect = containerRef.current!.getBoundingClientRect()
       const dropWorld = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
       let z = pins.reduce((m, p) => Math.max(m, p.z), 0)
@@ -488,7 +506,7 @@ export function BoardCanvas() {
   // --- "Create link here" from the context menu ---
   const createLinkAt = useCallback(
     async (world: { x: number; y: number }) => {
-      const url = window.prompt('URL')
+      const url = await promptDialog('Адрес ссылки', 'https://')
       if (!url) return
       const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
       addPin({

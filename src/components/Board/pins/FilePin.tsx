@@ -1,3 +1,4 @@
+import { useCallback, useEffect } from 'react'
 import { File as FileIcon, Music, Video, Image as ImageIcon, FileText, Archive, Code } from 'lucide-react'
 import type { FilePin as FilePinT } from '../../../api/board'
 import { downloadEntry } from '../../../utils/download'
@@ -6,16 +7,25 @@ import { usePinActivation } from '../PinShell'
 import styles from './Pins.module.css'
 
 export function FilePin({ pin }: { pin: FilePinT }) {
-  const { activated } = usePinActivation()
-  void activated
+  const { registerDoubleClick } = usePinActivation()
+
+  // Double-click downloads. Registered with the shell rather than bound to
+  // the DOM here: a native dblclick never reaches a pin while the canvas
+  // holds the pointer capture (see PinShell).
+  const download = useCallback(() => {
+    void downloadEntry(pin.assetPath, pin.fileName)
+    return true
+  }, [pin.assetPath, pin.fileName])
+
+  useEffect(() => {
+    registerDoubleClick(download)
+    return () => registerDoubleClick(null)
+  }, [registerDoubleClick, download])
 
   const icon = pickIcon(pin.fileName, pin.mimeType)
 
   return (
-    <div
-      className={styles.fileWrap}
-      onDoubleClick={() => downloadEntry(pin.assetPath, pin.fileName)}
-    >
+    <div className={styles.fileWrap}>
       <div className={styles.fileIcon}>{icon}</div>
       <div className={styles.fileName}>{pin.fileName}</div>
       <div className={styles.fileSize}>{formatSize(pin.fileSize, false)}</div>
