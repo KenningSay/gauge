@@ -491,3 +491,380 @@
   font-size: 16px;
   line-height: 1.45;
 }
+
+/* ---------- note styles ----------------------------------------------
+   Each style dresses the same note as a different physical object. They
+   share the pin's colour (set inline as the background) and only add the
+   trimmings: a torn edge, spiral rings, a clip, a strip of tape. Drawn with
+   gradients and pseudo-elements rather than images, so they scale with the
+   board's zoom and cost nothing to load.
+
+   Everything here sits on .root, which already carries the note's colour
+   and its readable text colour. */
+
+/* Classic sticky: a slight lift at one corner, like a real one that has
+   stopped sticking. */
+.styleSticky {
+  border-radius: var(--radius-md);
+}
+
+/* A sheet of paper: square corners, a subtle edge, and a folded corner
+   drawn as two triangles so the fold shows the paper's own colour. */
+.stylePaper {
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.stylePaper::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  background:
+    linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.16) 50%),
+    linear-gradient(315deg, color-mix(in srgb, currentColor 8%, transparent) 50%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Spiral pad: rings punched along the top, and the paper starts below
+   them. The rings are one repeating-gradient, not 12 elements. */
+.styleSpiral {
+  border-radius: 3px;
+  padding-top: 18px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.styleSpiral::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 10px;
+  right: 10px;
+  height: 10px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.45) 0 3px,
+    transparent 3px 8px,
+    rgba(0, 0, 0, 0.45) 8px 11px,
+    transparent 11px 22px
+  );
+  border-radius: 2px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* A sheet under a clip: the clip is a rounded outline hanging over the top
+   edge, drawn with a border rather than a glyph so it inherits the ink. */
+.styleClip {
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.styleClip::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 18px;
+  width: 22px;
+  height: 34px;
+  border: 3px solid rgba(0, 0, 0, 0.45);
+  border-radius: 11px;
+  background: transparent;
+  pointer-events: none;
+}
+
+/* Taped to the board: a translucent strip across the top corner, slightly
+   rotated, with the frosted look tape has over colour. */
+.styleTape {
+  border-radius: 2px;
+}
+
+.styleTape::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 92px;
+  height: 26px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(1px);
+  pointer-events: none;
+}
+
+/* Neo-brutalist card: heavy ink outline and a hard offset shadow, the look
+   from the collections screen. */
+.styleCard {
+  border-radius: 10px;
+  box-shadow:
+    inset 0 0 0 2.5px #16150f,
+    5px 5px 0 0 #16150f;
+}
+
+/* Folder: a tab on the top-left, same colour as the card, plus the same
+   heavy outline. */
+.styleFolder {
+  border-radius: 10px;
+  margin-top: 12px;
+  box-shadow:
+    inset 0 0 0 2.5px #16150f,
+    5px 5px 0 0 #16150f;
+}
+
+.styleFolder::before {
+  content: '';
+  position: absolute;
+  top: -13px;
+  left: 14px;
+  width: 64px;
+  height: 16px;
+  background: inherit;
+  border: 2.5px solid #16150f;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  pointer-events: none;
+}
+
+/* Ribbon: a banner with notched ends, for headings and section markers. */
+.styleRibbon {
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 50%, 100% 100%, 0 100%, 18px 50%);
+  box-shadow: none;
+}
+
+/* The ribbon's clip eats its own padding on both ends. */
+.styleRibbon .noteBody,
+.styleRibbon .noteEditor {
+  padding-left: 30px;
+  padding-right: 30px;
+}
+
+/* --- more note styles ------------------------------------------------- */
+
+/* Torn from a pad: a ragged bottom edge, cut with a repeating zig-zag
+   mask so the tear follows the note's own colour. */
+.styleTorn {
+  border-radius: 3px 3px 0 0;
+  -webkit-mask-image: linear-gradient(#000 0 0), conic-gradient(from -45deg at bottom, #0000 25%, #000 0);
+  mask-image: linear-gradient(#000 0 0), conic-gradient(from -45deg at bottom, #0000 25%, #000 0);
+  -webkit-mask-size: 100% calc(100% - 9px), 18px 9px;
+  mask-size: 100% calc(100% - 9px), 18px 9px;
+  -webkit-mask-repeat: no-repeat, repeat-x;
+  mask-repeat: no-repeat, repeat-x;
+  -webkit-mask-position: top, bottom;
+  mask-position: top, bottom;
+}
+
+/* Ruled sheet with a margin rule down the left, like school paper. */
+.styleLined {
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.styleLined::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 32px, rgba(220, 80, 80, 0.35) 32px 33px, transparent 33px),
+    repeating-linear-gradient(transparent 0 21px, rgba(0, 0, 0, 0.12) 21px 22px);
+  pointer-events: none;
+}
+
+.styleLined .noteBody,
+.styleLined .noteEditor { padding-left: 42px; }
+
+/* Spiral bound down the left side instead of the top. */
+.styleSpiralSide {
+  border-radius: 3px;
+  padding-left: 20px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.styleSpiralSide::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 10px;
+  bottom: 10px;
+  width: 10px;
+  background: repeating-linear-gradient(
+    rgba(0, 0, 0, 0.45) 0 3px,
+    transparent 3px 8px,
+    rgba(0, 0, 0, 0.45) 8px 11px,
+    transparent 11px 22px
+  );
+  border-radius: 2px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Clipboard: a dark board behind the sheet with a clip at the top. */
+.styleClipboard {
+  border-radius: 6px;
+  padding-top: 22px;
+  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.35);
+}
+
+.styleClipboard::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 54px;
+  height: 20px;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Taped down at two opposite corners. */
+.styleTapeCorners {
+  border-radius: 2px;
+}
+
+.styleTapeCorners::before,
+.styleTapeCorners::after {
+  content: '';
+  position: absolute;
+  width: 58px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+
+.styleTapeCorners::before { top: -8px; left: -16px; transform: rotate(-38deg); }
+.styleTapeCorners::after { bottom: -8px; right: -16px; transform: rotate(-38deg); }
+
+/* Banner with a swallow-tail on the right and a dropped shadow strip,
+   the numbered-list look. */
+.styleBanner {
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 50%, 100% 100%, 0 100%);
+  box-shadow: none;
+}
+
+.styleBanner .noteBody,
+.styleBanner .noteEditor { padding-right: 34px; }
+
+/* A numbered marker sitting on the left edge, for ordered steps. */
+.styleNumbered {
+  border-radius: 6px;
+  margin-left: 16px;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.styleNumbered::before {
+  content: '';
+  position: absolute;
+  left: -18px;
+  top: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: inherit;
+  border: 2px solid rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.styleNumbered .noteBody,
+.styleNumbered .noteEditor { padding-left: 26px; }
+
+/* Double frame: an inner rule inset from a solid outer border. */
+.styleDoubleFrame {
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 6px transparent,
+    inset 0 0 0 7px rgba(0, 0, 0, 0.3);
+}
+
+/* Dashed outline, for drafts and placeholders. */
+.styleDashed {
+  border-radius: 6px;
+  outline: 2px dashed rgba(0, 0, 0, 0.4);
+  outline-offset: -6px;
+}
+
+/* Bolted plate: corners marked with rivets. */
+.styleBolted {
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.45);
+  background-image:
+    radial-gradient(circle at 10px 10px, rgba(0, 0, 0, 0.4) 0 3px, transparent 3px),
+    radial-gradient(circle at calc(100% - 10px) 10px, rgba(0, 0, 0, 0.4) 0 3px, transparent 3px),
+    radial-gradient(circle at 10px calc(100% - 10px), rgba(0, 0, 0, 0.4) 0 3px, transparent 3px),
+    radial-gradient(circle at calc(100% - 10px) calc(100% - 10px), rgba(0, 0, 0, 0.4) 0 3px, transparent 3px);
+}
+
+/* Speech bubble with a tail on the bottom-left. */
+.styleBubble {
+  border-radius: 16px;
+}
+
+.styleBubble::after {
+  content: '';
+  position: absolute;
+  left: 24px;
+  bottom: -12px;
+  width: 0;
+  height: 0;
+  border-left: 14px solid transparent;
+  border-right: 0 solid transparent;
+  border-top: 14px solid;
+  border-top-color: inherit;
+  /* The tail inherits the note's background through currentColor on the
+     wrapper, so it always matches the bubble. */
+  color: inherit;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.12));
+  pointer-events: none;
+}
+
+/* Luggage tag: a notch and a punched hole on the left. */
+.styleTag {
+  border-radius: 6px;
+  margin-left: 10px;
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
+}
+
+.styleTag::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.styleTag .noteBody,
+.styleTag .noteEditor { padding-left: 36px; }
+
+/* Capsule with a solid cap on the left, the pill look from the reference. */
+.styleCapsule {
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.3);
+}
+
+.styleCapsule::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 26%;
+  border-radius: 999px 0 0 999px;
+  background: rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.styleCapsule .noteBody,
+.styleCapsule .noteEditor { padding-left: 30%; padding-right: 22px; }

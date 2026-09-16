@@ -93,10 +93,38 @@ interface PinBase {
   sourceIds?: string[]
 }
 
+// How a note is dressed. `texture` is the paper's surface (ruled, grid…);
+// this is the object it's pretending to be — a torn sheet, a spiral pad, a
+// sheet held by a clip. Absent on notes written before styles existed, and
+// read as 'sticky', which is what they looked like.
+export type NoteStyle =
+  | 'sticky'
+  | 'paper'
+  | 'torn'
+  | 'lined'
+  | 'spiral'
+  | 'spiralSide'
+  | 'clip'
+  | 'clipboard'
+  | 'tape'
+  | 'tapeCorners'
+  | 'card'
+  | 'folder'
+  | 'ribbon'
+  | 'banner'
+  | 'numbered'
+  | 'doubleFrame'
+  | 'dashed'
+  | 'bolted'
+  | 'bubble'
+  | 'tag'
+  | 'capsule'
+
 export interface NotePin extends PinBase {
   type: 'note'
   text: string
   color: string
+  style?: NoteStyle
   // Optional override. Left unset, the note picks black or white from the
   // background's luminance, which is right for almost every colour — the
   // field exists for the cases where it isn't.

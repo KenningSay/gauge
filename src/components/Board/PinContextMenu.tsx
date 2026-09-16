@@ -21,7 +21,7 @@ import {
   Triangle,
   Image as ImageIcon,
 } from 'lucide-react'
-import type { CustomAction, NotePin as NotePinT, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
+import type { CustomAction, NotePin as NotePinT, NoteStyle, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import { readableOn } from './pins/NotePin'
@@ -394,6 +394,19 @@ const TEXT_COLORS = ['#16150f', '#f4f3ef', '#7f1d1d', '#1e3a8a']
 // groupings, callouts) rather than as sticky notes.
 const SHAPE_COLORS = ['#2dd4bf', '#fbbf24', '#f87171', '#a855f7', '#60a5fa', '#4ade80', '#f472b6', '#94a3b8']
 
+// What the note is dressed as. Ordered from plainest to loudest, so the
+// two you reach for most are first.
+const NOTE_STYLES: Array<{ id: NoteStyle; label: string }> = [
+  { id: 'sticky', label: 'Стикер' },
+  { id: 'paper', label: 'Листок' },
+  { id: 'spiral', label: 'Блокнот' },
+  { id: 'clip', label: 'На скрепке' },
+  { id: 'tape', label: 'На скотче' },
+  { id: 'card', label: 'Карточка' },
+  { id: 'folder', label: 'Папка' },
+  { id: 'ribbon', label: 'Лента' },
+]
+
 // Paper textures. Already supported by the renderer and stored per note —
 // there was simply no way to pick one.
 const NOTE_TEXTURES: Array<{ id: NoteTexture; label: string }> = [
@@ -510,6 +523,19 @@ function ColorSubmenu({ pin }: { pin: NotePinT }) {
               <Pipette size={12} />
               <input type="color" value={pin.color} onChange={(e) => setColor(e.target.value)} />
             </label>
+          </div>
+
+          <div className={styles.swatchLabel}>Вид</div>
+          <div className={styles.textureChips}>
+            {NOTE_STYLES.map((st) => (
+              <button
+                key={st.id}
+                className={`${styles.textureChip} ${(pin.style ?? 'sticky') === st.id ? styles.textureChipActive : ''}`}
+                onClick={() => updatePin(pin.id, 'style', st.id)}
+              >
+                {st.label}
+              </button>
+            ))}
           </div>
 
           <div className={styles.swatchLabel}>Бумага</div>
