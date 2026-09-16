@@ -53,7 +53,13 @@ export function ShapePin({ pin }: { pin: ShapePinT }) {
   }, [pin.text, activated])
 
   useEffect(() => {
-    if (activated) areaRef.current?.focus()
+    if (!activated) return
+    const el = areaRef.current
+    if (!el) return
+    el.focus()
+    // Caret at the end, not the start: the editor is often opened by
+    // typing a first character, and the rest of the word has to follow it.
+    el.setSelectionRange(el.value.length, el.value.length)
   }, [activated])
 
   // Same commit-from-cleanup rule as NotePin: editing can end by the pin

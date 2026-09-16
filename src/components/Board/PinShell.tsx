@@ -10,8 +10,9 @@
 // zoom (--zoom, set on the world layer), so it stays hairline-thin at any
 // scale instead of growing with the pin.
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef } from 'react'
 import type { Pin, PortSide } from '../../api/board'
+import { useBoardStore } from '../../store/useBoardStore'
 import styles from './PinShell.module.css'
 
 export interface PinActivation {
@@ -65,7 +66,16 @@ export function PinShell({
   onPortPointerDown,
   children,
 }: Props) {
-  const [activated, setActivatedState] = useState(false)
+  // Edit mode lives in the store, so the keyboard (Enter, or simply typing
+  // with a pin selected) and pin creation can open a pin for editing — the
+  // pattern Miro and FigJam use. Double-click still works; it's just no
+  // longer the only way in.
+  const activated = useBoardStore((s) => s.activePinId === pin.id)
+  const setActivePin = useBoardStore((s) => s.setActivePin)
+  const setActivatedState = useCallback(
+    (v: boolean) => setActivePin(v ? pin.id : null),
+    [setActivePin, pin.id],
+  )
   const shellRef = useRef<HTMLDivElement | null>(null)
 
   // Double-click is detected by hand, from pointerdown, instead of relying
