@@ -14,17 +14,20 @@ interface Props {
   selected: boolean
   onPointerDownBody: (e: React.PointerEvent) => void
   onPointerDownHandle: (e: React.PointerEvent, handle: ResizeHandle) => void
+  // Lit while board search is open and this pin is one of the hits.
+  matched?: boolean
   onContextMenu: (e: React.MouseEvent) => void
   onPortPointerDown?: (e: React.PointerEvent, side: PortSide) => void
 }
 
 export function PinRenderer(props: Props) {
-  const { pin, override, selected, onPointerDownBody, onPointerDownHandle, onContextMenu, onPortPointerDown } = props
+  const { pin, override, selected, matched, onPointerDownBody, onPointerDownHandle, onContextMenu, onPortPointerDown } = props
   return (
     <PinShell
       pin={pin}
       override={override}
       selected={selected}
+      matched={matched}
       onPointerDownBody={onPointerDownBody}
       onPointerDownHandle={onPointerDownHandle}
       onContextMenu={onContextMenu}
