@@ -4,6 +4,7 @@ import type {
   BoardHistory,
   ChatLog,
   CustomAction,
+  Edge,
   Pin,
   Viewport,
 } from '../api/board'
@@ -43,6 +44,9 @@ interface BoardState {
   clearSelection: () => void
 
   addPin: (pin: Pin) => void
+  addEdge: (edge: Edge) => void
+  removeEdges: (ids: string[]) => void
+  updateEdge: (id: string, field: string, value: unknown) => void
   removePins: (ids: string[]) => void
   movePins: (moves: Array<{ id: string; x: number; y: number }>) => void
   resizePin: (id: string, size: { w: number; h: number }) => void
@@ -201,6 +205,50 @@ export const useBoardStore = create<BoardState>((set, get) => {
       scheduleSave()
     },
 
+    addEdge: (edge) => {
+      const { board, history } = get()
+      if (!board) return
+      // Refuse a duplicate in the same direction and a self-link: both are
+      // easy to produce by dropping a connection back where it started,
+      // and neither draws as anything but a smudge.
+      if (edge.from.pinId === edge.to.pinId) return
+      const exists = (board.edges ?? []).some(
+        (e) => e.from.pinId === edge.from.pinId && e.to.pinId === edge.to.pinId,
+      )
+      if (exists) return
+      const op = { type: 'addEdge' as const, edge }
+      set({ board: applyOp(board, op), history: pushOp(history, op) })
+      scheduleSave()
+    },
+
+    removeEdges: (ids) => {
+      const { board, history } = get()
+      if (!board) return
+      const doomed = (board.edges ?? []).filter((e) => ids.includes(e.id))
+      if (doomed.length === 0) return
+      let next = board
+      let hist = history
+      for (const edge of doomed) {
+        const op = { type: 'removeEdge' as const, edge }
+        next = applyOp(next, op)
+        hist = pushOp(hist, op)
+      }
+      set({ board: next, history: hist })
+      scheduleSave()
+    },
+
+    updateEdge: (id, field, value) => {
+      const { board, history } = get()
+      if (!board) return
+      const edge = (board.edges ?? []).find((e) => e.id === id)
+      if (!edge) return
+      const before = (edge as unknown as Record<string, unknown>)[field]
+      if (before === value) return
+      const op = { type: 'updateEdge' as const, id, field, from: before, to: value }
+      set({ board: applyOp(board, op), history: pushOp(history, op) })
+      scheduleSave()
+    },
+
     removePins: (ids) => {
       const { board, history } = get()
       if (!board) return
@@ -209,6 +257,17 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const toRemove = ids
         .map((id) => board.pins.find((p) => p.id === id))
         .filter((p): p is Pin => !!p)
+      // Connections die with the pins they attach to, as their own ops, so
+      // undoing the delete brings the connections back too. Left behind,
+      // they'd be edges anchored to nothing.
+      const orphanedEdges = (board.edges ?? []).filter(
+        (e) => ids.includes(e.from.pinId) || ids.includes(e.to.pinId),
+      )
+      for (const edge of orphanedEdges) {
+        const op = { type: 'removeEdge' as const, edge }
+        newBoard = applyOp(newBoard, op)
+        newHistory = pushOp(newHistory, op)
+      }
       for (const pin of toRemove) {
         const op = { type: 'removePin' as const, pin }
         newBoard = applyOp(newBoard, op)

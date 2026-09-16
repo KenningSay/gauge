@@ -1,4 +1,4 @@
-import type { Pin } from '../../../api/board'
+import type { Pin, PortSide } from '../../../api/board'
 import { PinShell, type ResizeHandle } from '../PinShell'
 import { NotePin } from './NotePin'
 import { ImagePin } from './ImagePin'
@@ -14,10 +14,11 @@ interface Props {
   onPointerDownBody: (e: React.PointerEvent) => void
   onPointerDownHandle: (e: React.PointerEvent, handle: ResizeHandle) => void
   onContextMenu: (e: React.MouseEvent) => void
+  onPortPointerDown?: (e: React.PointerEvent, side: PortSide) => void
 }
 
 export function PinRenderer(props: Props) {
-  const { pin, override, selected, onPointerDownBody, onPointerDownHandle, onContextMenu } = props
+  const { pin, override, selected, onPointerDownBody, onPointerDownHandle, onContextMenu, onPortPointerDown } = props
   return (
     <PinShell
       pin={pin}
@@ -26,6 +27,7 @@ export function PinRenderer(props: Props) {
       onPointerDownBody={onPointerDownBody}
       onPointerDownHandle={onPointerDownHandle}
       onContextMenu={onContextMenu}
+      onPortPointerDown={onPortPointerDown}
     >
       {pin.type === 'note' && <NotePin pin={pin} />}
       {pin.type === 'image' && <ImagePin pin={pin} />}

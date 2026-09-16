@@ -11,7 +11,7 @@
 // scale instead of growing with the pin.
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import type { Pin } from '../../api/board'
+import type { Pin, PortSide } from '../../api/board'
 import styles from './PinShell.module.css'
 
 export interface PinActivation {
@@ -46,8 +46,12 @@ interface Props {
   // Called when the user presses down on a resize handle.
   onPointerDownHandle: (e: React.PointerEvent, handle: ResizeHandle) => void
   onContextMenu: (e: React.MouseEvent) => void
+  // Starts pulling a connection out of one of the four ports.
+  onPortPointerDown?: (e: React.PointerEvent, side: PortSide) => void
   children: React.ReactNode
 }
+
+const PORTS: PortSide[] = ['top', 'right', 'bottom', 'left']
 
 const HANDLES: ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 
@@ -58,6 +62,7 @@ export function PinShell({
   onPointerDownBody,
   onPointerDownHandle,
   onContextMenu,
+  onPortPointerDown,
   children,
 }: Props) {
   const [activated, setActivatedState] = useState(false)
@@ -168,6 +173,25 @@ export function PinShell({
             />
           )}
         </div>
+
+        {/* Connection ports. Hidden until the pin is hovered or selected —
+            four dots on every card at all times would bury the board in
+            chrome. Dragging one pulls a wire; the canvas decides where it
+            lands. */}
+        {onPortPointerDown &&
+          PORTS.map((side) => (
+            <div
+              key={side}
+              className={`${styles.port} ${styles[`port_${side}`]}`}
+              title="Потянуть связь"
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                onPortPointerDown(e, side)
+              }}
+            >
+              <span className={styles.portDot} />
+            </div>
+          ))}
 
         {/* Resize handles: shown only when selected (hover already
             implies selection in the intended flow). */}

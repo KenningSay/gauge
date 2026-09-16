@@ -9,7 +9,7 @@
 // Zustand's referential-equality re-rendering works without any extra
 // bookkeeping in the store.
 
-import type { Board, BoardHistory, Op, Pin } from '../api/board'
+import type { Board, BoardHistory, Edge, Op, Pin } from '../api/board'
 
 // Returns a new Board with `op` applied forward. Never mutates its input.
 export function applyOp(board: Board, op: Op): Board {
@@ -31,7 +31,20 @@ export function applyOp(board: Board, op: Op): Board {
 
     case 'reorderPin':
       return updatePin(board, op.id, (p) => ({ ...p, z: op.to }))
+
+    case 'addEdge':
+      return { ...board, edges: [...(board.edges ?? []), op.edge] }
+
+    case 'removeEdge':
+      return { ...board, edges: (board.edges ?? []).filter((e) => e.id !== op.edge.id) }
+
+    case 'updateEdge':
+      return updateEdge(board, op.id, (e) => ({ ...e, [op.field]: op.to }) as Edge)
   }
+}
+
+function updateEdge(board: Board, id: string, fn: (e: Edge) => Edge): Board {
+  return { ...board, edges: (board.edges ?? []).map((e) => (e.id === id ? fn(e) : e)) }
 }
 
 // Returns a new Board with `op` undone. Every op must be self-invertible
@@ -56,6 +69,15 @@ export function revertOp(board: Board, op: Op): Board {
 
     case 'reorderPin':
       return updatePin(board, op.id, (p) => ({ ...p, z: op.from }))
+
+    case 'addEdge':
+      return { ...board, edges: (board.edges ?? []).filter((e) => e.id !== op.edge.id) }
+
+    case 'removeEdge':
+      return { ...board, edges: [...(board.edges ?? []), op.edge] }
+
+    case 'updateEdge':
+      return updateEdge(board, op.id, (e) => ({ ...e, [op.field]: op.from }) as Edge)
   }
 }
 

@@ -1,0 +1,68 @@
+/* A big fixed canvas centred on the world origin. Two things have to line
+   up here: the element has to be large enough that Chrome actually paints
+   inside it (a 0x0 SVG with overflow:visible draws nothing), and the paths
+   are written in world coordinates, so the box is offset by half its size
+   and the content group translates back by the same amount. Offsetting
+   without that counter-translate draws every curve 100000px from its pins. */
+.layer {
+  position: absolute;
+  left: calc(-1 * var(--edge-span, 100000px));
+  top: calc(-1 * var(--edge-span, 100000px));
+  width: calc(2 * var(--edge-span, 100000px));
+  height: calc(2 * var(--edge-span, 100000px));
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wire {
+  fill: none;
+  stroke: var(--text-faint);
+  /* Divided by the canvas zoom, like every other hairline on the board. */
+  stroke-width: calc(2px / var(--zoom, 1));
+  stroke-linecap: round;
+  transition: stroke 140ms ease, stroke-width 140ms ease;
+}
+
+.wireSelected {
+  stroke: var(--signal);
+  stroke-width: calc(3px / var(--zoom, 1));
+}
+
+/* Invisible, fat, and the only part that takes pointer events — clicking a
+   2px curve is otherwise a test of patience. */
+.hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: calc(16px / var(--zoom, 1));
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.endpoint {
+  fill: var(--text-faint);
+  r: calc(4px / var(--zoom, 1));
+  pointer-events: none;
+}
+
+.label {
+  fill: var(--text);
+  font-family: var(--font-sans);
+  font-size: calc(13px / var(--zoom, 1));
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: calc(4px / var(--zoom, 1));
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* The wire being dragged out of a port: dashed and accented, so it reads as
+   "not committed yet". */
+.pending {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: calc(2px / var(--zoom, 1));
+  stroke-dasharray: calc(6px / var(--zoom, 1)) calc(5px / var(--zoom, 1));
+  stroke-linecap: round;
+  pointer-events: none;
+}

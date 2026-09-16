@@ -173,3 +173,37 @@ describe('pruneHistory', () => {
     expect(h.cursor).toBe(2)
   })
 })
+
+describe('edge ops', () => {
+  const edge = { id: 'e1', from: { pinId: 'a', side: 'right' as const }, to: { pinId: 'b', side: 'left' as const } }
+
+  it('adds and reverts a connection', () => {
+    const b = board([note('a'), note('b')])
+    const added = applyOp(b, { type: 'addEdge', edge })
+    expect(added.edges).toEqual([edge])
+    expect(revertOp(added, { type: 'addEdge', edge }).edges).toEqual([])
+  })
+
+  it('removes and restores a connection', () => {
+    const b = { ...board([note('a'), note('b')]), edges: [edge] }
+    const removed = applyOp(b, { type: 'removeEdge', edge })
+    expect(removed.edges).toEqual([])
+    expect(revertOp(removed, { type: 'removeEdge', edge }).edges).toEqual([edge])
+  })
+
+  it('updates a field and puts the old value back', () => {
+    const b = { ...board([note('a'), note('b')]), edges: [edge] }
+    const op = { type: 'updateEdge' as const, id: 'e1', field: 'label', from: undefined, to: 'зависит от' }
+    const labelled = applyOp(b, op)
+    expect(labelled.edges?.[0].label).toBe('зависит от')
+    expect(revertOp(labelled, op).edges?.[0].label).toBeUndefined()
+  })
+
+  it('handles a board saved before connections existed', () => {
+    // Older board files have no `edges` key at all; applying an op must not
+    // throw on the undefined.
+    const legacy = board([note('a')])
+    delete (legacy as { edges?: unknown }).edges
+    expect(applyOp(legacy, { type: 'addEdge', edge }).edges).toEqual([edge])
+  })
+})

@@ -202,3 +202,42 @@
   border: calc(1.5px / var(--zoom, 1)) solid var(--signal);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
+/* ---------- connection ports ---------- */
+
+/* Four grab targets on the edges. The target is comfortably large; the dot
+   drawn inside it is small, the way node editors do it — you aim at a dot
+   but you hit a much bigger area. */
+.port {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(18px / var(--zoom, 1));
+  height: calc(18px / var(--zoom, 1));
+  opacity: 0;
+  cursor: crosshair;
+  z-index: 4;
+  transition: opacity 140ms ease;
+}
+
+.shell:hover .port,
+.shell.selected .port { opacity: 1; }
+
+.portDot {
+  width: calc(9px / var(--zoom, 1));
+  height: calc(9px / var(--zoom, 1));
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: calc(2px / var(--zoom, 1)) solid var(--signal);
+  transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1.1), background-color 120ms ease;
+}
+
+.port:hover .portDot {
+  transform: scale(1.35);
+  background: var(--signal);
+}
+
+.port_top    { top: calc(-9px / var(--zoom, 1)); left: 50%; margin-left: calc(-9px / var(--zoom, 1)); }
+.port_bottom { bottom: calc(-9px / var(--zoom, 1)); left: 50%; margin-left: calc(-9px / var(--zoom, 1)); }
+.port_left   { left: calc(-9px / var(--zoom, 1)); top: 50%; margin-top: calc(-9px / var(--zoom, 1)); }
+.port_right  { right: calc(-9px / var(--zoom, 1)); top: 50%; margin-top: calc(-9px / var(--zoom, 1)); }
