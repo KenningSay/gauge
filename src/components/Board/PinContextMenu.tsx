@@ -15,8 +15,13 @@ import {
   Sparkles,
   ChevronRight,
   Pipette,
+  Square,
+  Circle,
+  Diamond,
+  Triangle,
+  Image as ImageIcon,
 } from 'lucide-react'
-import type { CustomAction, NotePin as NotePinT, NoteTexture, Pin } from '../../api/board'
+import type { CustomAction, NotePin as NotePinT, NoteTexture, Pin, ShapeKind } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import { readableOn } from './pins/NotePin'
@@ -36,9 +41,12 @@ interface Props {
   onCreateNote: (world: { x: number; y: number }) => void
   onCreateLink: (world: { x: number; y: number }) => void
   onCreateVaultNote: (world: { x: number; y: number }) => void
+  onCreateShape: (world: { x: number; y: number }, kind: ShapeKind) => void
+  // Opens the vault picker to put a picture inside an existing shape.
+  onPickShapeImage: (pinId: string) => void
 }
 
-export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, onCreateVaultNote }: Props) {
+export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, onCreateVaultNote, onCreateShape, onPickShapeImage }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState(target.screen)
 
@@ -81,7 +89,7 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, on
       onContextMenu={(e) => e.preventDefault()}
     >
       {target.kind === 'pin' ? (
-        <PinMenuItems pin={target.pin} onClose={onClose} />
+        <PinMenuItems pin={target.pin} onClose={onClose} onPickShapeImage={onPickShapeImage} />
       ) : (
         <EmptyMenuItems
           onClose={onClose}
@@ -91,6 +99,10 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, on
           }}
           onCreateVaultNote={() => {
             onCreateVaultNote(target.world)
+            onClose()
+          }}
+          onCreateShape={(kind) => {
+            onCreateShape(target.world, kind)
             onClose()
           }}
           onCreateLink={() => {
@@ -103,7 +115,7 @@ export function PinContextMenu({ target, onClose, onCreateNote, onCreateLink, on
   )
 }
 
-function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
+function PinMenuItems({ pin, onClose, onPickShapeImage }: { pin: Pin; onClose: () => void; onPickShapeImage: (pinId: string) => void }) {
   const store = useBoardStore
   const promptDialog = useUiStore((s) => s.promptDialog)
   const pushToast = useUiStore((s) => s.pushToast)
@@ -182,6 +194,8 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
     // Notes and links have no backing file — the menu item is hidden for
     // them, but the union still has to be narrowed for the compiler.
     if (pin.type === 'link' || pin.type === 'note') return
+    // A shape may or may not carry a picture; the others always do.
+    if (!pin.assetPath || !pin.fileName) return
     void downloadEntry(pin.assetPath, pin.fileName)
     onClose()
   }
@@ -218,6 +232,29 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
           Открыть в новой вкладке
         </MenuItem>
       )}
+      {pin.type === 'shape' && (
+        <MenuItem
+          icon={<ImageIcon size={13} />}
+          onClick={() => {
+            onPickShapeImage(pin.id)
+            onClose()
+          }}
+        >
+          {pin.assetPath ? 'Заменить картинку…' : 'Вставить картинку…'}
+        </MenuItem>
+      )}
+      {pin.type === 'shape' && pin.assetPath && (
+        <MenuItem
+          icon={<Unlink size={13} />}
+          onClick={() => {
+            store.getState().updatePin(pin.id, 'assetPath', undefined)
+            store.getState().updatePin(pin.id, 'fileName', undefined)
+            onClose()
+          }}
+        >
+          Убрать картинку
+        </MenuItem>
+      )}
       {pin.type === 'note' && !pin.sourcePath && (
         <MenuItem icon={<FileText size={13} />} onClick={handleSaveAsMd}>
           Сохранить в хранилище (.md)…
@@ -228,7 +265,7 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
           Отвязать от файла
         </MenuItem>
       )}
-      {pin.type !== 'link' && pin.type !== 'note' && (
+      {pin.type !== 'link' && pin.type !== 'note' && pin.assetPath && (
         <MenuItem icon={<Download size={13} />} onClick={handleDownload}>Скачать</MenuItem>
       )}
       <div className={styles.divider} />
@@ -241,21 +278,48 @@ function PinMenuItems({ pin, onClose }: { pin: Pin; onClose: () => void }) {
   )
 }
 
+const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
+  { id: 'rect', label: 'Прямоугольник', icon: <Square size={13} /> },
+  { id: 'ellipse', label: 'Овал', icon: <Circle size={13} /> },
+  { id: 'diamond', label: 'Ромб', icon: <Diamond size={13} /> },
+  { id: 'triangle', label: 'Треугольник', icon: <Triangle size={13} /> },
+]
+
 function EmptyMenuItems({
   onCreateNote,
   onCreateLink,
   onCreateVaultNote,
+  onCreateShape,
 }: {
   onClose: () => void
   onCreateNote: () => void
   onCreateLink: () => void
   onCreateVaultNote: () => void
+  onCreateShape: (kind: ShapeKind) => void
 }) {
+  const [shapesOpen, setShapesOpen] = useState(false)
   return (
     <>
       <MenuItem icon={<StickyNote size={13} />} onClick={onCreateNote}>Создать заметку здесь</MenuItem>
       <MenuItem icon={<FileText size={13} />} onClick={onCreateVaultNote}>Заметка из хранилища (.md)…</MenuItem>
       <MenuItem icon={<LinkIcon size={13} />} onClick={onCreateLink}>Создать ссылку здесь</MenuItem>
+
+      <div className={styles.submenuWrap}>
+        <button className={styles.item} onClick={() => setShapesOpen((v) => !v)} aria-expanded={shapesOpen}>
+          <span className={styles.itemIcon}><Square size={13} /></span>
+          Фигура
+          <span className={styles.submenuChevron}><ChevronRight size={13} /></span>
+        </button>
+        {shapesOpen && (
+          <div className={styles.submenu}>
+            {SHAPES.map((s) => (
+              <MenuItem key={s.id} icon={s.icon} onClick={() => onCreateShape(s.id)}>
+                {s.label}
+              </MenuItem>
+            ))}
+          </div>
+        )}
+      </div>
     </>
   )
 }

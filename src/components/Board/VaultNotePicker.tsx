@@ -17,9 +17,13 @@ import styles from './VaultNotePicker.module.css'
 interface Props {
   onPick: (entry: FileEntry) => void
   onCancel: () => void
+  // Which files to offer. Defaults to markdown (the linked-note case); a
+  // shape looking for a picture asks for images instead.
+  kind?: 'markdown' | 'image'
+  title?: string
 }
 
-export function VaultNotePicker({ onPick, onCancel }: Props) {
+export function VaultNotePicker({ onPick, onCancel, kind = 'markdown', title }: Props) {
   const [query, setQuery] = useState('')
   const [cursor, setCursor] = useState(0)
   const index = useFileStore((s) => s.searchIndex)
@@ -37,14 +41,15 @@ export function VaultNotePicker({ onPick, onCancel }: Props) {
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const md = (index ?? []).filter((e) => !e.isDir && /\.(md|markdown|txt)$/i.test(e.name))
+    const pattern = kind === 'image' ? /\.(png|jpe?g|gif|webp|svg|avif)$/i : /\.(md|markdown|txt)$/i
+    const md = (index ?? []).filter((e) => !e.isDir && pattern.test(e.name))
     const hits = q ? md.filter((e) => e.path.toLowerCase().includes(q)) : md
     // Newest first with no query: the file you want is usually one you
     // touched recently. Alphabetical would bury it under a decade of notes.
     return hits
       .sort((a, b) => (q ? a.path.length - b.path.length : (b.modified ?? '').localeCompare(a.modified ?? '')))
       .slice(0, 80)
-  }, [index, query])
+  }, [index, query, kind])
 
   useEffect(() => {
     setCursor(0)
@@ -76,7 +81,7 @@ export function VaultNotePicker({ onPick, onCancel }: Props) {
             ref={inputRef}
             className={styles.input}
             value={query}
-            placeholder="Найти заметку в хранилище…"
+            placeholder={title ?? (kind === 'image' ? 'Найти картинку в хранилище…' : 'Найти заметку в хранилище…')}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKey}
           />
