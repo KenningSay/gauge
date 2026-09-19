@@ -12,6 +12,10 @@ Built and actually run against a raw nginx `dav` module; Nextcloud/ownCloud/Syno
 
 🇷🇺 **По-русски:** быстрый файловый менеджер для своего WebDAV-сервера (Nextcloud, ownCloud, nginx `dav`) — работает прямо из браузера, без стороннего бэкенда и без чужого аккаунта поверх. Логин/пароль вводятся только на экране входа и никогда никуда не пишутся. Ставится в один `docker run`, см. [Quick start](#quick-start-docker).
 
+![A Gauge board: kanban columns, wired notes, a code note and rendered math on an infinite canvas](docs/screenshots/board.png)
+
+> **Note on language:** Gauge's interface is Russian-only — there is no i18n layer yet. Everything in this README describes it accurately, but the buttons in the app say «Файлы», «Доски» and so on. If you want it in another language, open an issue; the strings are all in one place per component and a translation pass is a contained piece of work.
+
 ---
 
 ## Contents
@@ -23,6 +27,7 @@ Built and actually run against a raw nginx `dav` module; Nextcloud/ownCloud/Syno
 - [Pointing it at your WebDAV server](#pointing-it-at-your-webdav-server)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Supported file types](#supported-file-types)
+- [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Development](#development)
 - [Security notes](#security-notes)
@@ -149,6 +154,23 @@ Inside the viewer: `←`/`→` to move between files, `Esc` to close. Inside a r
 | Text / code (editable) | `md` `txt` `json` `js` `ts` `tsx` `css` `html` `xml` `yml` `toml` `ini` `sh` `py` `log` `csv` … and anything else the server reports as `text/*` |
 
 Markdown files get a rendered preview by default, with a toggle to edit the raw source. Anything else falls back to a plain download button — nothing is ever silently unsupported.
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![File list](docs/screenshots/files.png) | ![Command palette searching the whole share](docs/screenshots/search.png) |
+| **Files.** Sortable columns you can resize, a folder tree, list or grid, and a virtualized table that stays smooth in a folder with thousands of entries. | **Search.** `Ctrl K` searches the entire share, not just the folder you are standing in — results carry the path they were found at. |
+
+![Dark theme](docs/screenshots/dark.png)
+
+Both themes ship; the toggle is in the toolbar and the choice is remembered.
+
+### A 35-second tour
+
+<a href="docs/demo.mp4"><img src="docs/demo-poster.jpg" width="260" alt="Play a 35-second video tour of Gauge"></a>
+
+Click through for the video ([`docs/demo.mp4`](docs/demo.mp4)) — it's shot vertically, for phones.
 
 ## How it works
 
