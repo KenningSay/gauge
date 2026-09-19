@@ -77,7 +77,7 @@ The chat sees the board — every pin's text plus its position and size — so "
 
 Two ways to reach DeepSeek:
 
-- **Server-side proxy (recommended, and the default).** Set `DEEPSEEK_API_KEY` on the container; nginx injects the `Authorization` header at `/ai/`. The key never reaches the browser. **Protect that endpoint** — it spends your balance and the shipped template doesn't authenticate it. Gauge forwards the browser's WebDAV credential on every `/ai/` request for exactly this reason, so if the same server also hosts your WebDAV share, put its `auth_basic` on `/ai/` too and strangers get a 401.
+- **Server-side proxy (recommended, and the default).** Set `DEEPSEEK_API_KEY` on the container — `-e DEEPSEEK_API_KEY=sk-...` on `docker run`, or uncomment the line in `docker-compose.yml` and keep the real value in a `.env` file beside it. nginx injects the `Authorization` header at `/ai/`, so the key never reaches the browser: it is absent from the bundle, from the network tab and from storage, and because it is read at container start it is never baked into the image either. **Protect that endpoint** — it spends your balance and the shipped template doesn't authenticate it. Gauge forwards the browser's WebDAV credential on every `/ai/` request for exactly this reason, so if the same server also hosts your WebDAV share, put its `auth_basic` on `/ai/` too and strangers get a 401.
 - **Direct endpoint (fallback).** Put `https://api.deepseek.com` in the panel's settings and your key alongside it. The key is kept in `sessionStorage` (gone when the tab closes) and never written to disk — but **this requires editing the CSP**: `connect-src 'self'` in `nginx.conf.template` blocks the request before CORS is even considered, so add `https://api.deepseek.com` there.
 
 Board data lives under `.gauge/` at the root of your WebDAV share (`boards-index/` for the board files, histories and chats; `boards/<id>/assets/` for uploaded pin files). Delete that folder and boards are gone — nothing else in the app depends on it. Don't create a `.gauge` folder by hand.
@@ -102,6 +102,8 @@ docker compose up -d
 ```
 
 Open `http://localhost:8080`, log in with your WebDAV username and password — that's the whole setup.
+
+Want the boards' AI panel too? Pass your own DeepSeek key as `DEEPSEEK_API_KEY` — `-e DEEPSEEK_API_KEY=sk-...` on `docker run`, or the commented line in `docker-compose.yml`. It's entirely optional: everything else works without it, and the key stays server-side either way. See [AI (DeepSeek, optional)](#ai-deepseek-optional).
 
 **Put this behind HTTPS before exposing it to anything but `localhost`.** The container itself serves plain HTTP — your WebDAV password goes over Basic Auth, which is only as safe as the connection it travels on. Terminate TLS with whatever you already use in front of self-hosted containers (Caddy, Traefik, nginx-proxy, a cloud load balancer, …); this image doesn't bundle a certificate itself, the same way most single-purpose containers don't.
 

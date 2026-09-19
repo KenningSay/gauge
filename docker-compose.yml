@@ -8,4 +8,12 @@ services:
       # nginx.conf.template for why). Basic Auth creds are entered in
       # Gauge's own login screen at runtime, never here.
       WEBDAV_TARGET: "https://your-webdav-server.example.com/dav/"
+
+      # OPTIONAL — the boards' AI panel. Put your own DeepSeek key here and
+      # nginx attaches it server-side, so it never reaches the browser.
+      # Leave it out and everything except the AI panel works normally.
+      #
+      # Don't commit a real key: keep it in a .env file next to this one
+      # (DEEPSEEK_API_KEY=sk-...) and Compose will substitute it below.
+      # DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
     restart: unless-stopped
