@@ -87,6 +87,18 @@ type Interaction =
       currentWorld: { x: number; y: number }
     }
   | {
+      // Drawing a shape by dragging its box out, the way every vector
+      // editor does it. The old flow dropped a fixed 260x180 shape in the
+      // middle of the screen and left you to resize it.
+      kind: 'draw'
+      pointerId: number
+      shape: ShapeKind
+      startWorld: { x: number; y: number }
+      currentWorld: { x: number; y: number }
+      // Shift constrains to a square/circle while held.
+      constrain: boolean
+    }
+  | {
       kind: 'wire'
       pointerId: number
       fromPinId: string
@@ -206,6 +218,12 @@ export function BoardCanvas() {
 
   const [guides, setGuides] = useState<Guide[]>([])
 
+  // The shape tool, once armed from the toolbar: the next drag on empty
+  // canvas draws this shape. Stays armed for one shape, like the default
+  // in Illustrator — drawing five boxes in a row is rarer than drawing one
+  // and going back to moving things.
+  const [armedShape, setArmedShape] = useState<ShapeKind | null>(null)
+
   // Guides for the current drag/resize, plus the offset that lands the
   // moving box on them. Memoised on the interaction so it is computed once
   // per pointer event rather than once per pin per render.
@@ -298,6 +316,23 @@ export function BoardCanvas() {
 
   const onContainerPointerDown = useCallback(
     (e: React.PointerEvent) => {
+      // An armed shape tool takes precedence over everything else the
+      // background does.
+      if (armedShape && e.button === 0) {
+        e.preventDefault()
+        const rect = containerRef.current!.getBoundingClientRect()
+        const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+        capturePointer(containerRef.current, e.pointerId)
+        setInteraction({
+          kind: 'draw',
+          pointerId: e.pointerId,
+          shape: armedShape,
+          startWorld: world,
+          currentWorld: world,
+          constrain: e.shiftKey,
+        })
+        return
+      }
       // Alt is the marquee-selection modifier; a bare click on empty space
       // clears selection and starts nothing else.
       if (e.altKey && e.button === 0) {
@@ -318,7 +353,7 @@ export function BoardCanvas() {
         clearSelection()
       }
     },
-    [clearSelection, screenToWorld],
+    [armedShape, clearSelection, screenToWorld],
   )
 
   const beginPinDrag = useCallback(
@@ -356,7 +391,10 @@ export function BoardCanvas() {
       const withFrameContents = new Set(activeIds)
       for (const id of activeIds) {
         const p = pins.find((x) => x.id === id)
-        if (p?.type !== 'frame') continue
+        // A frame always carries its contents; a shape only when it has
+        // been told to act as a container.
+        const carries = p?.type === 'frame' || (p?.type === 'shape' && p.holdsContents)
+        if (!p || !carries) continue
         for (const inner of pinsInFrame(p, pins)) withFrameContents.add(inner.id)
       }
       activeIds = Array.from(withFrameContents)
@@ -535,6 +573,14 @@ export function BoardCanvas() {
         setInteraction((cur) =>
           cur && cur.kind === 'marquee' ? { ...cur, currentWorld: world } : cur,
         )
+      } else if (interaction.kind === 'draw') {
+        const rect = containerRef.current!.getBoundingClientRect()
+        const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+        setInteraction((cur) =>
+          cur && cur.kind === 'draw'
+            ? { ...cur, currentWorld: world, constrain: e.shiftKey }
+            : cur,
+        )
       } else if (interaction.kind === 'wire') {
         const rect = containerRef.current!.getBoundingClientRect()
         const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
@@ -616,6 +662,20 @@ export function BoardCanvas() {
           // A pin grown over its neighbours pushes them like a moved one.
           pushNeighbours([id])
         }
+      } else if (interaction.kind === 'draw') {
+        const box = drawnBox(interaction)
+        // A click without a drag is not a shape. Anything smaller than the
+        // resize floor would be born unusable.
+        if (box.w >= MIN_W / 2 && box.h >= MIN_H / 2) {
+          const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
+          const pin = makeShapePin({ x: box.x, y: box.y, z }, interaction.shape)
+          pin.w = Math.max(MIN_W, Math.round(box.w))
+          pin.h = Math.max(MIN_H, Math.round(box.h))
+          addPin(pin)
+          useBoardStore.getState().selectOnly(pin.id)
+        }
+        // One shape per arming: see the note where armedShape is declared.
+        setArmedShape(null)
       } else if (interaction.kind === 'marquee') {
         const { startWorld, currentWorld } = interaction
         const box: Rect = {
@@ -672,6 +732,7 @@ export function BoardCanvas() {
     settings?.snapStep,
     groupIntoFrame,
     ungroupFrame,
+    armedShape,
   ])
 
   // --- keyboard shortcuts (scoped to when the board canvas is mounted) ---
@@ -716,6 +777,11 @@ export function BoardCanvas() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size > 0) {
         e.preventDefault()
         useBoardStore.getState().removePins(Array.from(selected))
+        return
+      }
+      if (e.key === 'Escape' && armedShape) {
+        e.preventDefault()
+        setArmedShape(null)
         return
       }
       if (e.key === 'Escape') {
@@ -1362,6 +1428,7 @@ export function BoardCanvas() {
       ref={containerRef}
       className={styles.canvas}
       style={gridStyle}
+      data-armed={armedShape ? 'true' : undefined}
       onPointerDown={onContainerPointerDown}
       // Focusable so the board can take focus back when a pin's editor
       // closes. Without it focus lands on <body>, which works by accident
@@ -1394,6 +1461,19 @@ export function BoardCanvas() {
           ['--zoom' as string]: viewport.zoom,
         }}
       >
+        {/* The shape being drawn, previewed as an outline. Drawn in the
+            world layer so it tracks the canvas exactly. */}
+        {interaction?.kind === 'draw' && (() => {
+          const box = drawnBox(interaction)
+          if (box.w < 2 && box.h < 2) return null
+          return (
+            <div
+              className={styles.drawPreview}
+              style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+            />
+          )
+        })()}
+
         {/* Alignment guides. Drawn in world coordinates inside the zoomed
             layer so they sit exactly on the edges they describe, with the
             stroke divided by the zoom so the line stays a hairline. */}
@@ -1518,7 +1598,11 @@ export function BoardCanvas() {
         onCreateNote={() => createNoteAt(viewportCenterWorld(viewport, containerSize))}
         onCreateVaultNote={() => createVaultNoteAt(viewportCenterWorld(viewport, containerSize))}
         onCreateLink={() => void createLinkAt(viewportCenterWorld(viewport, containerSize))}
-        onCreateShape={(kind) => createShapeAt(viewportCenterWorld(viewport, containerSize), kind)}
+        // Arms the tool rather than dropping a shape: the next drag on the
+        // canvas draws it at the size you want, which is what "как в
+        // Illustrator" means. Picking the same shape again disarms.
+        onCreateShape={(kind) => setArmedShape((cur) => (cur === kind ? null : kind))}
+        armedShape={armedShape}
         onCreateFrame={() => {
           if (selected.size > 0) {
             groupIntoFrame(Array.from(selected))
@@ -1587,6 +1671,27 @@ function viewportCenterWorld(
   return {
     x: viewport.x + size.w / 2 / viewport.zoom,
     y: viewport.y + size.h / 2 / viewport.zoom,
+  }
+}
+
+// The box being dragged out by the shape tool, normalised so dragging up
+// or left works as well as down and right. Shift makes it square, taking
+// the longer side — the behaviour of every vector editor's constrain.
+function drawnBox(i: Extract<Interaction, { kind: 'draw' }>): Rect {
+  const dx = i.currentWorld.x - i.startWorld.x
+  const dy = i.currentWorld.y - i.startWorld.y
+  let w = Math.abs(dx)
+  let h = Math.abs(dy)
+  if (i.constrain) {
+    const side = Math.max(w, h)
+    w = side
+    h = side
+  }
+  return {
+    x: dx < 0 ? i.startWorld.x - w : i.startWorld.x,
+    y: dy < 0 ? i.startWorld.y - h : i.startWorld.y,
+    w,
+    h,
   }
 }
 

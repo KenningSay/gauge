@@ -35,7 +35,11 @@ interface Props {
   onCreateNote: () => void
   onCreateVaultNote: () => void
   onCreateLink: () => void
+  // Arms the shape tool; the canvas draws the shape on the next drag.
   onCreateShape: (kind: ShapeKind) => void
+  // Which shape is armed right now, if any — the button stays lit so it
+  // is obvious the canvas is in a drawing mode.
+  armedShape?: ShapeKind | null
   // Wraps the selection in a frame, or drops an empty one when nothing is
   // selected.
   onCreateFrame: () => void
@@ -50,7 +54,7 @@ const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
   { id: 'triangle', label: 'Треугольник', icon: <Triangle size={16} /> },
 ]
 
-export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onCreateFrame, onFit, onCreateVaultFile, onExport, exporting }: Props) {
+export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, armedShape, onCreateFrame, onFit, onCreateVaultFile, onExport, exporting }: Props) {
 
   // A phone shows the side panel full-screen; the toolbar would float
   // across its bottom edge, over the chat input or the last row of
@@ -80,9 +84,10 @@ export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCrea
           {SHAPES.map((s) => (
             <button
               key={s.id}
-              className={styles.shapeBtn}
-              title={s.label}
+              className={`${styles.shapeBtn} ${armedShape === s.id ? styles.shapeBtnArmed : ''}`}
+              title={`${s.label} — затем растяни на холсте`}
               aria-label={s.label}
+              aria-pressed={armedShape === s.id}
               onClick={() => {
                 onCreateShape(s.id)
                 setShapesOpen(false)

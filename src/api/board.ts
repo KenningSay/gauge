@@ -437,6 +437,11 @@ export interface ShapePin extends PinBase {
   // pins reference theirs.
   assetPath?: string
   fileName?: string
+  // Makes the shape carry whatever sits inside it, like a frame does.
+  // Off by default and opt-in per shape: a board is full of shapes drawn
+  // *behind* things for emphasis, and having every one of them drag the
+  // cards on top of it would be a nasty surprise.
+  holdsContents?: boolean
 }
 
 // A titled area that owns whatever sits inside it. Membership is

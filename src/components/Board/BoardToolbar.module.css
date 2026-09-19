@@ -192,3 +192,11 @@
 .standDown .bar {
   pointer-events: none;
 }
+
+/* An armed shape tool: the canvas is in drawing mode until you draw or
+   press Escape, and the only thing that can say so is this button. */
+.shapeBtnArmed {
+  background: var(--bg-selected);
+  color: var(--signal);
+  box-shadow: inset 0 0 0 1px var(--signal-dim);
+}

@@ -58,3 +58,23 @@
      decoration in its own right. */
   filter: drop-shadow(0 0 calc(2px / var(--zoom, 1)) var(--signal-dim));
 }
+
+/* ---------- shape tool ---------- */
+
+/* Crosshair while a shape is armed: the pointer is the only warning that
+   the next drag draws instead of selecting. */
+.canvas[data-armed='true'],
+.canvas[data-armed='true'] * {
+  cursor: crosshair;
+}
+
+/* The box being dragged out. Dashed outline, no fill — a filled preview
+   hides whatever you are drawing around. */
+.drawPreview {
+  position: absolute;
+  pointer-events: none;
+  z-index: 8000;
+  border: calc(1.5px / var(--zoom, 1)) dashed var(--signal);
+  border-radius: calc(4px / var(--zoom, 1));
+  background: rgba(45, 212, 191, 0.07);
+}

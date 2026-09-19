@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  Boxes,
   LayoutGrid,
   Ungroup,
   Scaling,
@@ -244,7 +245,9 @@ function PinMenuItems({
   // cards are never quite level with each other, and no amount of care
   // with a mouse makes them so — that was the ask on the board.
   const handleTidyFrame = () => {
-    if (pin.type !== 'frame') return
+    // Frames always; shapes only once they have been made containers.
+    const isContainer = pin.type === 'frame' || (pin.type === 'shape' && pin.holdsContents)
+    if (!isContainer) return
     const st = store.getState()
     const all = st.board?.pins ?? []
     const contents = pinsInFrame(pin, all)
@@ -253,7 +256,8 @@ function PinMenuItems({
       onClose()
       return
     }
-    const { moves, frame } = layoutInFrame(pin, contents, pin.padding ?? FRAME_DEFAULT_PADDING)
+    const padding = pin.type === 'frame' ? (pin.padding ?? FRAME_DEFAULT_PADDING) : FRAME_DEFAULT_PADDING
+    const { moves, frame } = layoutInFrame(pin, contents, padding)
     if (frame.h !== pin.h) st.resizePin(pin.id, { w: frame.w, h: frame.h })
     if (moves.length) st.movePins(moves)
     useUiStore.getState().pushToast(`Разложено: ${contents.length}`)
@@ -429,6 +433,22 @@ function PinMenuItems({
       {pin.type === 'note' && (
         <MenuItem icon={<Scaling size={13} />} onClick={handleFitHeight}>
           Подогнать высоту под текст
+        </MenuItem>
+      )}
+      {pin.type === 'shape' && (
+        <MenuItem
+          icon={<Boxes size={13} />}
+          onClick={() => {
+            store.getState().updatePin(pin.id, 'holdsContents', !pin.holdsContents)
+            onClose()
+          }}
+        >
+          {pin.holdsContents ? 'Не держать содержимое' : 'Держать содержимое в себе'}
+        </MenuItem>
+      )}
+      {pin.type === 'shape' && pin.holdsContents && (
+        <MenuItem icon={<LayoutGrid size={13} />} onClick={handleTidyFrame}>
+          Разложить содержимое
         </MenuItem>
       )}
       {pin.type === 'frame' && (
