@@ -540,6 +540,22 @@ export function BoardCanvas() {
         return
       }
 
+      // Ctrl+Enter strikes the selection through as done. A bare letter
+      // would have been shorter, but plain printable keys are taken: they
+      // open the editor and land in the text (see "start typing" below).
+      if (mod && e.key === 'Enter' && selected.size > 0) {
+        e.preventDefault()
+        const ids = Array.from(selected)
+        const st = useBoardStore.getState()
+        // One card decides for the batch: if anything in the selection is
+        // still open, the whole selection gets struck; if they are all
+        // struck already, the shortcut un-strikes them. Toggling each card
+        // on its own would just shuffle a mixed selection around.
+        const anyOpen = ids.some((id) => !pins.find((p) => p.id === id)?.done)
+        for (const id of ids) st.updatePin(id, 'done', anyOpen)
+        return
+      }
+
       // Enter edits the selected pin, Escape leaves — the convention every
       // board tool shares. Only with exactly one pin selected, since there
       // is no sensible "edit five pins".

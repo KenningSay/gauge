@@ -95,6 +95,11 @@ interface PinBase {
   // lines are drawn between pins (that would turn a busy board into
   // spaghetti), so this data is the only link.
   sourceIds?: string[]
+  // Struck through: the card is done//cancelled but kept for the record.
+  // Lives on the base rather than on the note, because a picture of a
+  // finished thing or a shape marking a dropped branch wants it just as
+  // much as a text card does.
+  done?: boolean
 }
 
 // How a note is dressed. `texture` is the paper's surface (ruled, grid…);

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  CheckCircle2,
   ArrowUpToLine,
   ArrowDownToLine,
   ArrowUp,
@@ -215,6 +216,19 @@ function PinMenuItems({
     onClose()
   }
 
+  // Strike through, the soft alternative to Удалить: the card stays
+  // readable and on the board, just visibly finished. Applies to the whole
+  // selection when this pin is part of one, because marking off a batch of
+  // finished cards one context menu at a time is nobody's idea of a good
+  // evening.
+  const handleToggleDone = () => {
+    const st = store.getState()
+    const targets = st.selected.has(pin.id) ? Array.from(st.selected) : [pin.id]
+    const next = !pin.done
+    for (const id of targets) st.updatePin(id, 'done', next)
+    onClose()
+  }
+
   // Turns a board-owned note into a real vault file: writes the .md, then
   // links the pin to it. After this the note is editable from Obsidian, the
   // file manager, or any other WebDAV client — which is the whole reason to
@@ -356,6 +370,9 @@ function PinMenuItems({
       <div className={styles.divider} />
       <AiSubmenu pin={pin} onClose={onClose} {...submenu('ai')} />
       <div className={styles.divider} />
+      <MenuItem icon={<CheckCircle2 size={13} />} onClick={handleToggleDone}>
+        {pin.done ? 'Убрать перечёркивание' : 'Перечеркнуть — сделано'}
+      </MenuItem>
       <MenuItem icon={<Trash2 size={13} />} danger onClick={handleDelete}>
         Удалить
       </MenuItem>

@@ -182,7 +182,7 @@ export function PinShell({
         {/* Body: the actual content. When not activated, a transparent
             overlay intercepts pointer events so dragging works on top of
             otherwise-interactive elements (iframe/video/textarea). */}
-        <div className={styles.body}>
+        <div className={`${styles.body} ${pin.done ? styles.bodyDone : ''}`}>
           {children}
           {!activated && (
             <div
@@ -192,6 +192,22 @@ export function PinShell({
             />
           )}
         </div>
+
+        {/* The strike itself sits OUTSIDE .body, which is overflow:hidden
+            and would clip the line's ends at the corners. Drawn as an SVG
+            so the stroke stays one hairline at any zoom instead of
+            thickening with the card, and so it scales to any card shape
+            without the maths a CSS gradient would need. */}
+        {pin.done && (
+          <svg
+            className={styles.doneStrike}
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden
+          >
+            <line x1="0" y1="100" x2="100" y2="0" vectorEffect="non-scaling-stroke" />
+          </svg>
+        )}
 
         {/* Connection ports. Hidden until the pin is hovered or selected —
             four dots on every card at all times would bury the board in
