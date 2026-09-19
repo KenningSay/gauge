@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -58,9 +59,21 @@ const MARKDOWN_COMPONENTS = {
   },
 }
 
+// Bottom-left, just inside the note. The row used to hang at bottom:-12px,
+// i.e. outside the pin, where .root's overflow:hidden cut every chip in
+// half — which is what the chips looked like on screen.
+const DEFAULT_REACTIONS_POS = { x: 0.04, y: 0.97 }
+
+// Pointer travel that turns a click on a chip into a drag of the whole row.
+const REACTION_DRAG_SLOP = 4
+
 export function NotePin({ pin }: { pin: NotePinT }) {
   const { activated, setActivated } = usePinActivation()
   const updatePin = useBoardStore((s) => s.updatePin)
+  const zoom = useBoardStore((s) => s.board?.viewport.zoom ?? 1)
+  // True between "this pointer travelled far enough to be a drag" and the
+  // click that follows it, so that click can be swallowed.
+  const draggedRef = useRef(false)
   const [draft, setDraft] = useState(pin.text)
   const draftRef = useRef(draft)
   draftRef.current = draft
@@ -150,6 +163,49 @@ export function NotePin({ pin }: { pin: NotePinT }) {
     return () => commitRef.current()
   }, [activated])
 
+  // Drags the whole reaction row by any one of its chips: no extra handle
+  // to find, and a plain click still counts up because the drag only
+  // starts after REACTION_DRAG_SLOP pixels of travel.
+  //
+  // Position is committed to the store once, on release — a write per
+  // pointermove would be an undo step and an autosave wake-up per pixel.
+  const beginReactionDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return
+    const row = e.currentTarget.parentElement as HTMLElement | null
+    if (!row) return
+    const startX = e.clientX
+    const startY = e.clientY
+    const from = pin.reactionsPos ?? DEFAULT_REACTIONS_POS
+    let moved = false
+    let next = from
+
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+      if (!moved && Math.hypot(dx, dy) < REACTION_DRAG_SLOP) return
+      moved = true
+      draggedRef.current = true
+      // Screen pixels -> board units -> fraction of this note's own size,
+      // so the row keeps its place when the note is resized or the canvas
+      // is zoomed.
+      next = {
+        x: Math.min(1, Math.max(0, from.x + dx / zoom / pin.w)),
+        y: Math.min(1, Math.max(0, from.y + dy / zoom / pin.h)),
+      }
+      row.style.left = `${next.x * 100}%`
+      row.style.top = `${next.y * 100}%`
+    }
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      if (moved) updatePin(pin.id, 'reactionsPos', next)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
   const style = pin.style ?? 'sticky'
   const isHud = HUD_STYLES.has(style)
   // A heads-up panel set in a humanist sans looks like a mistake, so the
@@ -238,7 +294,13 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         </div>
       )}
       {pin.reactions && pin.reactions.length > 0 && (
-        <div className={styles.reactions}>
+        <div
+          className={styles.reactions}
+          style={{
+            left: `${(pin.reactionsPos?.x ?? DEFAULT_REACTIONS_POS.x) * 100}%`,
+            top: `${(pin.reactionsPos?.y ?? DEFAULT_REACTIONS_POS.y) * 100}%`,
+          }}
+        >
           {pin.reactions.map((r) => (
             <button
               key={r.emoji}
@@ -247,10 +309,19 @@ export function NotePin({ pin }: { pin: NotePinT }) {
               title={`${r.emoji} ×${r.count} — клик добавляет, Shift+клик убирает, правый клик снимает совсем`}
               // Must not reach the pin underneath, or every count bumped
               // is also a note dragged a pixel and an editor opened.
-              onPointerDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                beginReactionDrag(e)
+              }}
               onDoubleClick={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation()
+                // A click that was really a drag must not also bump the
+                // count — the pointerup that ends a drag still fires one.
+                if (draggedRef.current) {
+                  draggedRef.current = false
+                  return
+                }
                 // Shift as well as Alt: on Linux the window manager takes
                 // Alt+click for itself (it drags the window), so a chip
                 // that only listened for Alt could be counted up and never

@@ -1839,9 +1839,15 @@
 
 .reactions {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: -12px;
+  /* left/top come from the pin's own reactionsPos (a fraction of its size),
+     set inline. The row is anchored by its bottom-left corner so it grows
+     upward and rightward from wherever it was dropped.
+
+     It must stay INSIDE the pin: .root is overflow:hidden, and the old
+     bottom:-12px put the chips half outside it, where they were clipped
+     through the middle. */
+  transform: translateY(-100%);
+  max-width: 92%;
   z-index: 3;
   display: flex;
   flex-wrap: wrap;
@@ -1870,6 +1876,11 @@
 }
 
 .reaction:hover { transform: translateY(-2px); }
+
+/* Grab cursor: the chips are draggable as a row, and nothing else on the
+   note says so. */
+.reaction { cursor: grab; }
+.reaction:active { cursor: grabbing; }
 
 .reactionCount {
   font-size: 16px;

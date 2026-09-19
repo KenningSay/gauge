@@ -137,6 +137,35 @@ export function BoardView() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
+  // Coming back to a tab that has been sitting open: ask the server whether
+  // the board moved while we were away, and if so load it. This is the
+  // "edited on the tablet, then sat down at the desktop" case — the stale
+  // desktop tab used to overwrite the tablet's work at the first keystroke,
+  // because nothing ever told it the file had changed.
+  //
+  // Skipped entirely when this tab has unsaved edits; syncIfServerChanged
+  // enforces that itself.
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState !== 'visible') return
+      void useBoardStore
+        .getState()
+        .syncIfServerChanged()
+        .then((changed) => {
+          if (changed) pushToast('Доска обновлена: есть правки с другого устройства')
+        })
+        .catch(() => {
+          // A failed check is not worth interrupting anyone over.
+        })
+    }
+    document.addEventListener('visibilitychange', check)
+    window.addEventListener('focus', check)
+    return () => {
+      document.removeEventListener('visibilitychange', check)
+      window.removeEventListener('focus', check)
+    }
+  }, [pushToast])
+
   useEffect(() => {
     if (!cachedIndex) void loadIndex()
   }, [loadIndex])

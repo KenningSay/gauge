@@ -351,6 +351,11 @@ export interface NotePin extends PinBase {
   // Absent on notes that have nothing pinned to them.
   decor?: Decor[]
   reactions?: Reaction[]
+  // Where the reaction row sits, as a fraction of the note's own size
+  // (same convention as Decor.x/y, so it survives a resize). Absent means
+  // the default corner. It used to be pinned outside the bottom edge,
+  // where the note's own overflow:hidden sliced every chip in half.
+  reactionsPos?: { x: number; y: number }
   // Optional override. Left unset, the note picks black or white from the
   // background's luminance, which is right for almost every colour — the
   // field exists for the cases where it isn't.
@@ -672,6 +677,15 @@ export async function loadBoard(id: string): Promise<LoadedBoard | null> {
   // can pass it back to saveBoard and let the server reject a stale write.
   const s = await stat(boardPath(id))
   return { board, etag: s?.etag ?? null }
+}
+
+// The ETag the server currently holds for this board, or null if it is
+// gone. One PROPFIND, no body: cheap enough to ask every time a tab comes
+// back to the foreground, which is how a desktop notices that the tablet
+// has been editing.
+export async function remoteEtag(id: string): Promise<string | null> {
+  const s = await stat(boardPath(id))
+  return s?.etag ?? null
 }
 
 // Saves the board. If `expectedEtag` is passed, the write is conditional:

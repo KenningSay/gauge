@@ -73,6 +73,7 @@ interface BoardState {
   flushSave: () => Promise<void>
   overwriteServer: () => Promise<void>
   restoreFromBackup: (path: string) => Promise<void>
+  syncIfServerChanged: () => Promise<boolean>
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -467,6 +468,32 @@ export const useBoardStore = create<BoardState>((set, get) => {
         if (get().saveState === 'saved') set({ saveState: 'idle' })
       }, 1500)
       useUiStore.getState().pushToast('Локальная версия перезаписала серверную')
+    },
+
+    // Picks up edits made elsewhere when this tab comes back to the
+    // foreground. The scenario it is for: edit on the tablet in the
+    // evening, sit down at the desktop where the board has been open since
+    // morning. Before, that stale tab would autosave its morning state over
+    // the evening's work at the first keystroke.
+    //
+    // Only ever runs when this tab has nothing unsaved — pulling the server
+    // copy over local edits would be the same data loss pointed the other
+    // way. With unsaved edits it stays put and the conflict path handles it.
+    syncIfServerChanged: async () => {
+      const { board, etag, saveState } = get()
+      if (!board) return false
+      if (saveState === 'dirty' || saveState === 'saving' || saveState === 'conflict') return false
+      let remote: string | null
+      try {
+        remote = await boardApi.remoteEtag(board.id)
+      } catch {
+        // Offline or the server blipped: leaving the board as-is is correct.
+        return false
+      }
+      // No etag at all (server not reporting one) is not evidence of change.
+      if (!remote || !etag || remote === etag) return false
+      await get().loadBoard(board.id)
+      return true
     },
 
     restoreFromBackup: async (path) => {
