@@ -361,6 +361,11 @@ export interface NotePin extends PinBase {
   // the default corner. It used to be pinned outside the bottom edge,
   // where the note's own overflow:hidden sliced every chip in half.
   reactionsPos?: { x: number; y: number }
+  // Size of the reaction chips, 1 = default. The 16px floor the rest of
+  // the UI keeps makes a row of chips huge next to a small card, and a
+  // reaction is a margin note, not content — so this one is allowed to go
+  // below it.
+  reactionsScale?: number
   // Optional override. Left unset, the note picks black or white from the
   // background's luminance, which is right for almost every colour — the
   // field exists for the cases where it isn't.

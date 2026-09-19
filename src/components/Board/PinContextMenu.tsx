@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  Scaling,
   CheckCircle2,
   ArrowUpToLine,
   ArrowDownToLine,
@@ -30,7 +31,13 @@ import type { CustomAction, NoteFont, NotePin as NotePinT, NoteStyle, NoteTextur
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import { FONT_BY_ID, HUD_STYLES, NOTE_FONTS, readableOn } from './pins/noteStyles'
-import { bumpReaction, removeReaction, frequentFonts } from '../../utils/textFormat'
+import {
+  bumpReaction,
+  clampReactionScale,
+  removeReaction,
+  stepReactionScale,
+  frequentFonts,
+} from '../../utils/textFormat'
 import { putTextContent } from '../../api/webdav'
 import { useAiStore } from '../../store/useAiStore'
 import { useUiStore } from '../../store/useUiStore'
@@ -211,6 +218,25 @@ function PinMenuItems({
     onClose()
   }
 
+  // Shrink-or-grow to exactly fit the text. The typing-time growth only
+  // ever grows, so this is how a card that was emptied gets its space back.
+  //
+  // Measured off the live element rather than recomputed: the note's real
+  // height depends on the face, the size, the leading and the markdown it
+  // rendered, and the browser has already done all of that.
+  const handleFitHeight = () => {
+    const host = document.querySelector(`[data-pin-id="${pin.id}"]`)
+    // CSS modules hash the class, so match on the substring — and mind the
+    // case, the hashed name keeps it.
+    const body = host?.querySelector('[class*="noteBody"]') as HTMLElement | null
+    if (!body) return
+    const delta = body.scrollHeight - body.clientHeight
+    if (delta !== 0) {
+      store.getState().resizePin(pin.id, { w: pin.w, h: Math.max(48, Math.round(pin.h + delta)) })
+    }
+    onClose()
+  }
+
   const handleDelete = () => {
     store.getState().removePins([pin.id])
     onClose()
@@ -369,6 +395,11 @@ function PinMenuItems({
       )}
       <div className={styles.divider} />
       <AiSubmenu pin={pin} onClose={onClose} {...submenu('ai')} />
+      {pin.type === 'note' && (
+        <MenuItem icon={<Scaling size={13} />} onClick={handleFitHeight}>
+          Подогнать высоту под текст
+        </MenuItem>
+      )}
       <div className={styles.divider} />
       <MenuItem icon={<CheckCircle2 size={13} />} onClick={handleToggleDone}>
         {pin.done ? 'Убрать перечёркивание' : 'Перечеркнуть — сделано'}
@@ -599,6 +630,7 @@ const REACTIONS = [
 function ReactionSubmenu({ pin, open, onToggle }: { pin: NotePinT } & SubmenuControl) {
   const updatePin = useBoardStore((s) => s.updatePin)
   const on = new Map((pin.reactions ?? []).map((r) => [r.emoji, r.count]))
+  const scale = clampReactionScale(pin.reactionsScale ?? 1)
 
   return (
     <div className={styles.submenuWrap}>
@@ -638,6 +670,30 @@ function ReactionSubmenu({ pin, open, onToggle }: { pin: NotePinT } & SubmenuCon
               </button>
             ))}
           </div>
+          {(pin.reactions?.length ?? 0) > 0 && (
+            <div className={styles.reactionSizeRow}>
+              <span>Размер</span>
+              <button
+                className={styles.reactionSizeStep}
+                aria-label="Меньше"
+                onClick={() =>
+                  updatePin(pin.id, 'reactionsScale', stepReactionScale(scale, -1))
+                }
+              >
+                −
+              </button>
+              <span className={styles.reactionSizeValue}>{Math.round(scale * 100)}%</span>
+              <button
+                className={styles.reactionSizeStep}
+                aria-label="Больше"
+                onClick={() =>
+                  updatePin(pin.id, 'reactionsScale', stepReactionScale(scale, 1))
+                }
+              >
+                +
+              </button>
+            </div>
+          )}
           <div className={styles.hint}>Shift+клик убирает одну, правый клик — снимает совсем</div>
           {(pin.reactions?.length ?? 0) > 0 && (
             <button

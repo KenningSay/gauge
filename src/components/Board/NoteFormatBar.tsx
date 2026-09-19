@@ -30,7 +30,14 @@ import {
 } from 'lucide-react'
 import type { NotePin as NotePinT, TextAlign, TextVAlign } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
-import { BASE_NOTE_FONT_SIZE, FONT_BY_ID, FONT_GROUPS, HUD_STYLES, NOTE_FONTS } from './pins/noteStyles'
+import {
+  BASE_NOTE_FONT_SIZE,
+  FONT_BY_ID,
+  FONT_GROUPS,
+  HUD_STYLES,
+  NOTE_FONTS,
+  readableOn,
+} from './pins/noteStyles'
 import {
   clampFontSize,
   clampLetterSpacing,
@@ -207,6 +214,34 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
           <Plus size={13} />
         </button>
       </div>
+
+      <div className={styles.sep} />
+
+      {/* Text colour. It was only ever in the context menu's colour
+          submenu, three levels in, which is why it read as "you still
+          can't colour the text" — the feature existed, nothing pointed at
+          it. Right-click puts it back to automatic. */}
+      <label
+        className={styles.colorBtn}
+        title="Цвет текста (правый клик — автоматически)"
+        onContextMenu={(e) => {
+          e.preventDefault()
+          set('textColor', undefined)
+        }}
+      >
+        <Baseline size={15} />
+        <span
+          className={styles.colorSwatch}
+          style={{ background: pin.textColor ?? readableOn(pin.color) }}
+        />
+        <input
+          className={styles.colorInput}
+          type="color"
+          aria-label="Цвет текста"
+          value={pin.textColor ?? readableOn(pin.color)}
+          onChange={(e) => set('textColor', e.target.value)}
+        />
+      </label>
 
       <div className={styles.sep} />
 

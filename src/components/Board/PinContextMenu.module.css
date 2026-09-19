@@ -341,3 +341,37 @@
 @media (prefers-reduced-motion: reduce) {
   .menu { animation: none; }
 }
+
+/* Size stepper for the reaction chips. The chips are deliberately allowed
+   below the 16px floor the rest of the UI keeps — a reaction is a margin
+   note on a card, and at 100% a row of them can be taller than the card
+   it annotates. The control itself stays at 16px. */
+.reactionSizeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 2px;
+  font-size: 16px;
+  color: var(--text-dim);
+}
+
+.reactionSizeStep {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reactionSizeStep:hover { background: var(--bg-hover); }
+
+.reactionSizeValue {
+  min-width: 46px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}

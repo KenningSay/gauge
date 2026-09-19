@@ -8,7 +8,12 @@ import { FileText, AlertCircle } from 'lucide-react'
 import type { NotePin as NotePinT } from '../../../api/board'
 import { BASE_NOTE_FONT_SIZE, FONT_BY_ID, HUD_STYLES, STYLE_CLASS, readableOn } from './noteStyles'
 import { editorShortcut } from '../../../utils/editorShortcuts'
-import { bumpReaction, removeReaction, textFormatStyle } from '../../../utils/textFormat'
+import {
+  bumpReaction,
+  clampReactionScale,
+  removeReaction,
+  textFormatStyle,
+} from '../../../utils/textFormat'
 import { getTextContent, putTextContent } from '../../../api/webdav'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { usePinActivation } from '../PinShell'
@@ -70,6 +75,7 @@ const REACTION_DRAG_SLOP = 4
 export function NotePin({ pin }: { pin: NotePinT }) {
   const { activated, setActivated } = usePinActivation()
   const updatePin = useBoardStore((s) => s.updatePin)
+  const resizePin = useBoardStore((s) => s.resizePin)
   const zoom = useBoardStore((s) => s.board?.viewport.zoom ?? 1)
   // True between "this pointer travelled far enough to be a drag" and the
   // click that follows it, so that click can be swallowed.
@@ -95,6 +101,27 @@ export function NotePin({ pin }: { pin: NotePinT }) {
     // typing a first character, and the rest of the word has to follow it.
     el.setSelectionRange(el.value.length, el.value.length)
   }, [activated])
+
+  // Grows the card as the text outgrows it. Before this the note kept its
+  // size and the overflow scrolled inside, so a long note looked like a
+  // short one with the end hidden — you had to notice and drag the corner.
+  //
+  // Growth only, never shrink: a card that snapped smaller on every
+  // backspace would fight the person typing. Deliberate shrinking is the
+  // corner handle, or «Подогнать высоту под текст» in the menu.
+  useEffect(() => {
+    if (!activated) return
+    const el = areaRef.current
+    if (!el) return
+    const needed = el.scrollHeight
+    const avail = el.clientHeight
+    if (needed <= avail + 1) return
+    // One line of slack on top of what is needed, so the next few
+    // characters don't each trigger their own resize — every resize is an
+    // undo step and an autosave wake-up.
+    const line = Math.max(20, Math.round(parseFloat(getComputedStyle(el).lineHeight) || 24))
+    resizePin(pin.id, { w: pin.w, h: pin.h + (needed - avail) + line })
+  }, [draft, activated, pin.id, pin.w, pin.h, resizePin])
 
   // --- linked vault file ---------------------------------------------
   // A note with a sourcePath is a view onto a real file: the board file
@@ -241,6 +268,12 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         // stripes, indicator), not the text colour — the plate is dark and
         // the text is set light in CSS.
         color: isHud ? pin.color : (pin.textColor ?? readableOn(pin.color)),
+        // Text colour travels separately from `color`, because on the HUD
+        // styles `color` IS the accent — it feeds the brackets, stripes and
+        // indicators through currentColor, and the text is set light in
+        // CSS. Before this, picking a text colour on any of the 22 HUD
+        // styles did nothing at all: the CSS hardcoded #e8eae6 and won.
+        ['--note-text' as string]: pin.textColor ?? (isHud ? '#e8eae6' : readableOn(pin.color)),
       }}
     >
       {/* The HUD styles paint on their own layer rather than on the note,
@@ -299,6 +332,10 @@ export function NotePin({ pin }: { pin: NotePinT }) {
           style={{
             left: `${(pin.reactionsPos?.x ?? DEFAULT_REACTIONS_POS.x) * 100}%`,
             top: `${(pin.reactionsPos?.y ?? DEFAULT_REACTIONS_POS.y) * 100}%`,
+            // Scale rather than font-size: one number moves the chip,
+            // its padding, its gap and its count together, so a small row
+            // stays proportioned instead of turning into cramped pills.
+            transform: `translateY(-100%) scale(${clampReactionScale(pin.reactionsScale ?? 1)})`,
           }}
         >
           {pin.reactions.map((r) => (

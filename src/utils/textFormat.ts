@@ -221,6 +221,19 @@ export function bumpReaction(
   return current.map((r) => (r.emoji === emoji ? { ...r, count } : r))
 }
 
+export const REACTION_SCALE_MIN = 0.5
+export const REACTION_SCALE_MAX = 2
+export const REACTION_SCALE_STEP = 0.1
+
+export function clampReactionScale(v: number): number {
+  if (!Number.isFinite(v)) return 1
+  return Math.min(REACTION_SCALE_MAX, Math.max(REACTION_SCALE_MIN, Math.round(v * 100) / 100))
+}
+
+export function stepReactionScale(current: number, dir: 1 | -1): number {
+  return clampReactionScale(current + dir * REACTION_SCALE_STEP)
+}
+
 // Takes a mark off entirely, whatever its count. Bound to right-click on
 // the chip, because the decrement modifier cannot be relied on: on Linux
 // desktops Alt+click is claimed by the window manager (it drags the

@@ -177,3 +177,45 @@
 
   .sep { flex: 0 0 auto; }
 }
+
+/* Text colour: an icon with the current colour shown as a bar under it,
+   the way every editor draws this control, with the native picker sitting
+   invisibly on top so one click opens it. */
+.colorBtn {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.colorBtn:hover { background: var(--bg-hover); }
+
+.colorSwatch {
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* Covers the whole control rather than being hidden: a display:none input
+   does not open its picker in every browser. */
+.colorInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+@media (pointer: coarse), (max-width: 640px) {
+  .colorBtn {
+    width: var(--tap);
+    height: var(--tap);
+  }
+}

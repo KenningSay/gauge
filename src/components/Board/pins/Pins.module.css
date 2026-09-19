@@ -915,7 +915,7 @@
   font-size: 16px;
   letter-spacing: 0.01em;
   /* Explicit, so it doesn't inherit the accent colour from the plate. */
-  color: #e8eae6;
+  color: var(--note-text, #e8eae6);
 }
 
 /* Chamfered plate: corners cut at 45°, a hairline inset rule, and the
@@ -1846,7 +1846,8 @@
      It must stay INSIDE the pin: .root is overflow:hidden, and the old
      bottom:-12px put the chips half outside it, where they were clipped
      through the middle. */
-  transform: translateY(-100%);
+  /* transform comes from the pin (anchor + scale), set inline. */
+  transform-origin: left bottom;
   max-width: 92%;
   z-index: 3;
   display: flex;
