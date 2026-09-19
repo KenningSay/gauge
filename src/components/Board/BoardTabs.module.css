@@ -69,12 +69,29 @@
   transition: opacity 120ms ease, background-color 120ms ease;
 }
 
+.tabMenu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
 .tab:hover .tabClose,
-.tabActive .tabClose {
+.tabActive .tabClose,
+.tab:hover .tabMenu,
+.tabActive .tabMenu {
   opacity: 1;
 }
 
-.tabClose:hover {
+.tabClose:hover,
+.tabMenu:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
@@ -122,21 +139,21 @@
 .menuBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 4999;
 }
 
+/* Fixed and portalled to <body>: positioned inside the tab it was clipped
+   by the strip's overflow:hidden and never appeared. Coordinates come from
+   TabMenu. */
 .menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
+  position: fixed;
   min-width: 160px;
   padding: 4px;
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
-  z-index: 51;
+  z-index: 5000;
   animation: menu-in 120ms ease-out;
 }
 
@@ -182,6 +199,7 @@
      strip enormous and puts "close this board" under the same thumb as
      "switch to it"; the halo buys the target without the bulk. */
   .tabClose,
+  .tabMenu,
   .addBtn {
     position: relative;
     width: 34px;
@@ -190,10 +208,17 @@
   }
 
   .tabClose::after,
+  .tabMenu::after,
   .addBtn::after {
     content: '';
     position: absolute;
     inset: -5px;
+  }
+
+  /* No hover on a finger: both controls stay visible. */
+  .tabClose,
+  .tabMenu {
+    opacity: 1;
   }
 
   /* The cross needs its own space from the tab label, or closing a board
