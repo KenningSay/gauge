@@ -30,15 +30,31 @@ server {
 
     # DeepSeek proxy for the boards' AI panel. The client hits this path
     # same-origin, so the CSP's connect-src 'self' is satisfied and the
-    # API key never appears in the browser — nginx injects it here. If
-    # DEEPSEEK_API_KEY is unset (empty), requests still reach the upstream
-    # but get a 401 from DeepSeek, which the panel shows as a normal chat
-    # error; the user can then either set the env var or switch to a
-    # direct endpoint in the panel's settings.
+    # API key never appears in the browser — nginx injects it here. Set
+    # DEEPSEEK_API_KEY on the container to enable it; leave it empty and
+    # requests still reach the upstream but come back 401, which the panel
+    # shows as a normal chat error. The user can then either set the env
+    # var or switch to a direct endpoint in the panel's settings.
     #
-    # proxy_buffering off is required for streaming: without it nginx
-    # buffers the entire SSE response and the panel sees nothing until the
-    # whole reply is complete, defeating the point of streaming.
+    # Three things here are load-bearing and easy to get wrong:
+    #
+    # 1. resolver + a variable in proxy_pass. With a literal hostname,
+    #    nginx resolves api.deepseek.com once at startup and REFUSES TO
+    #    START if DNS is unavailable at that moment — taking down every
+    #    other site this nginx serves, not just /ai/. Routing through a
+    #    variable defers resolution to request time, so a DNS hiccup fails
+    #    this one endpoint with a 502 instead of the whole server.
+    #    DNS_RESOLVER defaults to Docker's embedded DNS (127.0.0.11);
+    #    override it if you run this outside Docker.
+    #
+    # 2. proxy_ssl_server_name on + proxy_ssl_name. Without SNI the TLS
+    #    handshake with api.deepseek.com fails and every request is a 502.
+    #    nginx does NOT send SNI by default on proxied HTTPS connections.
+    #
+    # 3. proxy_buffering off, required for streaming: otherwise nginx
+    #    buffers the whole SSE response and the panel sees nothing until
+    #    the reply is complete, defeating the point of streaming.
+    #
     # NOTE: this endpoint spends your DeepSeek balance, and nothing here
     # authenticates the caller — anyone who can reach this container can use
     # it. Gauge forwards the browser session's WebDAV credential on every
@@ -48,9 +64,15 @@ server {
     # deployment off the public internet, or leave DEEPSEEK_API_KEY unset and
     # use direct mode with your own key.
     location /ai/ {
-        proxy_pass https://api.deepseek.com/;
+        resolver ${DNS_RESOLVER} valid=300s ipv6=off;
+        resolver_timeout 5s;
+        set $gauge_ai_upstream "https://api.deepseek.com";
+
+        proxy_pass $gauge_ai_upstream$request_uri;
         proxy_http_version 1.1;
         proxy_set_header Host api.deepseek.com;
+        proxy_ssl_server_name on;
+        proxy_ssl_name api.deepseek.com;
         proxy_set_header Authorization "Bearer ${DEEPSEEK_API_KEY}";
         proxy_set_header Connection "";
         proxy_buffering off;
