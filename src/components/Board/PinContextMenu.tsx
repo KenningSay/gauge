@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  Lock,
+  Unlock,
   Boxes,
   LayoutGrid,
   Ungroup,
@@ -461,6 +463,15 @@ function PinMenuItems({
           </MenuItem>
         </>
       )}
+      <MenuItem
+        icon={pin.locked ? <Unlock size={13} /> : <Lock size={13} />}
+        onClick={() => {
+          store.getState().updatePin(pin.id, 'locked', pin.locked ? undefined : true)
+          onClose()
+        }}
+      >
+        {pin.locked ? 'Разблокировать' : 'Заблокировать (Ctrl+2)'}
+      </MenuItem>
       <div className={styles.divider} />
       <MenuItem icon={<CheckCircle2 size={13} />} onClick={handleToggleDone}>
         {pin.done ? 'Убрать перечёркивание' : 'Перечеркнуть — сделано'}

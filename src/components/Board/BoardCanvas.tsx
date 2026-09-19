@@ -43,6 +43,8 @@ import { VaultNotePicker } from './VaultNotePicker'
 import { runPool } from '../../utils/pool'
 import { PinRenderer } from './pins/PinRenderer'
 import { PinContextMenu, type PinMenuTarget } from './PinContextMenu'
+import { createPortal } from 'react-dom'
+import { AlignBar } from './AlignBar'
 import styles from './BoardCanvas.module.css'
 import { isKey } from '../../utils/keys'
 
@@ -370,6 +372,13 @@ export function BoardCanvas() {
       // very cards it is grouping.
       if (pin.type !== 'frame' && pin.z < maxZ) reorderPin(pin.id, maxZ + 1)
 
+      // A locked pin can be selected (so it can be unlocked again) but
+      // never dragged.
+      if (pin.locked) {
+        useBoardStore.getState().selectOnly(pin.id)
+        return
+      }
+
       const store = useBoardStore.getState()
       const currentSelection = store.selected
       let activeIds: string[]
@@ -381,6 +390,36 @@ export function BoardCanvas() {
       } else {
         selectOnly(pin.id)
         activeIds = [pin.id]
+      }
+
+      // Alt+drag leaves a copy behind and drags the copy — Illustrator's
+      // duplicate gesture, and by far the fastest way to lay out a row of
+      // similar cards. The ORIGINALS stay put; the new pins are what the
+      // pointer now holds.
+      const freshPositions = new Map<string, { x: number; y: number }>()
+      if (e.altKey) {
+        const copies: Pin[] = []
+        const topZ = pins.reduce((m, p) => Math.max(m, p.z), 0)
+        for (const [i, id] of activeIds.entries()) {
+          const src = pins.find((p) => p.id === id)
+          if (!src || src.locked) continue
+          copies.push({
+            ...src,
+            id: crypto.randomUUID(),
+            z: topZ + 1 + i,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          } as Pin)
+        }
+        if (copies.length) {
+          for (const c of copies) addPin(c)
+          activeIds = copies.map((c) => c.id)
+          selectMany(activeIds)
+          // The copies are not in `pins` yet (this render closed over the
+          // old array), so their start positions come from the copies
+          // themselves — otherwise the drag would have nothing to move.
+          for (const c of copies) freshPositions.set(c.id, { x: c.x, y: c.y })
+        }
       }
 
       // Dragging a frame drags what it holds. This is the whole point of
@@ -401,6 +440,11 @@ export function BoardCanvas() {
 
       const startPositions = new Map<string, { x: number; y: number }>()
       for (const id of activeIds) {
+        const known = freshPositions.get(id)
+        if (known) {
+          startPositions.set(id, known)
+          continue
+        }
         const p = pins.find((x) => x.id === id)
         if (p) startPositions.set(id, { x: p.x, y: p.y })
       }
@@ -414,7 +458,7 @@ export function BoardCanvas() {
         delta: { dx: 0, y: 0 },
       })
     },
-    [pins, reorderPin, selectMany, selectOnly],
+    [addPin, pins, reorderPin, selectMany, selectOnly],
   )
 
   const beginWire = useCallback(
@@ -464,9 +508,21 @@ export function BoardCanvas() {
     // Absent on boards made before the setting existed, and those were
     // pushing — so only an explicit false turns it off.
     if (!current || current.settings.pushEnabled === false) return
+    // Containers take no part in pushing, in either direction. A frame
+    // overlaps every card it holds BY DEFINITION, so to the push solver a
+    // frame looks like a permanent collision: touch one card inside and
+    // the frame is shoved clear of it, which on screen reads as the
+    // container spitting its contents out. Reported as exactly that.
+    const isContainer = (p: Pin) =>
+      p.type === 'frame' || (p.type === 'shape' && p.holdsContents === true)
+    const participants = current.pins.filter((p) => !isContainer(p))
+    const movedParticipants = movedIds.filter((id) =>
+      participants.some((p) => p.id === id),
+    )
+    if (movedParticipants.length === 0) return
     const moves = resolvePushForMoved(
-      current.pins.map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h })),
-      movedIds,
+      participants.map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h })),
+      movedParticipants,
     )
     if (moves.length) state.movePins(moves)
   }, [])
@@ -733,6 +789,8 @@ export function BoardCanvas() {
     groupIntoFrame,
     ungroupFrame,
     armedShape,
+    movePins,
+    pushToast,
   ])
 
   // --- keyboard shortcuts (scoped to when the board canvas is mounted) ---
@@ -794,6 +852,47 @@ export function BoardCanvas() {
         clearSelection()
         return
       }
+      // Arrow keys nudge, Shift makes it a big step — the only way to
+      // place something to an exact pixel, and muscle memory from every
+      // editor there is.
+      const arrow: Record<string, [number, number]> = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      }
+      if (arrow[e.key] && selected.size > 0 && !mod) {
+        e.preventDefault()
+        const step = e.shiftKey ? 10 : 1
+        const [ux, uy] = arrow[e.key]
+        const moves = Array.from(selected)
+          .map((id) => pins.find((p) => p.id === id))
+          .filter((p): p is Pin => !!p && !p.locked)
+          .map((p) => ({ id: p.id, x: p.x + ux * step, y: p.y + uy * step }))
+        if (moves.length) movePins(moves)
+        return
+      }
+
+      // Ctrl+2 / Ctrl+Alt+2: lock the selection, unlock everything.
+      // Illustrator's pair, and the same reason — the backdrop you keep
+      // grabbing by mistake.
+      if (mod && !e.altKey && e.key === '2' && selected.size > 0) {
+        e.preventDefault()
+        const st = useBoardStore.getState()
+        for (const id of selected) st.updatePin(id, 'locked', true)
+        clearSelection()
+        pushToast('Заблокировано. Ctrl+Alt+2 — снять со всех')
+        return
+      }
+      if (mod && e.altKey && e.key === '2') {
+        e.preventDefault()
+        const st = useBoardStore.getState()
+        const locked = pins.filter((p) => p.locked)
+        for (const p of locked) st.updatePin(p.id, 'locked', undefined)
+        pushToast(locked.length ? `Разблокировано: ${locked.length}` : 'Заблокированных нет')
+        return
+      }
+
       // Ctrl+G groups the selection into a frame, Ctrl+Shift+G takes a
       // frame away again — the pairing every design tool uses.
       if (mod && isKey(e, 'g') && !e.shiftKey && selected.size > 0) {
@@ -1461,6 +1560,25 @@ export function BoardCanvas() {
           ['--zoom' as string]: viewport.zoom,
         }}
       >
+        {/* Mode banner. A crosshair cursor is easy to miss, and a board
+            silently in drawing mode is a board that "does nothing" when
+            you try to drag a card. */}
+        {/* Align palette: only with a multi-selection, and never while a
+            shape tool is armed (two banners in the same slot). */}
+        {!armedShape && <AlignBar />}
+
+        {/* Into <body>, for the same reason the align palette is: a
+            `position: fixed` element inside the transformed world layer is
+            positioned against that layer, so this banner slid off screen
+            with the pan. */}
+        {armedShape &&
+          createPortal(
+            <div className={styles.modeBanner} role="status">
+              Рисование: растяни рамку на холсте. Shift — квадрат, Esc — отмена
+            </div>,
+            document.body,
+          )}
+
         {/* The shape being drawn, previewed as an outline. Drawn in the
             world layer so it tracks the canvas exactly. */}
         {interaction?.kind === 'draw' && (() => {
@@ -1601,7 +1719,16 @@ export function BoardCanvas() {
         // Arms the tool rather than dropping a shape: the next drag on the
         // canvas draws it at the size you want, which is what "как в
         // Illustrator" means. Picking the same shape again disarms.
-        onCreateShape={(kind) => setArmedShape((cur) => (cur === kind ? null : kind))}
+        onCreateShape={(kind) => {
+          setArmedShape((cur) => {
+            const next = cur === kind ? null : kind
+            // Without this the button looked like it did nothing: the old
+            // behaviour dropped a shape immediately, so a click that
+            // merely ARMS a tool has to say so out loud.
+            if (next) pushToast('Растяни рамку на холсте. Shift — ровный квадрат, Esc — отмена')
+            return next
+          })
+        }}
         armedShape={armedShape}
         onCreateFrame={() => {
           if (selected.size > 0) {

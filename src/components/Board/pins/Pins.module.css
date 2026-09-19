@@ -2194,3 +2194,43 @@
   font-weight: 600;
   padding: 0;
 }
+
+/* ---------- wrapping inside a card ----------
+   A card is narrow and its width is chosen by hand, so anything that
+   cannot wrap turns into a horizontal scrollbar — reported as exactly
+   that. A long URL, a hash, a path or a German compound has no space to
+   break at, so breaking anywhere beats a card you have to scroll
+   sideways. Code keeps its own rules (see .noteMarkdown pre below):
+   wrapping code silently changes what it says. */
+.noteMarkdown,
+.noteEditor {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* The body must never scroll sideways: vertical growth is the card's
+   answer to too much content, and it now has auto-grow to do it with. */
+.noteBody {
+  overflow-x: hidden;
+}
+
+/* Code blocks are the one exception — they scroll instead of wrapping,
+   because a broken line of code reads as different code. */
+.noteMarkdown :global(pre) {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.noteMarkdown :global(pre) :global(code) {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: pre;
+}
+
+/* A table is the other thing that cannot be squeezed; let it scroll
+   inside its own box rather than stretching the card. */
+.noteMarkdown :global(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}

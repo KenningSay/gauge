@@ -95,6 +95,11 @@ interface PinBase {
   // lines are drawn between pins (that would turn a busy board into
   // spaghetti), so this data is the only link.
   sourceIds?: string[]
+  // Locked: cannot be dragged, resized or deleted until unlocked. Taken
+  // from Illustrator's Ctrl+2, and it earns its place on a board for the
+  // same reason — the background picture and the frame you drew around
+  // everything are exactly the things you keep grabbing by accident.
+  locked?: boolean
   // Struck through: the card is done//cancelled but kept for the record.
   // Lives on the base rather than on the note, because a picture of a
   // finished thing or a shape marking a dropped branch wants it just as

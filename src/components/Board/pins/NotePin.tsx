@@ -4,6 +4,7 @@ import type React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import remarkBreaks from 'remark-breaks'
 import { rehypeNoteHighlight } from '../../../utils/noteHighlight'
 import { FileText, AlertCircle } from 'lucide-react'
 import type { NotePin as NotePinT } from '../../../api/board'
@@ -29,7 +30,14 @@ import shell from '../PinShell.module.css'
 
 // Module-level constants: passing fresh array literals would make
 // react-markdown rebuild its processor on every keystroke.
-const REMARK_PLUGINS = [remarkGfm, remarkMath]
+// remarkBreaks turns a single Enter into a line break.
+//
+// Strict markdown treats one newline as a space and only breaks a line on
+// a blank line or two trailing spaces — correct for documents, wrong for
+// a sticky note. People typed a list down a card, pressed Enter between
+// the items, and got one run-on paragraph: "форматирование с новой
+// строкой не работает".
+const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks]
 const REHYPE_PLUGINS = [rehypeNoteHighlight] as never[]
 
 const MARKDOWN_COMPONENTS = {

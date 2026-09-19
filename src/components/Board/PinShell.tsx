@@ -1,3 +1,4 @@
+import { Lock } from 'lucide-react'
 // Universal wrapper every pin is rendered inside. Responsibilities:
 //   - positions the pin in world coords
 //   - the "tongue" on top for dragging pins with interactive bodies
@@ -198,6 +199,14 @@ export function PinShell({
             so the stroke stays one hairline at any zoom instead of
             thickening with the card, and so it scales to any card shape
             without the maths a CSS gradient would need. */}
+        {/* A locked pin says so, or "why won't this move" becomes a bug
+            report. Small, in the corner, only while it is locked. */}
+        {pin.locked && (
+          <span className={styles.lockBadge} title="Заблокировано — Ctrl+Alt+2 снимает со всех">
+            <Lock size={12} />
+          </span>
+        )}
+
         {pin.done && (
           <svg
             className={styles.doneStrike}
