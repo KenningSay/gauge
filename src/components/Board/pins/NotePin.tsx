@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { hexWithOpacity } from '../../../utils/color'
 import type React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -432,12 +433,3 @@ export function NotePin({ pin }: { pin: NotePinT }) {
   )
 }
 
-// Compose the note background: pin color at pin opacity over the board's
-// background, so a semi-transparent note still reads as a solid sticker.
-function hexWithOpacity(hex: string, opacity: number): string {
-  const a = Math.max(0, Math.min(1, opacity / 100))
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r}, ${g}, ${b}, ${a})`
-}

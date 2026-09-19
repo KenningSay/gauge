@@ -7,6 +7,7 @@
 // rectangle behind it.
 
 import { useEffect, useRef, useState } from 'react'
+import { hexWithOpacity } from '../../../utils/color'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ShapeKind, ShapePin as ShapePinT } from '../../../api/board'
@@ -31,13 +32,7 @@ function shapePath(kind: ShapeKind): string {
   }
 }
 
-function hexWithOpacity(hex: string, opacity: number): string {
-  const a = Math.max(0, Math.min(1, opacity / 100))
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r}, ${g}, ${b}, ${a})`
-}
+
 
 export function ShapePin({ pin }: { pin: ShapePinT }) {
   const { activated, setActivated } = usePinActivation()

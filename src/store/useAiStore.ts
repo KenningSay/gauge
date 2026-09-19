@@ -139,6 +139,10 @@ ${pin.text}`
     case 'shape':
       return `[Фигура: ${pin.shape}]${pin.fileName ? ` с картинкой ${pin.fileName}` : ''}${pin.text ? `
 ${pin.text}` : ''}`
+    case 'frame':
+      // Contents are listed as their own pins; the frame contributes
+      // only the grouping it implies.
+      return `[Контейнер] ${pin.title || 'без названия'}`
   }
 }
 
@@ -162,6 +166,8 @@ function shortLabel(pin: Pin): string {
       return pin.title ?? pin.url
     case 'shape':
       return pin.text.split('\n')[0]?.slice(0, 80) || `фигура (${pin.shape})`
+    case 'frame':
+      return `контейнер «${pin.title || 'без названия'}»`
     default:
       return pin.fileName
   }

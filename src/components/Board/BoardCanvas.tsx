@@ -6,6 +6,7 @@ import { useFileStore } from '../../store/useFileStore'
 import { useBoardPanZoom, type ViewportState } from '../../hooks/useBoardPanZoom'
 import { useBoardVirtual } from '../../hooks/useBoardVirtual'
 import { boundingBox, computeAlignSnap, nearbyRects, type Guide } from '../../utils/alignGuides'
+import { FRAME_DEFAULT_PADDING, frameAround, pinsInFrame } from '../../utils/frameGeo'
 import { boundsOf, rectsIntersect, resolvePush, resolvePushForMoved, type Rect } from '../../utils/boardGeo'
 import {
   looksLikeUrl,
@@ -329,7 +330,10 @@ export function BoardCanvas() {
       // from the spec. Pushed as a real op so undo restores the previous
       // stacking, not silently ignored.
       const maxZ = pins.reduce((m, p) => Math.max(m, p.z), 0)
-      if (pin.z < maxZ) reorderPin(pin.id, maxZ + 1)
+      // A frame stays behind its contents. Raising it on click — which is
+      // right for every other pin — would drop a tinted sheet over the
+      // very cards it is grouping.
+      if (pin.type !== 'frame' && pin.z < maxZ) reorderPin(pin.id, maxZ + 1)
 
       const store = useBoardStore.getState()
       const currentSelection = store.selected
@@ -343,6 +347,19 @@ export function BoardCanvas() {
         selectOnly(pin.id)
         activeIds = [pin.id]
       }
+
+      // Dragging a frame drags what it holds. This is the whole point of
+      // a frame, and it is resolved at grab time rather than per frame of
+      // the drag: the contents are whatever was inside when you picked it
+      // up, so a card cannot fall out halfway across the board just
+      // because the frame's edge swept past it.
+      const withFrameContents = new Set(activeIds)
+      for (const id of activeIds) {
+        const p = pins.find((x) => x.id === id)
+        if (p?.type !== 'frame') continue
+        for (const inner of pinsInFrame(p, pins)) withFrameContents.add(inner.id)
+      }
+      activeIds = Array.from(withFrameContents)
 
       const startPositions = new Map<string, { x: number; y: number }>()
       for (const id of activeIds) {
@@ -415,6 +432,78 @@ export function BoardCanvas() {
     )
     if (moves.length) state.movePins(moves)
   }, [])
+
+  // --- frames ---
+
+  // Wraps the selection in a frame. The frame is created BEHIND everything
+  // (z below the lowest pin) rather than on top, because it is a backdrop:
+  // dropped on top it would cover the cards it is meant to group.
+  const groupIntoFrame = useCallback(
+    (ids: string[]) => {
+      const chosen = pins.filter((p) => ids.includes(p.id) && p.type !== 'frame')
+      if (chosen.length === 0) return
+      const rect = frameAround(chosen, FRAME_DEFAULT_PADDING)
+      if (!rect) return
+      const minZ = pins.reduce((m, p) => Math.min(m, p.z), 0)
+      const frame: Pin = {
+        id: crypto.randomUUID(),
+        type: 'frame',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        z: minZ - 1,
+        ...rect,
+        title: 'Контейнер',
+        color: '#2dd4bf',
+        fillOpacity: 8,
+        padding: FRAME_DEFAULT_PADDING,
+      }
+      addPin(frame)
+      selectOnly(frame.id)
+      pushToast('Контейнер создан: тащи за него — поедет со всем содержимым')
+    },
+    [addPin, pins, pushToast, selectOnly],
+  )
+
+  // An empty frame to draw around things afterwards: drop it, size it by
+  // its corner, drag cards in. Whatever ends up inside belongs to it,
+  // because membership is geometric and needs no further ceremony.
+  const createEmptyFrameAt = useCallback(
+    (centre: { x: number; y: number }) => {
+      const w = 640
+      const h = 420
+      const minZ = pins.reduce((m, p) => Math.min(m, p.z), 0)
+      const frame: Pin = {
+        id: crypto.randomUUID(),
+        type: 'frame',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        z: minZ - 1,
+        x: Math.round(centre.x - w / 2),
+        y: Math.round(centre.y - h / 2),
+        w,
+        h,
+        title: 'Контейнер',
+        color: '#2dd4bf',
+        fillOpacity: 8,
+        padding: FRAME_DEFAULT_PADDING,
+      }
+      addPin(frame)
+      selectOnly(frame.id)
+    },
+    [addPin, pins, selectOnly],
+  )
+
+  // Removes the frame and leaves its contents exactly where they are.
+  // Nothing else to undo: membership was never stored anywhere.
+  const ungroupFrame = useCallback(
+    (frameId: string) => {
+      const frame = pins.find((p) => p.id === frameId)
+      if (!frame || frame.type !== 'frame') return
+      useBoardStore.getState().removePins([frameId])
+      pushToast('Контейнер убран, карточки остались на месте')
+    },
+    [pins, pushToast],
+  )
 
   // Move/up listeners — attached to window so we keep getting events even
   // if the pointer leaves the container (user drags off-screen).
@@ -581,6 +670,8 @@ export function BoardCanvas() {
     addEdge,
     settings?.snapEnabled,
     settings?.snapStep,
+    groupIntoFrame,
+    ungroupFrame,
   ])
 
   // --- keyboard shortcuts (scoped to when the board canvas is mounted) ---
@@ -635,6 +726,18 @@ export function BoardCanvas() {
         }
         setSelectedEdgeId(null)
         clearSelection()
+        return
+      }
+      // Ctrl+G groups the selection into a frame, Ctrl+Shift+G takes a
+      // frame away again — the pairing every design tool uses.
+      if (mod && isKey(e, 'g') && !e.shiftKey && selected.size > 0) {
+        e.preventDefault()
+        groupIntoFrame(Array.from(selected))
+        return
+      }
+      if (mod && isKey(e, 'g') && e.shiftKey && selected.size > 0) {
+        e.preventDefault()
+        for (const id of selected) ungroupFrame(id)
         return
       }
       if (mod && isKey(e, 'a')) {
@@ -1416,6 +1519,13 @@ export function BoardCanvas() {
         onCreateVaultNote={() => createVaultNoteAt(viewportCenterWorld(viewport, containerSize))}
         onCreateLink={() => void createLinkAt(viewportCenterWorld(viewport, containerSize))}
         onCreateShape={(kind) => createShapeAt(viewportCenterWorld(viewport, containerSize), kind)}
+        onCreateFrame={() => {
+          if (selected.size > 0) {
+            groupIntoFrame(Array.from(selected))
+            return
+          }
+          createEmptyFrameAt(viewportCenterWorld(viewport, containerSize))
+        }}
         onFit={fitToPins}
         onExport={(f) => void exportBoard(f)}
         exporting={exporting}

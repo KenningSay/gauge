@@ -7,10 +7,20 @@
 // tools place theirs.
 
 import { useEffect, useState } from 'react'
-import { StickyNote, FileText, Link as LinkIcon, Square, Circle, Diamond, Triangle, Maximize, Paperclip ,
+import {
+  StickyNote,
+  FileText,
+  Link as LinkIcon,
+  Square,
+  Circle,
+  Diamond,
+  Triangle,
+  Maximize,
+  Paperclip,
   ImageDown,
   FileDown,
   Loader2,
+  Frame,
 } from 'lucide-react'
 import type { ShapeKind } from '../../api/board'
 import { useUiStore } from '../../store/useUiStore'
@@ -26,6 +36,9 @@ interface Props {
   onCreateVaultNote: () => void
   onCreateLink: () => void
   onCreateShape: (kind: ShapeKind) => void
+  // Wraps the selection in a frame, or drops an empty one when nothing is
+  // selected.
+  onCreateFrame: () => void
   onFit: () => void
   onCreateVaultFile: () => void
 }
@@ -37,7 +50,7 @@ const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
   { id: 'triangle', label: 'Треугольник', icon: <Triangle size={16} /> },
 ]
 
-export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onFit, onCreateVaultFile, onExport, exporting }: Props) {
+export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, onCreateFrame, onFit, onCreateVaultFile, onExport, exporting }: Props) {
 
   // A phone shows the side panel full-screen; the toolbar would float
   // across its bottom edge, over the chat input or the last row of
@@ -84,6 +97,14 @@ export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCrea
       <div className={styles.bar}>
         <button className={styles.btn} title="Заметка" aria-label="Создать заметку" onClick={onCreateNote}>
           <StickyNote size={17} />
+        </button>
+        <button
+          className={styles.btn}
+          title="Контейнер: обвести выделенное, иначе пустой"
+          aria-label="Создать контейнер"
+          onClick={onCreateFrame}
+        >
+          <Frame size={17} />
         </button>
         <button
           className={styles.btn}

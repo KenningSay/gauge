@@ -77,7 +77,7 @@ export function templateAssetsDirFor(id: string): string {
 
 // ---------- Types ----------
 
-export type PinType = 'note' | 'image' | 'video' | 'audio' | 'file' | 'link' | 'shape'
+export type PinType = 'note' | 'image' | 'video' | 'audio' | 'file' | 'link' | 'shape' | 'frame'
 export type NoteTexture = 'plain' | 'grid' | 'ruled' | 'dots' | 'graph'
 
 interface PinBase {
@@ -439,7 +439,32 @@ export interface ShapePin extends PinBase {
   fileName?: string
 }
 
-export type Pin = NotePin | ImagePin | VideoPin | AudioPin | FilePin | LinkPin | ShapePin
+// A titled area that owns whatever sits inside it. Membership is
+// GEOMETRIC, not a stored list of ids: a pin belongs to the frame it is
+// inside, full stop. A stored list would have to be maintained on every
+// drag, every delete and every undo, and would disagree with what the
+// user can see the moment it fell out of step — and what the user sees is
+// the only definition of "in the box" that anyone will accept.
+export interface FramePin extends PinBase {
+  type: 'frame'
+  title: string
+  color: string
+  // 0-100, as elsewhere. Frames are mostly transparent: the point is to
+  // group what is already there, not to paint over it.
+  fillOpacity: number
+  // Inner margin used when laying the contents out on a grid.
+  padding?: number
+}
+
+export type Pin =
+  | NotePin
+  | ImagePin
+  | VideoPin
+  | AudioPin
+  | FilePin
+  | LinkPin
+  | ShapePin
+  | FramePin
 
 export interface Viewport {
   x: number

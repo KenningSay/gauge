@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  LayoutGrid,
+  Ungroup,
   Scaling,
   CheckCircle2,
   ArrowUpToLine,
@@ -30,6 +32,7 @@ import {
 import type { CustomAction, NoteFont, NotePin as NotePinT, NoteStyle, NoteTexture, Pin, ShapeKind, ShapePin as ShapePinT } from '../../api/board'
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
+import { FRAME_DEFAULT_PADDING, layoutInFrame, pinsInFrame } from '../../utils/frameGeo'
 import { FONT_BY_ID, HUD_STYLES, NOTE_FONTS, readableOn } from './pins/noteStyles'
 import {
   bumpReaction,
@@ -237,6 +240,34 @@ function PinMenuItems({
     onClose()
   }
 
+  // Lays the frame's contents out on a grid with equal gaps. Hand-placed
+  // cards are never quite level with each other, and no amount of care
+  // with a mouse makes them so — that was the ask on the board.
+  const handleTidyFrame = () => {
+    if (pin.type !== 'frame') return
+    const st = store.getState()
+    const all = st.board?.pins ?? []
+    const contents = pinsInFrame(pin, all)
+    if (contents.length === 0) {
+      useUiStore.getState().pushToast('В контейнере пусто', 'error')
+      onClose()
+      return
+    }
+    const { moves, frame } = layoutInFrame(pin, contents, pin.padding ?? FRAME_DEFAULT_PADDING)
+    if (frame.h !== pin.h) st.resizePin(pin.id, { w: frame.w, h: frame.h })
+    if (moves.length) st.movePins(moves)
+    useUiStore.getState().pushToast(`Разложено: ${contents.length}`)
+    onClose()
+  }
+
+  // Takes the frame away and leaves the cards where they are. Membership
+  // was never stored, so there is nothing else to unpick.
+  const handleUngroup = () => {
+    store.getState().removePins([pin.id])
+    useUiStore.getState().pushToast('Контейнер убран, карточки остались на месте')
+    onClose()
+  }
+
   const handleDelete = () => {
     store.getState().removePins([pin.id])
     onClose()
@@ -298,7 +329,7 @@ function PinMenuItems({
   const handleDownload = () => {
     // Notes and links have no backing file — the menu item is hidden for
     // them, but the union still has to be narrowed for the compiler.
-    if (pin.type === 'link' || pin.type === 'note') return
+    if (pin.type === 'link' || pin.type === 'note' || pin.type === 'frame') return
     // A shape may or may not carry a picture; the others always do.
     if (!pin.assetPath || !pin.fileName) return
     void downloadEntry(pin.assetPath, pin.fileName)
@@ -390,7 +421,7 @@ function PinMenuItems({
           Отвязать от файла
         </MenuItem>
       )}
-      {pin.type !== 'link' && pin.type !== 'note' && pin.assetPath && (
+      {pin.type !== 'link' && pin.type !== 'note' && pin.type !== 'frame' && pin.assetPath && (
         <MenuItem icon={<Download size={13} />} onClick={handleDownload}>Скачать</MenuItem>
       )}
       <div className={styles.divider} />
@@ -399,6 +430,16 @@ function PinMenuItems({
         <MenuItem icon={<Scaling size={13} />} onClick={handleFitHeight}>
           Подогнать высоту под текст
         </MenuItem>
+      )}
+      {pin.type === 'frame' && (
+        <>
+          <MenuItem icon={<LayoutGrid size={13} />} onClick={handleTidyFrame}>
+            Разложить содержимое
+          </MenuItem>
+          <MenuItem icon={<Ungroup size={13} />} onClick={handleUngroup}>
+            Убрать контейнер (карточки останутся)
+          </MenuItem>
+        </>
       )}
       <div className={styles.divider} />
       <MenuItem icon={<CheckCircle2 size={13} />} onClick={handleToggleDone}>
