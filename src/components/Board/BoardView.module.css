@@ -218,3 +218,19 @@
   justify-content: flex-end;
   gap: 8px;
 }
+/* Someone else has this board open. Advisory, not an error: it sits above
+   the canvas in the warning colour rather than the danger one, because
+   nothing has gone wrong yet — that is the entire point of showing it. */
+.presenceBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--tick);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.presenceBar svg { flex: none; }

@@ -204,6 +204,10 @@ export function fitFontSize(
 
 // Adding a mark that is already there bumps its count rather than putting
 // a second copy beside it; taking the last one off removes the mark.
+//
+// Note that counting UP is the easy gesture and counting DOWN is not, so
+// there is also removeReaction below: a chip that reached 15 must not need
+// fifteen precise clicks to undo.
 export function bumpReaction(
   list: Array<{ emoji: string; count: number }> | undefined,
   emoji: string,
@@ -215,4 +219,15 @@ export function bumpReaction(
   const count = found.count + by
   if (count <= 0) return current.filter((r) => r.emoji !== emoji)
   return current.map((r) => (r.emoji === emoji ? { ...r, count } : r))
+}
+
+// Takes a mark off entirely, whatever its count. Bound to right-click on
+// the chip, because the decrement modifier cannot be relied on: on Linux
+// desktops Alt+click is claimed by the window manager (it drags the
+// window) and never reaches the page at all.
+export function removeReaction(
+  list: Array<{ emoji: string; count: number }> | undefined,
+  emoji: string,
+): Array<{ emoji: string; count: number }> {
+  return (list ?? []).filter((r) => r.emoji !== emoji)
 }

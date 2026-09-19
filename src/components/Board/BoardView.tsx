@@ -10,7 +10,7 @@
 // written.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Loader2, AlertCircle, Users } from 'lucide-react'
 import type { BoardIndex, BoardMeta, Pin } from '../../api/board'
 import * as boardApi from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
@@ -23,6 +23,8 @@ import {
   isBuiltInTemplate,
 } from '../../utils/boardDefaults'
 import { BoardTabs } from './BoardTabs'
+import { BackupsDialog } from './BackupsDialog'
+import { useBoardPresence } from '../../hooks/useBoardPresence'
 import { BoardCanvas } from './BoardCanvas'
 import { AiPanel } from './AiPanel'
 import styles from './BoardView.module.css'
@@ -48,6 +50,9 @@ export function BoardView() {
     name: '',
     templateId: 'builtin-empty',
   })
+  // Which board's version history is on screen, if any. Lives here rather
+  // than in BoardTabs because it must survive the tab menu closing.
+  const [backupsFor, setBackupsFor] = useState<{ id: string; name: string } | null>(null)
   const [userTemplates, setUserTemplates] = useState<{ id: string; name: string }[]>([])
 
   const openIds = useBoardTabsStore((s) => s.openIds)
@@ -60,6 +65,9 @@ export function BoardView() {
   const loadBoard = useBoardStore((s) => s.loadBoard)
   const unloadBoard = useBoardStore((s) => s.unloadBoard)
   const saveState = useBoardStore((s) => s.saveState)
+  // Declared after `board`: this hook reads it, and a hook placed above
+  // its own dependency is the "used before declaration" white screen.
+  const peers = useBoardPresence(board?.id ?? null)
   const saveError = useBoardStore((s) => s.saveError)
 
   const promptDialog = useUiStore((s) => s.promptDialog)
@@ -164,7 +172,9 @@ export function BoardView() {
     void (async () => {
       const overwrite = await confirmDialog(
         'Доска изменена где-то ещё. Перезаписать серверную версию своими изменениями? ' +
-          '«Отмена» — перезагрузить доску с сервера и потерять несохранённые правки.',
+          '«Отмена» — перезагрузить доску с сервера.\n\n' +
+          'Обе версии уже сохранены в «История версий» (меню доски), так что любой выбор ' +
+          'обратим.',
       )
       try {
         if (overwrite) await useBoardStore.getState().overwriteServer()
@@ -313,9 +323,18 @@ export function BoardView() {
         onClose={(id) => useBoardTabsStore.getState().closeTab(id)}
         onRename={handleRenameBoard}
         onDelete={handleDeleteBoard}
+        onHistory={(id, name) => setBackupsFor({ id, name })}
         onCreate={handleOpenCreateDialog}
         onOpenExisting={openTab}
       />
+
+      {backupsFor && (
+        <BackupsDialog
+          boardId={backupsFor.id}
+          boardName={backupsFor.name}
+          onClose={() => setBackupsFor(null)}
+        />
+      )}
 
       <div className={styles.body}>
         {!hasBoards && !activeId && (
@@ -327,6 +346,17 @@ export function BoardView() {
             <button className={styles.primaryBtn} onClick={handleOpenCreateDialog}>
               <Plus size={16} /> Создать первую доску
             </button>
+          </div>
+        )}
+
+        {activeId && board?.id === activeId && peers.length > 0 && (
+          <div className={styles.presenceBar} role="status">
+            <Users size={16} />
+            <span>
+              Доска открыта ещё {peers.length === 1 ? 'в одном месте' : `в ${peers.length} местах`} (
+              {peers.map((p) => p.label).join(', ')}). Правки с двух сторон могут конфликтовать —
+              копии сохраняются в «История версий».
+            </span>
           </div>
         )}
 

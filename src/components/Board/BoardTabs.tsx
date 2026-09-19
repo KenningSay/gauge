@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, X, Pencil, Trash2, MoreVertical } from 'lucide-react'
+import { Plus, X, Pencil, Trash2, MoreVertical, History } from 'lucide-react'
 import type { BoardMeta } from '../../api/board'
 import { BoardSettings } from './BoardSettings'
 import styles from './BoardTabs.module.css'
@@ -13,6 +13,7 @@ interface Props {
   onClose: (id: string) => void
   onRename: (id: string, currentName: string) => void
   onDelete: (id: string, name: string) => void
+  onHistory: (id: string, name: string) => void
   onCreate: () => void
   onOpenExisting: (id: string) => void
 }
@@ -35,6 +36,7 @@ export function BoardTabs({
   onClose,
   onRename,
   onDelete,
+  onHistory,
   onCreate,
   onOpenExisting,
 }: Props) {
@@ -134,6 +136,11 @@ export function BoardTabs({
             setMenu(null)
             onDelete(m.id, m.name)
           }}
+          onHistory={() => {
+            const m = menu
+            setMenu(null)
+            onHistory(m.id, m.name)
+          }}
         />
       )}
     </div>
@@ -150,12 +157,14 @@ function TabMenu({
   onClose,
   onRename,
   onDelete,
+  onHistory,
 }: {
   x: number
   y: number
   onClose: () => void
   onRename: () => void
   onDelete: () => void
+  onHistory: () => void
 }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState({ x, y })
@@ -196,6 +205,9 @@ function TabMenu({
       >
         <button className={styles.menuItem} onClick={onRename}>
           <Pencil size={13} /> Переименовать
+        </button>
+        <button className={styles.menuItem} onClick={onHistory}>
+          <History size={13} /> История версий
         </button>
         <button className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={onDelete}>
           <Trash2 size={13} /> Удалить

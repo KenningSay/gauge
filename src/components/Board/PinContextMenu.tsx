@@ -29,7 +29,7 @@ import type { CustomAction, NoteFont, NotePin as NotePinT, NoteStyle, NoteTextur
 import { newId } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import { FONT_BY_ID, HUD_STYLES, NOTE_FONTS, readableOn } from './pins/noteStyles'
-import { bumpReaction, frequentFonts } from '../../utils/textFormat'
+import { bumpReaction, removeReaction, frequentFonts } from '../../utils/textFormat'
 import { putTextContent } from '../../api/webdav'
 import { useAiStore } from '../../store/useAiStore'
 import { useUiStore } from '../../store/useUiStore'
@@ -597,16 +597,39 @@ function ReactionSubmenu({ pin, open, onToggle }: { pin: NotePinT } & SubmenuCon
               <button
                 key={e}
                 className={`${styles.reactionPick} ${on.has(e) ? styles.reactionPickOn : ''}`}
-                title={on.has(e) ? `${e} ×${on.get(e)} — ещё раз добавит, Alt уберёт` : e}
-                onClick={(ev) =>
-                  updatePin(pin.id, 'reactions', bumpReaction(pin.reactions, e, ev.altKey ? -1 : 1))
+                title={
+                  on.has(e)
+                    ? `${e} ×${on.get(e)} — ещё раз добавит, Shift уберёт, правый клик снимет совсем`
+                    : e
                 }
+                onClick={(ev) =>
+                  updatePin(
+                    pin.id,
+                    'reactions',
+                    // Alt is unreliable here: Linux window managers grab
+                    // Alt+click before the page sees it. Shift does the
+                    // same job and nothing else wants it.
+                    bumpReaction(pin.reactions, e, ev.altKey || ev.shiftKey ? -1 : 1),
+                  )
+                }
+                onContextMenu={(ev) => {
+                  ev.preventDefault()
+                  updatePin(pin.id, 'reactions', removeReaction(pin.reactions, e))
+                }}
               >
                 {e}
               </button>
             ))}
           </div>
-          <div className={styles.hint}>Alt+клик убирает</div>
+          <div className={styles.hint}>Shift+клик убирает одну, правый клик — снимает совсем</div>
+          {(pin.reactions?.length ?? 0) > 0 && (
+            <button
+              className={styles.item}
+              onClick={() => updatePin(pin.id, 'reactions', [])}
+            >
+              Убрать все реакции
+            </button>
+          )}
         </div>
       )}
     </div>

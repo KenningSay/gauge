@@ -13,6 +13,7 @@ import {
   bumpReaction,
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
+  removeReaction,
 } from './textFormat'
 
 describe('clampFontSize', () => {
@@ -257,5 +258,23 @@ describe('bumpReaction', () => {
     const before = [{ emoji: '🔥', count: 1 }]
     bumpReaction(before, '🔥', 1)
     expect(before).toEqual([{ emoji: '🔥', count: 1 }])
+  })
+})
+
+describe('removeReaction', () => {
+  it('drops a mark whatever its count, so a runaway 15 takes one action not fifteen', () => {
+    const list = [
+      { emoji: '🔥', count: 15 },
+      { emoji: '✅', count: 8 },
+    ]
+    expect(removeReaction(list, '🔥')).toEqual([{ emoji: '✅', count: 8 }])
+  })
+
+  it('is a no-op for a mark that is not there', () => {
+    expect(removeReaction([{ emoji: '✅', count: 1 }], '🔥')).toEqual([{ emoji: '✅', count: 1 }])
+  })
+
+  it('tolerates a pin that never had reactions', () => {
+    expect(removeReaction(undefined, '🔥')).toEqual([])
   })
 })

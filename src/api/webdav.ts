@@ -407,16 +407,41 @@ export async function stat(path: string): Promise<ResourceStat | null> {
 
 export class PreconditionFailedError extends Error {}
 
-// Same as putTextContent, but sends If-Match when ifMatch is provided so
-// the server rejects the write with 412 if the resource changed since the
-// ETag was captured. This is the whole mechanism behind the boards'
-// "changed elsewhere" dialog — client-side timestamp comparison would race
-// against another tab/device writing between our stat() and our PUT.
+// THE SERVER DOES NOT ENFORCE If-Match. Verified against the live nginx
+// WebDAV module: a PUT carrying a deliberately wrong If-Match returns 204
+// and overwrites the file anyway. nginx's dav module simply does not
+// implement conditional requests for PUT, and there is no config switch
+// that turns it on.
+//
+// This cost a user a board's worth of work: two tabs on two machines each
+// autosaved their own state into one board for an hour, each silently
+// clobbering the other, while the code believed a 412 would stop it. The
+// "changed elsewhere" dialog this file's old comment described could not
+// fire even once.
+//
+// So the check has to happen here. We PROPFIND first and compare the ETag
+// to the one the caller loaded. This is a check-then-write, so a writer
+// that slips in between our PROPFIND and our PUT is still missed — the
+// window is milliseconds instead of the hour it was before, and the
+// remaining risk is covered from the other side: the board store snapshots
+// whatever it is about to overwrite (see snapshotServerVersion), so even a
+// lost race leaves the other version on disk rather than in the void.
+//
+// If-Match is still sent. It costs nothing, and the day this vault moves
+// behind a server that honours it, the race closes completely on its own.
 export async function putTextContentConditional(
   path: string,
   content: string,
   ifMatch: string | null,
 ): Promise<ResourceStat> {
+  if (ifMatch) {
+    const current = await stat(path)
+    // A file that vanished under us is not a conflict: the write recreates
+    // it. Only a DIFFERENT etag means somebody else wrote in the meantime.
+    if (current?.etag && current.etag !== ifMatch) {
+      throw new PreconditionFailedError('Ресурс изменился с момента загрузки')
+    }
+  }
   const headers: Record<string, string> = { 'Content-Type': 'text/plain; charset=utf-8' }
   if (ifMatch) headers['If-Match'] = ifMatch
   try {

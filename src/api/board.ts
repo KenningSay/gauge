@@ -11,6 +11,8 @@
 //   /.gauge/templates/_index.json         list of user templates
 //   /.gauge/templates/<id>.json           one template's state
 //   /.gauge/templates/<id>/assets/<file>  that template's external files
+//   /.gauge/backups/<id>/<ts>__<kind>.json  point-in-time board snapshots
+//   /.gauge/locks/<id>/<clientId>.json    who currently has this board open
 //
 // Why history lives in its own file: op-logs are unbounded by design
 // (user chose "no limit"), and a board the user drags 500 pins on in one
@@ -48,6 +50,8 @@ export const BOARDS_DIR = `${GAUGE_DIR}/boards`
 export const TEMPLATES_DIR = `${GAUGE_DIR}/templates`
 export const BOARD_INDEX_FILE = `${BOARDS_INDEX_DIR}/_index.json`
 export const TEMPLATE_INDEX_FILE = `${TEMPLATES_DIR}/_index.json`
+export const BACKUPS_DIR = `${GAUGE_DIR}/backups`
+export const LOCKS_DIR = `${GAUGE_DIR}/locks`
 
 export function boardPath(id: string): string {
   return `${BOARDS_INDEX_DIR}/${id}.json`
@@ -605,6 +609,8 @@ export function bootstrap(): Promise<void> {
       await mkdir(GAUGE_DIR, 'boards-index')
       await mkdir(GAUGE_DIR, 'boards')
       await mkdir(GAUGE_DIR, 'templates')
+      await mkdir(GAUGE_DIR, 'backups')
+      await mkdir(GAUGE_DIR, 'locks')
     })().catch((e) => {
       // Don't memoise a failure — the next call should retry (user may have
       // logged in with different creds in between, or the network blipped).
@@ -707,6 +713,251 @@ async function tryDelete(path: string): Promise<void> {
   } catch (e) {
     if (!(e instanceof WebDavError && e.status === 404)) throw e
   }
+}
+
+// ---------- Backups ----------
+
+// Why this exists: the server does not enforce If-Match (see the long note
+// in webdav.ts), so a conditional write is a check-then-write with a small
+// race left in it, and "small" is not "none" when the thing at stake is an
+// evening's work. Snapshots close it from the other end — whatever a write
+// is about to lose is already on disk somewhere else.
+//
+// Two kinds land here:
+//   auto      periodic copy of this client's own state while it edits
+//   conflict  the OTHER side's state, captured the moment we detect that
+//             someone wrote under us — the version that would otherwise be
+//             the one that disappears
+//
+// Filenames are `<timestamp>__<kind>.json` with colons stripped, because a
+// colon in a WebDAV path has to be escaped in a URL and is illegal on some
+// filesystems the vault might get copied onto.
+
+export type BackupKind = 'auto' | 'conflict' | 'manual'
+
+export interface BackupEntry {
+  path: string
+  name: string
+  at: Date
+  kind: BackupKind
+  size: number
+}
+
+// Kept per board. Conflict snapshots get their own, larger budget: they are
+// rare, and each one is by definition a version that no longer exists
+// anywhere else.
+export const BACKUP_KEEP_AUTO = 40
+export const BACKUP_KEEP_CONFLICT = 25
+
+export function backupDirFor(boardId: string): string {
+  return `${BACKUPS_DIR}/${boardId}`
+}
+
+function backupFileName(at: Date, kind: BackupKind): string {
+  const iso = at.toISOString().replace(/[:.]/g, '-')
+  return `${iso}__${kind}.json`
+}
+
+function parseBackupName(name: string): { at: Date; kind: BackupKind } | null {
+  const m = name.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)__(auto|conflict|manual)\.json$/)
+  if (!m) return null
+  // Undo the colon/dot stripping: 2026-09-19T14-07-30-123Z -> ISO.
+  const iso = m[1].replace(
+    /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/,
+    '$1T$2:$3:$4.$5Z',
+  )
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return null
+  return { at, kind: m[2] as BackupKind }
+}
+
+// Best-effort by design: a failed backup must never fail or block the save
+// it was protecting. The caller gets false and carries on.
+export async function writeBackup(
+  boardId: string,
+  board: Board,
+  kind: BackupKind,
+  at: Date = new Date(),
+): Promise<boolean> {
+  try {
+    await mkdir(GAUGE_DIR, 'backups')
+    await mkdir(BACKUPS_DIR, boardId)
+    await putTextContent(
+      `${backupDirFor(boardId)}/${backupFileName(at, kind)}`,
+      JSON.stringify(board, null, 2),
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Captures what is on the server RIGHT NOW, before we overwrite it. Called
+// when a conditional save comes back as a conflict: that server-side state
+// is somebody's real work, and it is about to be replaced by ours if the
+// user picks "overwrite".
+export async function snapshotServerVersion(boardId: string): Promise<boolean> {
+  try {
+    const raw = await getTextContent(boardPath(boardId))
+    const board = JSON.parse(raw) as Board
+    return await writeBackup(boardId, board, 'conflict')
+  } catch {
+    return false
+  }
+}
+
+export async function listBackups(boardId: string): Promise<BackupEntry[]> {
+  let entries: FileEntry[]
+  try {
+    entries = await list(backupDirFor(boardId))
+  } catch (e) {
+    if (e instanceof WebDavError && e.status === 404) return []
+    throw e
+  }
+  const out: BackupEntry[] = []
+  for (const e of entries) {
+    if (e.isDir) continue
+    const parsed = parseBackupName(e.name)
+    if (!parsed) continue
+    out.push({
+      path: `${backupDirFor(boardId)}/${e.name}`,
+      name: e.name,
+      at: parsed.at,
+      kind: parsed.kind,
+      size: e.size,
+    })
+  }
+  // Newest first — the restore list is read top-down and the useful one is
+  // almost always the most recent.
+  out.sort((a, b) => b.at.getTime() - a.at.getTime())
+  return out
+}
+
+export async function loadBackup(path: string): Promise<Board> {
+  const raw = await getTextContent(path)
+  return JSON.parse(raw) as Board
+}
+
+export async function deleteBackup(path: string): Promise<void> {
+  await tryDelete(path)
+}
+
+// Trims each kind against its own budget. Runs after a successful write and
+// is best-effort for the same reason writeBackup is.
+export async function pruneBackups(boardId: string): Promise<void> {
+  try {
+    const all = await listBackups(boardId)
+    const budgets: Record<BackupKind, number> = {
+      auto: BACKUP_KEEP_AUTO,
+      conflict: BACKUP_KEEP_CONFLICT,
+      manual: BACKUP_KEEP_CONFLICT,
+    }
+    const seen: Record<string, number> = {}
+    for (const b of all) {
+      seen[b.kind] = (seen[b.kind] ?? 0) + 1
+      if (seen[b.kind] > budgets[b.kind]) await tryDelete(b.path)
+    }
+  } catch {
+    // Pruning is housekeeping; never let it surface as a save error.
+  }
+}
+
+
+// ---------- Presence ----------
+
+// Who else has this board open right now.
+//
+// Conflict detection catches a second editor only once it has already
+// written — one side then has to choose between two versions, and choosing
+// is a thing users get wrong under pressure. Presence moves the warning to
+// before the damage: open a board that is open somewhere else and you are
+// told, while both copies still agree.
+//
+// One small file per client rather than one shared file with a list in it,
+// because a shared list has exactly the concurrent-write problem this whole
+// change is about. Nobody ever writes to anybody else's file; a stale one
+// is deleted only long after its owner can plausibly still be alive.
+
+// A client is considered present if its heartbeat is younger than this.
+// Three missed beats — enough slack for a phone that slept for a moment or
+// a laggy VPN, short enough that a closed tab stops warning people quickly.
+export const PRESENCE_STALE_MS = 90_000
+export const PRESENCE_BEAT_MS = 30_000
+// Long past any plausible "it might come back": swept on sight.
+const PRESENCE_GARBAGE_MS = 30 * 60_000
+
+export interface PresencePeer {
+  clientId: string
+  label: string
+  at: Date
+}
+
+export function presenceDirFor(boardId: string): string {
+  return `${LOCKS_DIR}/${boardId}`
+}
+
+// Best-effort everywhere: presence is an advisory nicety, and a vault that
+// refuses to create the folder must not stop anyone from opening a board.
+export async function announcePresence(
+  boardId: string,
+  clientId: string,
+  label: string,
+): Promise<void> {
+  try {
+    await mkdir(GAUGE_DIR, 'locks')
+    await mkdir(LOCKS_DIR, boardId)
+    await putTextContent(
+      `${presenceDirFor(boardId)}/${clientId}.json`,
+      JSON.stringify({ clientId, label, at: new Date().toISOString() }),
+    )
+  } catch {
+    // ignored by design
+  }
+}
+
+export async function clearPresence(boardId: string, clientId: string): Promise<void> {
+  await tryDelete(`${presenceDirFor(boardId)}/${clientId}.json`).catch(() => {})
+}
+
+// Returns everyone EXCEPT self who beat recently. Freshness comes from the
+// directory listing's mtime, not the JSON body, so this costs one PROPFIND
+// and no GETs at all; the body is only read for the label, and only for
+// peers that turn out to be live.
+export async function listPresence(
+  boardId: string,
+  selfClientId: string,
+): Promise<PresencePeer[]> {
+  let entries: FileEntry[]
+  try {
+    entries = await list(presenceDirFor(boardId))
+  } catch {
+    return []
+  }
+  const now = Date.now()
+  const peers: PresencePeer[] = []
+  for (const e of entries) {
+    if (e.isDir || !e.name.endsWith('.json')) continue
+    const clientId = e.name.slice(0, -'.json'.length)
+    if (clientId === selfClientId) continue
+    const at = new Date(e.modified)
+    const age = now - at.getTime()
+    if (Number.isNaN(at.getTime())) continue
+    if (age > PRESENCE_GARBAGE_MS) {
+      void tryDelete(`${presenceDirFor(boardId)}/${e.name}`).catch(() => {})
+      continue
+    }
+    if (age > PRESENCE_STALE_MS) continue
+    let label = 'другое устройство'
+    try {
+      const raw = await getTextContent(`${presenceDirFor(boardId)}/${e.name}`)
+      const parsed = JSON.parse(raw) as { label?: string }
+      if (parsed.label) label = parsed.label
+    } catch {
+      // keep the default label
+    }
+    peers.push({ clientId, label, at })
+  }
+  return peers
 }
 
 // ---------- History ----------

@@ -7,7 +7,7 @@ import { FileText, AlertCircle } from 'lucide-react'
 import type { NotePin as NotePinT } from '../../../api/board'
 import { BASE_NOTE_FONT_SIZE, FONT_BY_ID, HUD_STYLES, STYLE_CLASS, readableOn } from './noteStyles'
 import { editorShortcut } from '../../../utils/editorShortcuts'
-import { bumpReaction, textFormatStyle } from '../../../utils/textFormat'
+import { bumpReaction, removeReaction, textFormatStyle } from '../../../utils/textFormat'
 import { getTextContent, putTextContent } from '../../../api/webdav'
 import { useBoardStore } from '../../../store/useBoardStore'
 import { usePinActivation } from '../PinShell'
@@ -244,14 +244,26 @@ export function NotePin({ pin }: { pin: NotePinT }) {
               key={r.emoji}
               type="button"
               className={styles.reaction}
-              title={`${r.emoji} ×${r.count} — клик добавляет, Alt+клик убирает`}
+              title={`${r.emoji} ×${r.count} — клик добавляет, Shift+клик убирает, правый клик снимает совсем`}
               // Must not reach the pin underneath, or every count bumped
               // is also a note dragged a pixel and an editor opened.
               onPointerDown={(e) => e.stopPropagation()}
               onDoubleClick={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation()
-                updatePin(pin.id, 'reactions', bumpReaction(pin.reactions, r.emoji, e.altKey ? -1 : 1))
+                // Shift as well as Alt: on Linux the window manager takes
+                // Alt+click for itself (it drags the window), so a chip
+                // that only listened for Alt could be counted up and never
+                // down — which is exactly how one of these reached 15.
+                const down = e.altKey || e.shiftKey
+                updatePin(pin.id, 'reactions', bumpReaction(pin.reactions, r.emoji, down ? -1 : 1))
+              }}
+              // Right-click clears the mark outright. Undoing a count of 15
+              // one click at a time is not an interaction, it is a chore.
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                updatePin(pin.id, 'reactions', removeReaction(pin.reactions, r.emoji))
               }}
             >
               <span>{r.emoji}</span>

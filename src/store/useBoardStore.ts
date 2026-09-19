@@ -72,12 +72,24 @@ interface BoardState {
 
   flushSave: () => Promise<void>
   overwriteServer: () => Promise<void>
+  restoreFromBackup: (path: string) => Promise<void>
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 const SAVE_DEBOUNCE_MS = 500
 let saveInFlight: Promise<void> | null = null
 let saveQueued = false
+
+// How often a still-editing client drops a copy of its own state into
+// /.gauge/backups. Not every save: autosave fires every half second of
+// activity, and 500 snapshots of one afternoon help nobody. Every few
+// minutes of ACTUAL editing is enough to bound any loss to a few minutes,
+// and — the case that matters — two clients editing the same board write
+// their snapshots independently, so the version that loses a clobbering
+// race is still sitting on disk afterwards.
+const SNAPSHOT_INTERVAL_MS = 3 * 60 * 1000
+let lastSnapshotAt = 0
+let lastSnapshotBoardId: string | null = null
 
 export const useBoardStore = create<BoardState>((set, get) => {
   function scheduleSave() {
@@ -105,11 +117,18 @@ export const useBoardStore = create<BoardState>((set, get) => {
         await boardApi.saveHistory(board.id, history)
         await boardApi.saveChat(board.id, chat)
         set({ etag: stat.etag, saveState: 'saved', saveError: null })
+        void maybeSnapshot(board)
         setTimeout(() => {
           if (get().saveState === 'saved') set({ saveState: 'idle' })
         }, 1500)
       } catch (e) {
         if (e instanceof PreconditionFailedError) {
+          // Somebody else wrote this board since we loaded it. BOTH versions
+          // are now at risk: theirs if the user picks "overwrite", ours if
+          // the user picks "reload". Park both in /.gauge/backups before
+          // asking, so whichever button gets pressed, nothing is gone.
+          await boardApi.snapshotServerVersion(board.id)
+          await boardApi.writeBackup(board.id, board, 'conflict')
           set({ saveState: 'conflict', saveError: 'Доска изменена в другом месте' })
         } else if (e instanceof WebDavError) {
           set({ saveState: 'error', saveError: `Ошибка сохранения: ${e.status}` })
@@ -125,6 +144,23 @@ export const useBoardStore = create<BoardState>((set, get) => {
       }
     })()
     return saveInFlight
+  }
+
+  // Best-effort and deliberately not awaited by the save path: a snapshot
+  // that fails or hangs must not turn a successful save into a failed one.
+  async function maybeSnapshot(board: Board) {
+    const now = Date.now()
+    // A board that was just opened starts its own clock, so switching
+    // boards always gets one snapshot in early rather than inheriting
+    // another board's timer and waiting out the full interval.
+    if (lastSnapshotBoardId !== board.id) {
+      lastSnapshotBoardId = board.id
+      lastSnapshotAt = 0
+    }
+    if (now - lastSnapshotAt < SNAPSHOT_INTERVAL_MS) return
+    lastSnapshotAt = now
+    const ok = await boardApi.writeBackup(board.id, board, 'auto')
+    if (ok) await boardApi.pruneBackups(board.id)
   }
 
   return {
@@ -421,12 +457,47 @@ export const useBoardStore = create<BoardState>((set, get) => {
     overwriteServer: async () => {
       const { board } = get()
       if (!board) return
+      // Unconditional write — this is the one call that is ALLOWED to
+      // clobber. Keep a copy of what is there first; "overwrite" is chosen
+      // in a hurry and regretted at leisure.
+      await boardApi.snapshotServerVersion(board.id)
       const stat = await boardApi.saveBoard(board, null)
       set({ etag: stat.etag, saveState: 'saved', saveError: null })
       setTimeout(() => {
         if (get().saveState === 'saved') set({ saveState: 'idle' })
       }, 1500)
       useUiStore.getState().pushToast('Локальная версия перезаписала серверную')
+    },
+
+    restoreFromBackup: async (path) => {
+      const cur = get().board
+      if (!cur) return
+      // The state being replaced becomes a snapshot of its own first —
+      // restoring the wrong version must not be the mistake that costs
+      // anything. It is the same one-way door "overwrite" is.
+      await boardApi.writeBackup(cur.id, cur, 'manual')
+      const restored = await boardApi.loadBackup(path)
+      // Identity stays with the live board: id and name are mirrored in
+      // _index.json, and pulling an old name back out of a snapshot would
+      // desync the tab strip from the index. This restores CONTENT.
+      const board: Board = {
+        ...restored,
+        id: cur.id,
+        name: cur.name,
+        createdAt: cur.createdAt,
+      }
+      // The op-log describes a timeline that no longer leads here, so undo
+      // would splice edits into a state they were never recorded against.
+      // Dropping it is the honest option; the pre-restore snapshot above is
+      // what "undo the restore" actually means now.
+      set({
+        board,
+        history: { ops: [], cursor: 0 },
+        selected: new Set(),
+        activePinId: null,
+      })
+      await get().flushSave()
+      useUiStore.getState().pushToast('Доска восстановлена из версии')
     },
   }
 })
