@@ -200,6 +200,45 @@ export function fitFontSize(
   return lo
 }
 
+// --- growing a note to fit its text ----------------------------------
+
+// The height a note should take so its editor shows all the text.
+//
+// `contentH` is the text's own height (measure it with the textarea
+// collapsed, or the answer is just the height it already has), `chromeH`
+// is everything of the card that is not the editor, and `currentH` is
+// where the card is now.
+//
+// Returns null when no resize is warranted. THIS IS THE IMPORTANT PART:
+// the first version of this compared scrollHeight to clientHeight and grew
+// by the difference. The difference never reached zero — measured against
+// a textarea that had already been stretched, it stayed at a constant 20px
+// — so every resize triggered another one: 52 of them in a row, a 140px
+// card grown to 1180px, and a frozen tab. A grow step must therefore be
+// computed from the CONTENT, never from the gap, and the caller must also
+// refuse to run twice for the same text.
+// Past this a note is a document, not a card, and something has probably
+// gone wrong with the measurement.
+export const MAX_AUTO_GROW_HEIGHT = 6000
+
+export function autoGrowHeight(
+  contentH: number,
+  chromeH: number,
+  currentH: number,
+): number | null {
+  if (!Number.isFinite(contentH) || !Number.isFinite(chromeH)) return null
+  const target = Math.ceil(contentH + Math.max(0, chromeH))
+  // A pixel of tolerance: sub-pixel layout should not start a resize.
+  if (target <= currentH + 1) return null
+  // An absolute ceiling, not a per-step limit. A per-step cap of "no more
+  // than double" was tried first and was wrong: pasting twelve paragraphs
+  // is a legitimate jump from 185px to 1713px, and the cap left the card
+  // 1100px short of its own text. What the cap is actually for is a
+  // measurement gone haywire, and that produces absurd numbers, not
+  // merely large ones.
+  return Math.min(target, MAX_AUTO_GROW_HEIGHT)
+}
+
 // --- reactions --------------------------------------------------------
 
 // Adding a mark that is already there bumps its count rather than putting

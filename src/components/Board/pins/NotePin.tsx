@@ -9,6 +9,7 @@ import type { NotePin as NotePinT } from '../../../api/board'
 import { BASE_NOTE_FONT_SIZE, FONT_BY_ID, HUD_STYLES, STYLE_CLASS, readableOn } from './noteStyles'
 import { editorShortcut } from '../../../utils/editorShortcuts'
 import {
+  autoGrowHeight,
   bumpReaction,
   clampReactionScale,
   removeReaction,
@@ -104,23 +105,50 @@ export function NotePin({ pin }: { pin: NotePinT }) {
 
   // Grows the card as the text outgrows it. Before this the note kept its
   // size and the overflow scrolled inside, so a long note looked like a
-  // short one with the end hidden — you had to notice and drag the corner.
+  // short one with the end hidden.
+  //
+  // Runs at most ONCE per distinct text. That is not an optimisation, it
+  // is the safety catch: the first version re-ran on every height change
+  // it caused, the measurement never converged, and a card grew itself to
+  // 1180px in 52 steps and froze the tab. Keyed on the draft, the loop
+  // cannot exist — a resize does not change the text.
   //
   // Growth only, never shrink: a card that snapped smaller on every
   // backspace would fight the person typing. Deliberate shrinking is the
   // corner handle, or «Подогнать высоту под текст» in the menu.
+  const grownForRef = useRef<string | null>(null)
+  // Everything of the card that is not the editor — borders, padding a
+  // style adds, a HUD plate's inset. Measured ONCE, when the editor opens
+  // and the card is at rest.
+  //
+  // It cannot be measured per keystroke: the height transition means
+  // clientHeight lags behind the height the card is already heading for,
+  // so `pin.h - clientHeight` reads as chrome that is growing. Measured
+  // that way the card overshot to 821px for four lines of text — the
+  // animation added to make growth smooth was feeding the measurement.
+  const chromeRef = useRef<number | null>(null)
   useEffect(() => {
-    if (!activated) return
+    if (!activated) {
+      grownForRef.current = null
+      chromeRef.current = null
+      return
+    }
     const el = areaRef.current
     if (!el) return
-    const needed = el.scrollHeight
-    const avail = el.clientHeight
-    if (needed <= avail + 1) return
-    // One line of slack on top of what is needed, so the next few
-    // characters don't each trigger their own resize — every resize is an
-    // undo step and an autosave wake-up.
-    const line = Math.max(20, Math.round(parseFloat(getComputedStyle(el).lineHeight) || 24))
-    resizePin(pin.id, { w: pin.w, h: pin.h + (needed - avail) + line })
+    if (chromeRef.current === null) chromeRef.current = pin.h - el.clientHeight
+    if (grownForRef.current === draft) return
+    grownForRef.current = draft
+
+    // Collapse before measuring: scrollHeight on a textarea that is
+    // already stretched to the card reports the stretched height, not the
+    // text's, which is exactly how the runaway loop started.
+    const restore = el.style.height
+    el.style.height = '0px'
+    const contentH = el.scrollHeight
+    el.style.height = restore
+
+    const next = autoGrowHeight(contentH, chromeRef.current ?? 0, pin.h)
+    if (next !== null) resizePin(pin.id, { w: pin.w, h: next })
   }, [draft, activated, pin.id, pin.w, pin.h, resizePin])
 
   // --- linked vault file ---------------------------------------------

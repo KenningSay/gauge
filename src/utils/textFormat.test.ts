@@ -14,6 +14,8 @@ import {
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
   removeReaction,
+  autoGrowHeight,
+  MAX_AUTO_GROW_HEIGHT,
 } from './textFormat'
 
 describe('clampFontSize', () => {
@@ -276,5 +278,42 @@ describe('removeReaction', () => {
 
   it('tolerates a pin that never had reactions', () => {
     expect(removeReaction(undefined, '🔥')).toEqual([])
+  })
+})
+
+describe('autoGrowHeight', () => {
+  it('returns the height the text needs plus the card chrome', () => {
+    expect(autoGrowHeight(200, 20, 140)).toBe(220)
+  })
+
+  it('returns null when the text already fits', () => {
+    expect(autoGrowHeight(100, 20, 140)).toBeNull()
+  })
+
+  it('ignores sub-pixel overflow rather than resizing for it', () => {
+    expect(autoGrowHeight(120.4, 20, 140)).toBeNull()
+  })
+
+  // The regression that matters: growth is computed from the CONTENT, so
+  // feeding the result back in is a no-op. The old "grow by the gap"
+  // version never converged — it resized 52 times and froze the tab.
+  it('converges: re-measuring after the grow asks for nothing more', () => {
+    const first = autoGrowHeight(300, 20, 140)
+    expect(first).toBe(320)
+    expect(autoGrowHeight(300, 20, first!)).toBeNull()
+  })
+
+  // A paste of twelve paragraphs is a legitimate jump of 1500px. Only an
+  // absurd measurement gets clamped.
+  it('allows a large but plausible jump in one step', () => {
+    expect(autoGrowHeight(1697, 16, 185)).toBe(1713)
+  })
+
+  it('clamps an absurd measurement to the ceiling', () => {
+    expect(autoGrowHeight(99999, 0, 140)).toBe(MAX_AUTO_GROW_HEIGHT)
+  })
+
+  it('treats a non-finite measurement as no answer', () => {
+    expect(autoGrowHeight(Number.NaN, 20, 140)).toBeNull()
   })
 })
