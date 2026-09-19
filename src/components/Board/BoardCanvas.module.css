@@ -32,3 +32,29 @@
   border-radius: 2px;
   z-index: 1000;
 }
+/* ---------- alignment guides ---------- */
+
+/* Lives inside the zoomed world layer, so its coordinates are world
+   coordinates and a guide lands exactly on the edge it describes. The
+   overflow is visible because guides routinely run past the nominal
+   bounds of this element. */
+.guideLayer {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 9000;
+}
+
+.guideLine {
+  /* Divided by the zoom, like every other hairline on the board: a guide
+     tuned at 100% becomes a stripe at 300%.
+     1.5px rather than 1: at 1px on a dark board the line was there but
+     easy to miss, which defeats the point of showing it. */
+  stroke: var(--signal);
+  stroke-width: calc(1.5px / var(--zoom, 1));
+  stroke-dasharray: calc(7px / var(--zoom, 1)) calc(5px / var(--zoom, 1));
+  /* Enough glow to read over a light-coloured card without becoming a
+     decoration in its own right. */
+  filter: drop-shadow(0 0 calc(2px / var(--zoom, 1)) var(--signal-dim));
+}

@@ -5,6 +5,7 @@ import { useUiStore } from '../../store/useUiStore'
 import { useFileStore } from '../../store/useFileStore'
 import { useBoardPanZoom, type ViewportState } from '../../hooks/useBoardPanZoom'
 import { useBoardVirtual } from '../../hooks/useBoardVirtual'
+import { boundingBox, computeAlignSnap, nearbyRects, type Guide } from '../../utils/alignGuides'
 import { boundsOf, rectsIntersect, resolvePush, resolvePushForMoved, type Rect } from '../../utils/boardGeo'
 import {
   looksLikeUrl,
@@ -192,25 +193,105 @@ export function BoardCanvas() {
   })
   const visiblePins = exporting ? pins : windowed
 
+  // --- alignment guides ---
+
+  // Pull distance in SCREEN pixels, converted to world units per zoom, so
+  // the magnet feels identical at 30% and at 300%. Six is about the width
+  // of the "did I mean to line these up" wobble in a hand-held drag.
+  const ALIGN_PULL_PX = 6
+  // How far away a card may be and still earn a guide line. A line drawn
+  // to something off screen explains nothing.
+  const ALIGN_NEIGHBOUR_RADIUS = 1200
+
+  const [guides, setGuides] = useState<Guide[]>([])
+
+  // Guides for the current drag/resize, plus the offset that lands the
+  // moving box on them. Memoised on the interaction so it is computed once
+  // per pointer event rather than once per pin per render.
+  const alignSnap = useMemo(() => {
+    if (!interaction) return null
+    const threshold = ALIGN_PULL_PX / viewport.zoom
+    if (interaction.kind === 'drag') {
+      const movingIds = new Set(interaction.ids)
+      const moved = pins
+        .filter((p) => movingIds.has(p.id))
+        .map((p) => {
+          const start = interaction.startPositions.get(p.id)
+          return start
+            ? { x: start.x + interaction.delta.dx, y: start.y + interaction.delta.y, w: p.w, h: p.h }
+            : { x: p.x, y: p.y, w: p.w, h: p.h }
+        })
+      const bbox = boundingBox(moved)
+      if (!bbox) return null
+      const others = pins
+        .filter((p) => !movingIds.has(p.id))
+        .map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h }))
+      return computeAlignSnap(bbox, nearbyRects(bbox, others, ALIGN_NEIGHBOUR_RADIUS), threshold)
+    }
+    if (interaction.kind === 'resize') {
+      const r = interaction.current
+      const others = pins
+        .filter((p) => p.id !== interaction.id)
+        .map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h }))
+      const near = nearbyRects(r, others, ALIGN_NEIGHBOUR_RADIUS)
+      // A resize aligns the EDGE under the cursor, not the whole box: the
+      // opposite edge is pinned and must not be pulled anywhere. Collapsing
+      // the box to a line on the moving edge makes all three of that axis's
+      // anchors coincide, so the same function answers the narrower
+      // question without a second code path.
+      const h = interaction.handle
+      const movingEast = h.includes('e')
+      const movingWest = h.includes('w')
+      const movingNorth = h.includes('n')
+      const movingSouth = h.includes('s')
+      const edge = {
+        x: movingEast ? r.x + r.w : r.x,
+        y: movingSouth ? r.y + r.h : r.y,
+        w: movingEast || movingWest ? 0 : r.w,
+        h: movingNorth || movingSouth ? 0 : r.h,
+      }
+      const snapped = computeAlignSnap(edge, near, threshold)
+      return {
+        dx: movingEast || movingWest ? snapped.dx : 0,
+        dy: movingNorth || movingSouth ? snapped.dy : 0,
+        guides: snapped.guides,
+      }
+    }
+    return null
+  }, [interaction, pins, viewport.zoom])
+
+  // Drawn lines follow the computation; they disappear the moment the
+  // interaction ends, which is what "only while something is near" means.
+  useEffect(() => {
+    setGuides(alignSnap?.guides ?? [])
+  }, [alignSnap])
+
   // --- per-pin drag/resize overrides applied on top of stored positions ---
   const overrides = useMemo(() => {
     if (!interaction) return null
+    // The alignment pull is applied here rather than on release: a magnet
+    // you cannot see until you let go is not a magnet, it is a surprise.
+    const adx = alignSnap?.dx ?? 0
+    const ady = alignSnap?.dy ?? 0
     if (interaction.kind === 'drag') {
       const m = new Map<string, Partial<Rect>>()
       for (const id of interaction.ids) {
         const start = interaction.startPositions.get(id)
         if (!start) continue
-        m.set(id, { x: start.x + interaction.delta.dx, y: start.y + interaction.delta.y })
+        m.set(id, {
+          x: start.x + interaction.delta.dx + adx,
+          y: start.y + interaction.delta.y + ady,
+        })
       }
       return m
     }
     if (interaction.kind === 'resize') {
       const m = new Map<string, Partial<Rect>>()
-      m.set(interaction.id, interaction.current)
+      m.set(interaction.id, resizeWithAlign(interaction.handle, interaction.current, adx, ady))
       return m
     }
     return null
-  }, [interaction])
+  }, [interaction, alignSnap])
 
   // --- pointer handlers on the container (pan is handled by the hook) ---
 
@@ -405,13 +486,31 @@ export function BoardCanvas() {
           for (const id of ids) {
             const s = startPositions.get(id)
             if (!s) continue
-            moves.push({ id, x: snap(s.x + delta.dx), y: snap(s.y + delta.y) })
+            // Same offset the card was already drawn with, so it stays
+            // where the guide showed it instead of jumping on release.
+            const adx = alignSnap?.dx ?? 0
+            const ady = alignSnap?.dy ?? 0
+            // Grid snap yields to a guide: if the card is aligned to a
+            // neighbour, rounding it to the grid would knock it back off.
+            const keep = adx !== 0 || ady !== 0
+            moves.push({
+              id,
+              x: keep ? s.x + delta.dx + adx : snap(s.x + delta.dx),
+              y: keep ? s.y + delta.y + ady : snap(s.y + delta.y),
+            })
           }
           movePins(moves)
           pushNeighbours(ids)
         }
       } else if (interaction.kind === 'resize') {
-        const { id, current, startRect } = interaction
+        const { id, startRect } = interaction
+        // Commit exactly the rectangle that was on screen, guides included.
+        const current = resizeWithAlign(
+          interaction.handle,
+          interaction.current,
+          alignSnap?.dx ?? 0,
+          alignSnap?.dy ?? 0,
+        )
         if (current.w !== startRect.w || current.h !== startRect.h) {
           // Resize commits only the size; position changes (from dragging
           // a corner handle that moves x/y) are a separate movePins batch.
@@ -420,7 +519,11 @@ export function BoardCanvas() {
             moves.push({ id, x: current.x, y: current.y })
           }
           if (moves.length) movePins(moves)
-          resizePin(id, { w: snap(current.w), h: snap(current.h) })
+          const aligned = (alignSnap?.dx ?? 0) !== 0 || (alignSnap?.dy ?? 0) !== 0
+          resizePin(id, {
+            w: aligned ? current.w : snap(current.w),
+            h: aligned ? current.h : snap(current.h),
+          })
           // A pin grown over its neighbours pushes them like a moved one.
           pushNeighbours([id])
         }
@@ -1188,6 +1291,24 @@ export function BoardCanvas() {
           ['--zoom' as string]: viewport.zoom,
         }}
       >
+        {/* Alignment guides. Drawn in world coordinates inside the zoomed
+            layer so they sit exactly on the edges they describe, with the
+            stroke divided by the zoom so the line stays a hairline. */}
+        {guides.length > 0 && (
+          <svg className={styles.guideLayer} aria-hidden>
+            {guides.map((g, i) => (
+              <line
+                key={`${g.axis}-${g.pos}-${i}`}
+                x1={g.axis === 'x' ? g.pos : g.start}
+                y1={g.axis === 'x' ? g.start : g.pos}
+                x2={g.axis === 'x' ? g.pos : g.end}
+                y2={g.axis === 'x' ? g.end : g.pos}
+                className={styles.guideLine}
+              />
+            ))}
+          </svg>
+        )}
+
         <EdgeLayer
           edges={edges}
           pins={pins}
@@ -1357,6 +1478,28 @@ function viewportCenterWorld(
     x: viewport.x + size.w / 2 / viewport.zoom,
     y: viewport.y + size.h / 2 / viewport.zoom,
   }
+}
+
+// Applies an alignment offset to a live resize: the dragged edge moves,
+// the opposite one stays where it is. Moving the whole rectangle (as a
+// drag does) would drag the pinned edge along and the card would slide
+// instead of resizing.
+function resizeWithAlign(handle: Handle, r: Rect, dx: number, dy: number): Rect {
+  if (dx === 0 && dy === 0) return r
+  let { x, y, w, h } = r
+  if (handle.includes('e')) w += dx
+  if (handle.includes('w')) {
+    x += dx
+    w -= dx
+  }
+  if (handle.includes('s')) h += dy
+  if (handle.includes('n')) {
+    y += dy
+    h -= dy
+  }
+  // A guide must never invert a card. Below the floor, ignore the pull.
+  if (w < MIN_W || h < MIN_H) return r
+  return { x, y, w, h }
 }
 
 function computeResize(
