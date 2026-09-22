@@ -77,7 +77,16 @@ export function templateAssetsDirFor(id: string): string {
 
 // ---------- Types ----------
 
-export type PinType = 'note' | 'image' | 'video' | 'audio' | 'file' | 'link' | 'shape' | 'frame'
+export type PinType =
+  | 'note'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'file'
+  | 'link'
+  | 'shape'
+  | 'frame'
+  | 'drawing'
 export type NoteTexture = 'plain' | 'grid' | 'ruled' | 'dots' | 'graph'
 
 interface PinBase {
@@ -466,6 +475,31 @@ export interface FramePin extends PinBase {
   padding?: number
 }
 
+// Freehand ink: what a pencil leaves behind.
+//
+// Points are stored RELATIVE to the pin's own box and normalised 0..1, so
+// a drawing scales when the pin is resized instead of tearing away from
+// its frame — the same convention the note decorations use, and for the
+// same reason.
+//
+// Several strokes live in one pin while the pencil stays in hand: drawing
+// a letter takes three strokes and nobody means three objects by it. The
+// pin's box grows to fit each new stroke.
+export interface InkStroke {
+  // Flat [x0, y0, x1, y1, …] rather than objects: a stroke is hundreds of
+  // points and this halves what a board file has to carry.
+  points: number[]
+  color: string
+  // In board units, so a line drawn at 30% zoom is as thick as one drawn
+  // at 300% when you look at them side by side.
+  width: number
+}
+
+export interface DrawingPin extends PinBase {
+  type: 'drawing'
+  strokes: InkStroke[]
+}
+
 export type Pin =
   | NotePin
   | ImagePin
@@ -475,6 +509,7 @@ export type Pin =
   | LinkPin
   | ShapePin
   | FramePin
+  | DrawingPin
 
 export interface Viewport {
   x: number

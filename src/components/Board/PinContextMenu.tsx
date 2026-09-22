@@ -335,7 +335,7 @@ function PinMenuItems({
   const handleDownload = () => {
     // Notes and links have no backing file — the menu item is hidden for
     // them, but the union still has to be narrowed for the compiler.
-    if (pin.type === 'link' || pin.type === 'note' || pin.type === 'frame') return
+    if (pin.type === 'link' || pin.type === 'note' || pin.type === 'frame' || pin.type === 'drawing') return
     // A shape may or may not carry a picture; the others always do.
     if (!pin.assetPath || !pin.fileName) return
     void downloadEntry(pin.assetPath, pin.fileName)
@@ -427,7 +427,7 @@ function PinMenuItems({
           Отвязать от файла
         </MenuItem>
       )}
-      {pin.type !== 'link' && pin.type !== 'note' && pin.type !== 'frame' && pin.assetPath && (
+      {pin.type !== 'link' && pin.type !== 'note' && pin.type !== 'frame' && pin.type !== 'drawing' && pin.assetPath && (
         <MenuItem icon={<Download size={13} />} onClick={handleDownload}>Скачать</MenuItem>
       )}
       <div className={styles.divider} />

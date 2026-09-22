@@ -143,6 +143,9 @@ ${pin.text}` : ''}`
       // Contents are listed as their own pins; the frame contributes
       // only the grouping it implies.
       return `[Контейнер] ${pin.title || 'без названия'}`
+    case 'drawing':
+      // Ink has no text to send; the model gets its presence and size.
+      return `[Рисунок от руки] ${pin.strokes.length} штрихов`
   }
 }
 
@@ -168,6 +171,8 @@ function shortLabel(pin: Pin): string {
       return pin.text.split('\n')[0]?.slice(0, 80) || `фигура (${pin.shape})`
     case 'frame':
       return `контейнер «${pin.title || 'без названия'}»`
+    case 'drawing':
+      return 'рисунок от руки'
     default:
       return pin.fileName
   }

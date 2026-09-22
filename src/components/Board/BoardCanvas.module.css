@@ -107,3 +107,105 @@
     text-align: center;
   }
 }
+
+/* ---------- pencil ---------- */
+
+/* The live stroke, drawn in world coordinates so it sits under the hand. */
+.inkPreview {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 8500;
+}
+
+/* Pencil palette. Portalled into <body> like every other fixed bar on the
+   board — inside the transformed world layer `fixed` follows the canvas. */
+.penBar {
+  position: fixed;
+  top: calc(var(--safe-top) + 96px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--signal-dim);
+  box-shadow: var(--shadow-md);
+}
+
+.penHint {
+  font-size: 16px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.penSwatches,
+.penWidths {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.penSwatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  padding: 0;
+}
+
+.penSwatchOn {
+  border-color: var(--signal);
+  transform: scale(1.1);
+}
+
+.penWidth {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.penWidth span { border-radius: 999px; display: block; }
+.penWidth:hover { background: var(--bg-hover); }
+.penWidthOn { background: var(--bg-selected); color: var(--signal); }
+
+.penDone {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.penDone:hover { background: var(--bg-hover); }
+
+@media (pointer: coarse), (max-width: 640px) {
+  .penBar {
+    max-width: calc(100vw - 16px);
+    flex-wrap: wrap;
+    justify-content: center;
+    border-radius: var(--radius-md);
+  }
+
+  .penHint { display: none; }
+  .penSwatch { width: var(--tap); height: var(--tap); }
+  .penWidth { width: var(--tap); height: var(--tap); }
+  .penDone { height: var(--tap); }
+}

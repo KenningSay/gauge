@@ -2234,3 +2234,15 @@
   max-width: 100%;
   overflow-x: auto;
 }
+
+/* ---------- freehand ink ---------- */
+
+.inkRoot {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  /* The ink itself catches nothing: the pin shell's own overlay handles
+     dragging, and a stroke is a thin line nobody can reliably hit. */
+  pointer-events: none;
+}

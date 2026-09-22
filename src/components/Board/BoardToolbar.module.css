@@ -200,3 +200,10 @@
   color: var(--signal);
   box-shadow: inset 0 0 0 1px var(--signal-dim);
 }
+
+/* A toggled-on tool (the pencil stays down until you put it away). */
+.btnOn {
+  background: var(--bg-selected);
+  color: var(--signal);
+  box-shadow: inset 0 0 0 1px var(--signal-dim);
+}

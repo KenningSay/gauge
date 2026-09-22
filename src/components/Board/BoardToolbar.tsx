@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react'
 import {
+  Pencil,
   StickyNote,
   FileText,
   Link as LinkIcon,
@@ -43,6 +44,10 @@ interface Props {
   // Wraps the selection in a frame, or drops an empty one when nothing is
   // selected.
   onCreateFrame: () => void
+  // The pencil: freehand drawing straight on the canvas. Stays on until
+  // turned off, unlike the shape tool.
+  penOn: boolean
+  onTogglePen: () => void
   onFit: () => void
   onCreateVaultFile: () => void
 }
@@ -54,7 +59,7 @@ const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
   { id: 'triangle', label: 'Треугольник', icon: <Triangle size={16} /> },
 ]
 
-export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, armedShape, onCreateFrame, onFit, onCreateVaultFile, onExport, exporting }: Props) {
+export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, armedShape, onCreateFrame, penOn, onTogglePen, onFit, onCreateVaultFile, onExport, exporting }: Props) {
 
   // A phone shows the side panel full-screen; the toolbar would float
   // across its bottom edge, over the chat input or the last row of
@@ -110,6 +115,15 @@ export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCrea
           onClick={onCreateFrame}
         >
           <Frame size={17} />
+        </button>
+        <button
+          className={`${styles.btn} ${penOn ? styles.btnOn : ''}`}
+          title="Карандаш: рисовать от руки прямо по холсту"
+          aria-label="Карандаш"
+          aria-pressed={penOn}
+          onClick={onTogglePen}
+        >
+          <Pencil size={17} />
         </button>
         <button
           className={styles.btn}

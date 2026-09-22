@@ -7,6 +7,12 @@ import { useBoardPanZoom, type ViewportState } from '../../hooks/useBoardPanZoom
 import { useBoardVirtual } from '../../hooks/useBoardVirtual'
 import { boundingBox, computeAlignSnap, nearbyRects, type Guide } from '../../utils/alignGuides'
 import { FRAME_DEFAULT_PADDING, frameAround, pinsInFrame } from '../../utils/frameGeo'
+import {
+  MIN_STROKE_POINTS,
+  appendSegment,
+  growToFit,
+  simplify,
+} from '../../utils/inkGeo'
 import { boundsOf, rectsIntersect, resolvePush, resolvePushForMoved, type Rect } from '../../utils/boardGeo'
 import {
   looksLikeUrl,
@@ -89,6 +95,13 @@ type Interaction =
       currentWorld: { x: number; y: number }
     }
   | {
+      // Freehand: the pencil is down and collecting points. Points are in
+      // WORLD coordinates while the stroke is live; they are normalised
+      // into the pin only when the pencil lifts.
+      kind: 'ink'
+      pointerId: number
+    }
+  | {
       // Drawing a shape by dragging its box out, the way every vector
       // editor does it. The old flow dropped a fixed 260x180 shape in the
       // middle of the screen and left you to resize it.
@@ -111,6 +124,10 @@ type Interaction =
     }
 
 const NO_EDGES: Edge[] = []
+
+// A pencil palette, not a colour picker: six that read on a dark board.
+const PEN_COLORS = ['#e8eae6', '#2dd4bf', '#fbbf24', '#f87171', '#a78bfa', '#1b1a18']
+const PEN_WIDTHS = [2, 3, 6, 12]
 
 const MIN_W = 80
 const MIN_H = 80
@@ -226,6 +243,29 @@ export function BoardCanvas() {
   // and going back to moving things.
   const [armedShape, setArmedShape] = useState<ShapeKind | null>(null)
 
+  // The pencil. Unlike the shape tool it STAYS armed: drawing is a stream
+  // of strokes, and disarming after each one would make it unusable.
+  // Escape, or the toolbar button again, puts it down.
+  const [penOn, setPenOn] = useState(false)
+  const [penColor, setPenColor] = useState('#e8eae6')
+  const [penWidth, setPenWidth] = useState(3)
+  // Strokes drawn without putting the pencil down land in one pin — a
+  // letter takes three strokes and nobody means three objects by it.
+  const inkPinRef = useRef<string | null>(null)
+  // The stroke in progress lives in refs and is painted straight into the
+  // DOM, not through React state.
+  //
+  // Measured: routing every pointermove through setInteraction cost ~25ms
+  // per event, because each one re-rendered the whole canvas. A pointer
+  // emits these at 60-120Hz, so the line lagged visibly behind the hand —
+  // the one thing a pencil may never do.
+  const inkPointsRef = useRef<number[]>([])
+  const inkPathRef = useRef<SVGPathElement | null>(null)
+  // The `d` attribute built so far, so a new sample appends one segment
+  // instead of rebuilding the whole string (O(n) per sample, O(n^2) over a
+  // stroke — a slow deliberate line is 500 samples long).
+  const inkDRef = useRef('')
+
   // Guides for the current drag/resize, plus the offset that lands the
   // moving box on them. Memoised on the interaction so it is computed once
   // per pointer event rather than once per pin per render.
@@ -318,6 +358,17 @@ export function BoardCanvas() {
 
   const onContainerPointerDown = useCallback(
     (e: React.PointerEvent) => {
+      // The pencil owns the background while it is down.
+      if (penOn && e.button === 0) {
+        e.preventDefault()
+        const rect = containerRef.current!.getBoundingClientRect()
+        const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+        capturePointer(containerRef.current, e.pointerId)
+        inkPointsRef.current = [world.x, world.y]
+        inkDRef.current = `M ${world.x} ${world.y}`
+        setInteraction({ kind: 'ink', pointerId: e.pointerId })
+        return
+      }
       // An armed shape tool takes precedence over everything else the
       // background does.
       if (armedShape && e.button === 0) {
@@ -355,7 +406,7 @@ export function BoardCanvas() {
         clearSelection()
       }
     },
-    [armedShape, clearSelection, screenToWorld],
+    [armedShape, clearSelection, penOn, screenToWorld],
   )
 
   const beginPinDrag = useCallback(
@@ -629,6 +680,14 @@ export function BoardCanvas() {
         setInteraction((cur) =>
           cur && cur.kind === 'marquee' ? { ...cur, currentWorld: world } : cur,
         )
+      } else if (interaction.kind === 'ink') {
+        const rect = containerRef.current!.getBoundingClientRect()
+        const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+        inkPointsRef.current.push(world.x, world.y)
+        const seg = appendSegment(inkPointsRef.current)
+        if (seg) inkDRef.current += ` ${seg}`
+        // Straight to the element: no state, no re-render, no lag.
+        inkPathRef.current?.setAttribute('d', inkDRef.current)
       } else if (interaction.kind === 'draw') {
         const rect = containerRef.current!.getBoundingClientRect()
         const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
@@ -718,6 +777,44 @@ export function BoardCanvas() {
           // A pin grown over its neighbours pushes them like a moved one.
           pushNeighbours([id])
         }
+      } else if (interaction.kind === 'ink') {
+        const pts = simplify(inkPointsRef.current, 2)
+        inkPointsRef.current = []
+        inkDRef.current = ''
+        if (pts.length >= MIN_STROKE_POINTS * 2) {
+          const style = { color: penColor, width: penWidth }
+          const st = useBoardStore.getState()
+          const existingId = inkPinRef.current
+          const existing = existingId
+            ? st.board?.pins.find((p) => p.id === existingId && p.type === 'drawing')
+            : undefined
+          if (existing && existing.type === 'drawing') {
+            // Same pencil session: fold this stroke into the pin, growing
+            // its box and re-normalising what is already there.
+            const { box, strokes } = growToFit(existing, existing.strokes, pts, style)
+            st.updatePin(existing.id, 'strokes', strokes)
+            if (box.x !== existing.x || box.y !== existing.y) {
+              st.movePins([{ id: existing.id, x: box.x, y: box.y }])
+            }
+            if (box.w !== existing.w || box.h !== existing.h) {
+              st.resizePin(existing.id, { w: box.w, h: box.h })
+            }
+          } else {
+            const { box, strokes } = growToFit({ x: 0, y: 0, w: 0, h: 0 }, [], pts, style)
+            const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
+            const pin: Pin = {
+              id: crypto.randomUUID(),
+              type: 'drawing',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              z,
+              ...box,
+              strokes,
+            }
+            addPin(pin)
+            inkPinRef.current = pin.id
+          }
+        }
       } else if (interaction.kind === 'draw') {
         const box = drawnBox(interaction)
         // A click without a drag is not a shape. Anything smaller than the
@@ -789,6 +886,14 @@ export function BoardCanvas() {
     groupIntoFrame,
     ungroupFrame,
     armedShape,
+    penOn,
+    // The pencil's colour and width are read inside the pointerup handler.
+    // Without them here, a stroke drawn after changing either one was
+    // committed with whatever was selected when the effect last rebuilt —
+    // picking red and thick, then drawing, produced a thin white line.
+    penColor,
+    penWidth,
+    alignSnap,
     movePins,
     pushToast,
   ])
@@ -835,6 +940,11 @@ export function BoardCanvas() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size > 0) {
         e.preventDefault()
         useBoardStore.getState().removePins(Array.from(selected))
+        return
+      }
+      if (e.key === 'Escape' && penOn) {
+        e.preventDefault()
+        setPenOn(false)
         return
       }
       if (e.key === 'Escape' && armedShape) {
@@ -1527,7 +1637,7 @@ export function BoardCanvas() {
       ref={containerRef}
       className={styles.canvas}
       style={gridStyle}
-      data-armed={armedShape ? 'true' : undefined}
+      data-armed={armedShape || penOn ? 'true' : undefined}
       onPointerDown={onContainerPointerDown}
       // Focusable so the board can take focus back when a pin's editor
       // closes. Without it focus lands on <body>, which works by accident
@@ -1571,6 +1681,42 @@ export function BoardCanvas() {
             `position: fixed` element inside the transformed world layer is
             positioned against that layer, so this banner slid off screen
             with the pan. */}
+        {penOn &&
+          createPortal(
+            <div className={styles.penBar} role="toolbar" aria-label="Карандаш">
+              <span className={styles.penHint}>Рисуй по холсту · Esc — убрать карандаш</span>
+              <div className={styles.penSwatches}>
+                {PEN_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    className={`${styles.penSwatch} ${penColor === c ? styles.penSwatchOn : ''}`}
+                    style={{ background: c }}
+                    aria-label={`Цвет ${c}`}
+                    aria-pressed={penColor === c}
+                    onClick={() => setPenColor(c)}
+                  />
+                ))}
+              </div>
+              <div className={styles.penWidths}>
+                {PEN_WIDTHS.map((w) => (
+                  <button
+                    key={w}
+                    className={`${styles.penWidth} ${penWidth === w ? styles.penWidthOn : ''}`}
+                    aria-label={`Толщина ${w}`}
+                    aria-pressed={penWidth === w}
+                    onClick={() => setPenWidth(w)}
+                  >
+                    <span style={{ width: w * 3, height: w, background: 'currentColor' }} />
+                  </button>
+                ))}
+              </div>
+              <button className={styles.penDone} onClick={() => setPenOn(false)}>
+                Готово
+              </button>
+            </div>,
+            document.body,
+          )}
+
         {armedShape &&
           createPortal(
             <div className={styles.modeBanner} role="status">
@@ -1578,6 +1724,25 @@ export function BoardCanvas() {
             </div>,
             document.body,
           )}
+
+        {/* The stroke under the pointer, drawn live. It lives in the world
+            layer (so it sits exactly where the hand is) and is replaced by
+            a real pin the moment the pencil lifts. */}
+        {interaction?.kind === 'ink' && (
+          <svg className={styles.inkPreview} aria-hidden>
+            <path
+              ref={inkPathRef}
+              d=""
+
+              fill="none"
+              stroke={penColor}
+              strokeWidth={penWidth}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+        )}
 
         {/* The shape being drawn, previewed as an outline. Drawn in the
             world layer so it tracks the canvas exactly. */}
@@ -1730,6 +1895,17 @@ export function BoardCanvas() {
           })
         }}
         armedShape={armedShape}
+        penOn={penOn}
+        onTogglePen={() => {
+          setPenOn((on) => {
+            // Putting the pencil down ends the session: the next strokes
+            // start a new drawing rather than joining the old one.
+            if (on) inkPinRef.current = null
+            else pushToast('Карандаш: рисуй прямо по холсту. Esc — убрать')
+            return !on
+          })
+          setArmedShape(null)
+        }}
         onCreateFrame={() => {
           if (selected.size > 0) {
             groupIntoFrame(Array.from(selected))
