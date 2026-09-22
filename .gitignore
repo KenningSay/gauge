@@ -4,3 +4,9 @@ dist
 .env.local
 .env.*.local
 HANDOFF.md
+
+# Any env file at all, however it is spelled. Two different backup
+# spellings (.env.local.bak, .env.prod.tmp) have now each leaked the
+# private WebDAV address into a public repo.
+.env*
+!.env.local.example
