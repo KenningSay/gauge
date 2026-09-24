@@ -84,6 +84,10 @@
   .percent {
     display: none;
   }
+  .meter {
+    flex: 0 0 56px;
+    min-width: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
