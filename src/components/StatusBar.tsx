@@ -1,0 +1,71 @@
+import { useCallback, useEffect, useState } from 'react'
+import { HardDrive } from 'lucide-react'
+import { getStorageInfo, type StorageInfo } from '../api/webdav'
+import { useFileStore } from '../store/useFileStore'
+import { formatSize } from '../utils/format'
+import styles from './StatusBar.module.css'
+
+// The server-side numbers (a df snapshot, or the WebDAV quota props) move
+// slowly — a minute between polls is plenty, with an extra fetch whenever
+// the listing changes (upload, delete, paste) and when the tab regains focus.
+const POLL_MS = 60_000
+
+function levelOf(ratio: number): 'ok' | 'warn' | 'critical' {
+  if (ratio >= 0.95) return 'critical'
+  if (ratio >= 0.85) return 'warn'
+  return 'ok'
+}
+
+export function StatusBar() {
+  const entries = useFileStore((s) => s.entries)
+  const [info, setInfo] = useState<StorageInfo | null>(null)
+
+  const refresh = useCallback(() => {
+    getStorageInfo().then(setInfo).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    refresh()
+  }, [entries, refresh])
+
+  useEffect(() => {
+    const id = window.setInterval(refresh, POLL_MS)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [refresh])
+
+  if (!info) return null
+
+  // used + available is less than total on ext4 (root-reserved blocks), so
+  // the bar fills by what is actually no longer available to Gauge.
+  const ratio = Math.min(1, Math.max(0, 1 - info.available / info.total))
+  const percent = Math.round(ratio * 100)
+  const level = levelOf(ratio)
+
+  return (
+    <footer
+      className={styles.bar}
+      title={`Занято ${formatSize(info.used, false)} · свободно ${formatSize(info.available, false)} · всего ${formatSize(info.total, false)}`}
+    >
+      <HardDrive size={16} className={styles.icon} />
+      <span className={styles.label}>Хранилище</span>
+      <div
+        className={styles.meter}
+        role="meter"
+        aria-label="Заполненность хранилища"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+      >
+        <div className={`${styles.fill} ${styles[level]}`} style={{ width: `${percent}%` }} />
+      </div>
+      <span className={`${styles.value} ${styles[level]}`}>
+        свободно {formatSize(info.available, false)} из {formatSize(info.total, false)}
+      </span>
+      <span className={styles.percent}>{percent}%</span>
+    </footer>
+  )
+}

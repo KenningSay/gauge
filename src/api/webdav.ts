@@ -455,3 +455,51 @@ export async function putTextContentConditional(
   const s = await stat(path)
   return s ?? { etag: null, lastModified: null }
 }
+// ---------- Storage usage (status bar) ----------
+
+export interface StorageInfo {
+  total: number
+  used: number
+  available: number
+}
+
+const QUOTA_PROPFIND = '<?xml version="1.0" encoding="utf-8"?>'
+  + '<d:propfind xmlns:d="DAV:"><d:prop>'
+  + '<d:quota-available-bytes/><d:quota-used-bytes/>'
+  + '</d:prop></d:propfind>'
+
+// Two sources, standard one first. RFC 4331 quota props come from Apache,
+// Nextcloud, Synology and friends; nginx's dav module answers the same
+// PROPFIND with an empty <prop>, so the server can instead drop a small
+// {total, used, available} JSON at /.gauge/storage.json (a cron job runs
+// df for the home instance). null means neither is there — the status bar
+// then just hides the meter instead of showing made-up numbers.
+export async function getStorageInfo(): Promise<StorageInfo | null> {
+  try {
+    const res = await request('/', {
+      method: 'PROPFIND',
+      headers: { Depth: '0', 'Content-Type': 'application/xml; charset=utf-8' },
+      body: QUOTA_PROPFIND,
+    })
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/xml')
+    const available = parseInt(extText(doc.documentElement, 'quota-available-bytes'), 10)
+    const used = parseInt(extText(doc.documentElement, 'quota-used-bytes'), 10)
+    if (Number.isFinite(available) && Number.isFinite(used) && available >= 0) {
+      return { total: used + available, used, available }
+    }
+  } catch (e) {
+    if (e instanceof UnauthorizedError) throw e
+  }
+
+  try {
+    const res = await request('/.gauge/storage.json', { method: 'GET', cache: 'no-cache' })
+    const data = await res.json() as Partial<StorageInfo>
+    const { total, used, available } = data
+    if ([total, used, available].every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0) && total! > 0) {
+      return { total: total!, used: used!, available: available! }
+    }
+  } catch (e) {
+    if (e instanceof UnauthorizedError) throw e
+  }
+  return null
+}

@@ -7,6 +7,7 @@ import { FolderTree } from './components/FolderTree'
 import { ContextMenu } from './components/ContextMenu'
 import { CommandPalette } from './components/CommandPalette'
 import { PropertiesPanel } from './components/PropertiesPanel'
+import { StatusBar } from './components/StatusBar'
 import { ToastContainer } from './components/Toast'
 import { Dialog } from './components/Dialog'
 import { LoginScreen } from './components/LoginScreen'
@@ -149,6 +150,7 @@ function MainApp() {
           <PropertiesPanel />
         </div>
       )}
+      <StatusBar />
       <ContextMenu />
       <CommandPalette />
       <ViewerModal />

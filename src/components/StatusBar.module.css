@@ -1,0 +1,93 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.label {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.meter {
+  position: relative;
+  flex: 0 1 220px;
+  min-width: 80px;
+  height: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* Tick marks every 10% — the same ruler language as the breadcrumbs. */
+.meter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(10% - 1px),
+    var(--border-strong) calc(10% - 1px),
+    var(--border-strong) 10%
+  );
+  pointer-events: none;
+}
+
+.fill {
+  height: 100%;
+  background: var(--signal);
+  transition: width 400ms ease, background-color 200ms ease;
+}
+.fill.warn {
+  background: var(--tick);
+}
+.fill.critical {
+  background: var(--danger);
+}
+
+.value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.value.warn {
+  color: var(--tick);
+}
+.value.critical {
+  color: var(--danger);
+}
+
+.percent {
+  margin-left: auto;
+  color: var(--text-faint);
+}
+
+@media (max-width: 600px) {
+  .label,
+  .percent {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
+}
