@@ -8,6 +8,7 @@ import {
   textFormatStyle,
   toggleWrap,
   togglePrefix,
+  toggleListPrefix,
   frequentFonts,
   fitFontSize,
   bumpReaction,
@@ -165,6 +166,48 @@ describe('togglePrefix', () => {
   it('does not run past the end of the selected block', () => {
     const r = togglePrefix('a\nb\nc', 0, 1, '# ')
     expect(r.text).toBe('# a\nb\nc')
+  })
+})
+
+describe('toggleListPrefix', () => {
+  it('makes a bulleted list out of plain lines', () => {
+    const r = toggleListPrefix('a\nb\nc', 0, 5, 'bullet')
+    expect(r.text).toBe('- a\n- b\n- c')
+  })
+
+  it('makes a numbered list, renumbering from 1 regardless of source', () => {
+    const r = toggleListPrefix('a\nb\nc', 0, 5, 'numbered')
+    expect(r.text).toBe('1. a\n2. b\n3. c')
+  })
+
+  it('switches a bulleted list to numbered instead of nesting the markers', () => {
+    const r = toggleListPrefix('- a\n- b', 0, 7, 'numbered')
+    expect(r.text).toBe('1. a\n2. b')
+  })
+
+  it('switches a numbered list to bulleted', () => {
+    const r = toggleListPrefix('1. a\n2. b', 0, 9, 'bullet')
+    expect(r.text).toBe('- a\n- b')
+  })
+
+  it('turns the same kind off when every line already has it', () => {
+    const r = toggleListPrefix('- a\n- b', 0, 7, 'bullet')
+    expect(r.text).toBe('a\nb')
+  })
+
+  it('turns numbered off back to plain text', () => {
+    const r = toggleListPrefix('1. a\n2. b', 0, 9, 'numbered')
+    expect(r.text).toBe('a\nb')
+  })
+
+  it('treats a mixed selection as "add", not "remove"', () => {
+    const r = toggleListPrefix('- a\nb', 0, 5, 'bullet')
+    expect(r.text).toBe('- a\n- b')
+  })
+
+  it('leaves blank lines in the selection alone', () => {
+    const r = toggleListPrefix('a\n\nb', 0, 4, 'bullet')
+    expect(r.text).toBe('- a\n\n- b')
   })
 })
 

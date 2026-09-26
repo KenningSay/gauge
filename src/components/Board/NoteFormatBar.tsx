@@ -20,6 +20,8 @@ import {
   Bold,
   CaseUpper,
   Italic,
+  List,
+  ListOrdered,
   Minus,
   MoreHorizontal,
   Plus,
@@ -46,6 +48,7 @@ import {
   fitFontSize,
   hasTextFormat,
   stepFontSize,
+  toggleListPrefix,
 } from '../../utils/textFormat'
 import styles from './NoteFormatBar.module.css'
 
@@ -129,6 +132,27 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
     })
     body.style.fontSize = previous
     set('fontSize', best)
+  }
+
+  // Bullet and numbered lists existed only as an editor keyboard shortcut
+  // (Ctrl+Shift+8 / Ctrl+Shift+7) — a real feature nobody could find, same
+  // problem text colour had before it got a button. Prefixes the current
+  // line/selection while actively editing, via the same togglePrefix the
+  // shortcut uses; with the note only selected (not open for editing),
+  // there is no caret to work from, so it applies to the whole text.
+  const applyListPrefix = (kind: 'bullet' | 'numbered') => {
+    const area = document.querySelector<HTMLTextAreaElement>(`[data-pin-id="${pin.id}"] textarea`)
+    if (area) {
+      const result = toggleListPrefix(area.value, area.selectionStart, area.selectionEnd, kind)
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!
+      setter.call(area, result.text)
+      area.dispatchEvent(new Event('input', { bubbles: true }))
+      requestAnimationFrame(() => area.setSelectionRange(result.start, result.end))
+      area.focus()
+      return
+    }
+    const result = toggleListPrefix(pin.text, 0, pin.text.length, kind)
+    set('text', result.text)
   }
 
   const alignBtn = (value: TextAlign, icon: React.ReactNode, label: string) => (
@@ -269,6 +293,34 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
         {alignBtn('left', <AlignLeft size={15} />, 'По левому краю')}
         {alignBtn('center', <AlignCenter size={15} />, 'По центру')}
         {alignBtn('right', <AlignRight size={15} />, 'По правому краю')}
+
+        <div className={styles.sep} />
+
+        {/* mousedown must not blur the textarea: a blur commits the draft
+            and closes the editor before this button's click ever runs,
+            so applyListPrefix would find no textarea (or a stale one) to
+            work with — the same trick every rich-text toolbar uses to
+            keep the caret/selection alive across a toolbar click. */}
+        <button
+          type="button"
+          className={styles.btn}
+          title="Маркированный список"
+          aria-label="Маркированный список"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => applyListPrefix('bullet')}
+        >
+          <List size={15} />
+        </button>
+        <button
+          type="button"
+          className={styles.btn}
+          title="Нумерованный список"
+          aria-label="Нумерованный список"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => applyListPrefix('numbered')}
+        >
+          <ListOrdered size={15} />
+        </button>
 
         <div className={styles.sep} />
 

@@ -137,6 +137,54 @@ export function togglePrefix(text: string, start: number, end: number, prefix: s
   }
 }
 
+// --- bullet / numbered lists --------------------------------------------
+//
+// A plain togglePrefix('1. ') on lines already reading "- item" would just
+// prepend, producing "1. - item" — a numbered list of one-item bullet
+// lists, not a numbered list. Switching from one marker to the other is
+// the common case (turn these bullets into a numbered list), so this
+// strips whichever marker is already there before deciding what to do,
+// instead of treating the two kinds as unrelated prefixes.
+
+const BULLET_MARKER = /^- /
+const NUMBERED_MARKER = /^\d+\. /
+
+export type ListKind = 'bullet' | 'numbered'
+
+export function toggleListPrefix(text: string, start: number, end: number, kind: ListKind): WrapResult {
+  const lineStart = text.lastIndexOf('\n', Math.max(0, start - 1)) + 1
+  const lineEndRaw = text.indexOf('\n', end)
+  const lineEnd = lineEndRaw === -1 ? text.length : lineEndRaw
+  const block = text.slice(lineStart, lineEnd)
+  const lines = block.split('\n')
+
+  const marker = kind === 'bullet' ? BULLET_MARKER : NUMBERED_MARKER
+  const real = lines.filter((l) => l !== '')
+  // Toggling off requires every real line to already be THIS kind — mixed
+  // or partial matches read as "turn the rest into this kind too".
+  const alreadyThisKind = real.length > 0 && real.every((l) => marker.test(l))
+
+  let n = 1
+  const next = lines
+    .map((l) => {
+      if (l === '') return l
+      const bare = l.replace(BULLET_MARKER, '').replace(NUMBERED_MARKER, '')
+      if (alreadyThisKind) return bare
+      return kind === 'bullet' ? `- ${bare}` : `${n++}. ${bare}`
+    })
+    .join('\n')
+
+  // Line-count-changing, variable-width markers (numbered items past 9 are
+  // wider than single-digit ones) make preserving the exact caret offset
+  // fragile; selecting the whole transformed block is simpler and leaves
+  // the result visibly selected, same as picking a font does.
+  return {
+    text: text.slice(0, lineStart) + next + text.slice(lineEnd),
+    start: lineStart,
+    end: lineStart + next.length,
+  }
+}
+
 // --- which fonts the context menu offers ------------------------------
 
 // The context menu is a short list, not a catalogue: the full set lives in

@@ -104,6 +104,12 @@
 .noteMarkdown :global(p):last-child { margin-bottom: 0; }
 .noteMarkdown :global(ul), .noteMarkdown :global(ol) { padding-left: 1.3em; margin: 0 0 0.6em; }
 .noteMarkdown :global(li) { margin: 0.15em 0; }
+/* A sub-list under a numbered item follows the usual outline convention —
+   1. / a. / i. by depth — instead of repeating plain digits three levels
+   deep. Markdown has no syntax of its own for "lettered list", so this is
+   the only way to get one: indent a list under a numbered item. */
+.noteMarkdown :global(ol ol) { list-style-type: lower-alpha; }
+.noteMarkdown :global(ol ol ol) { list-style-type: lower-roman; }
 .noteMarkdown :global(a) { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .noteMarkdown :global(strong) { font-weight: 650; }
 
