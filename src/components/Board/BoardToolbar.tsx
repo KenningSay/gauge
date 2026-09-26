@@ -41,9 +41,12 @@ interface Props {
   // Which shape is armed right now, if any — the button stays lit so it
   // is obvious the canvas is in a drawing mode.
   armedShape?: ShapeKind | null
-  // Wraps the selection in a frame, or drops an empty one when nothing is
-  // selected.
+  // Wraps the selection in a frame, or arms the container tool (drawn by
+  // dragging, like a shape) when nothing is selected.
   onCreateFrame: () => void
+  // Whether the container tool is armed right now — lights the button the
+  // same way an armed shape does.
+  frameArmed?: boolean
   // The pencil: freehand drawing straight on the canvas. Stays on until
   // turned off, unlike the shape tool.
   penOn: boolean
@@ -59,7 +62,7 @@ const SHAPES: Array<{ id: ShapeKind; label: string; icon: React.ReactNode }> = [
   { id: 'triangle', label: 'Треугольник', icon: <Triangle size={16} /> },
 ]
 
-export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, armedShape, onCreateFrame, penOn, onTogglePen, onFit, onCreateVaultFile, onExport, exporting }: Props) {
+export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCreateLink, onCreateShape, armedShape, onCreateFrame, frameArmed, penOn, onTogglePen, onFit, onCreateVaultFile, onExport, exporting }: Props) {
 
   // A phone shows the side panel full-screen; the toolbar would float
   // across its bottom edge, over the chat input or the last row of
@@ -109,9 +112,10 @@ export function BoardToolbar({ hasEdges, onCreateNote, onCreateVaultNote, onCrea
           <StickyNote size={17} />
         </button>
         <button
-          className={styles.btn}
-          title="Контейнер: обвести выделенное, иначе пустой"
+          className={`${styles.btn} ${frameArmed ? styles.btnOn : ''}`}
+          title="Контейнер: с выделением — обвести его, иначе растяни рамку на холсте"
           aria-label="Создать контейнер"
+          aria-pressed={frameArmed}
           onClick={onCreateFrame}
         >
           <Frame size={17} />

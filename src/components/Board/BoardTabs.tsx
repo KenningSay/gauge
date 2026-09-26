@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, X, Pencil, Trash2, MoreVertical, History } from 'lucide-react'
+import { Plus, X, Pencil, Trash2, MoreVertical, History, Undo2, Redo2 } from 'lucide-react'
 import type { BoardMeta } from '../../api/board'
+import { useBoardStore } from '../../store/useBoardStore'
 import { BoardSettings } from './BoardSettings'
 import styles from './BoardTabs.module.css'
 
@@ -41,6 +42,14 @@ export function BoardTabs({
   onOpenExisting,
 }: Props) {
   const [menu, setMenu] = useState<MenuState | null>(null)
+
+  // Undo/redo as buttons, not only Ctrl+Z/Ctrl+Shift+Z: a tablet with no
+  // keyboard attached had no way to reach either one.
+  const undo = useBoardStore((s) => s.undo)
+  const redo = useBoardStore((s) => s.redo)
+  const history = useBoardStore((s) => s.history)
+  const canUndo = history.cursor > 0
+  const canRedo = history.cursor < history.ops.length
 
   const openBoards = openIds
     .map((id) => boards.find((b) => b.id === id))
@@ -95,6 +104,29 @@ export function BoardTabs({
           <Plus size={15} />
         </button>
       </div>
+
+      {activeId && (
+        <div className={styles.historyBtns}>
+          <button
+            className={styles.iconBtn}
+            disabled={!canUndo}
+            onClick={() => undo()}
+            title="Отменить (Ctrl+Z)"
+            aria-label="Отменить"
+          >
+            <Undo2 size={16} />
+          </button>
+          <button
+            className={styles.iconBtn}
+            disabled={!canRedo}
+            onClick={() => redo()}
+            title="Повторить (Ctrl+Shift+Z)"
+            aria-label="Повторить"
+          >
+            <Redo2 size={16} />
+          </button>
+        </div>
+      )}
 
       {boards.length > 0 && (
         <select

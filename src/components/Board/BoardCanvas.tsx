@@ -104,10 +104,11 @@ type Interaction =
   | {
       // Drawing a shape by dragging its box out, the way every vector
       // editor does it. The old flow dropped a fixed 260x180 shape in the
-      // middle of the screen and left you to resize it.
+      // middle of the screen and left you to resize it. 'frame' reuses the
+      // exact same drag for the container tool, for the same reason.
       kind: 'draw'
       pointerId: number
-      shape: ShapeKind
+      shape: ShapeKind | 'frame'
       startWorld: { x: number; y: number }
       currentWorld: { x: number; y: number }
       // Shift constrains to a square/circle while held.
@@ -191,12 +192,6 @@ export function BoardCanvas() {
   const pushToast = useUiStore((s) => s.pushToast)
   const promptDialog = useUiStore((s) => s.promptDialog)
 
-  const { screenToWorld } = useBoardPanZoom({
-    viewport,
-    onChange: setViewport,
-    containerRef,
-  })
-
   // --- container sizing (for virtualization) ---
   useEffect(() => {
     const el = containerRef.current
@@ -243,10 +238,27 @@ export function BoardCanvas() {
   // and going back to moving things.
   const [armedShape, setArmedShape] = useState<ShapeKind | null>(null)
 
+  // Same idea as the shape tool, for the container: the old flow dropped a
+  // fixed 640x420 box in the middle of the screen and left you to resize it
+  // by its corner. "Two points" (drop, then drag a handle) instead of one
+  // drag felt broken on a board where every other shape draws by dragging.
+  const [frameArmed, setFrameArmed] = useState(false)
+
   // The pencil. Unlike the shape tool it STAYS armed: drawing is a stream
   // of strokes, and disarming after each one would make it unusable.
   // Escape, or the toolbar button again, puts it down.
   const [penOn, setPenOn] = useState(false)
+
+  // The pan hook's own pointerdown listener sits directly on the canvas
+  // node, ahead of this component's, so it has to be told not to start a
+  // pan itself while one of the drag-to-draw tools above owns the gesture.
+  const { screenToWorld } = useBoardPanZoom({
+    viewport,
+    onChange: setViewport,
+    containerRef,
+    disabled: Boolean(armedShape || frameArmed || penOn),
+  })
+
   const [penColor, setPenColor] = useState('#e8eae6')
   const [penWidth, setPenWidth] = useState(3)
   // Strokes drawn without putting the pencil down land in one pin — a
@@ -369,9 +381,9 @@ export function BoardCanvas() {
         setInteraction({ kind: 'ink', pointerId: e.pointerId })
         return
       }
-      // An armed shape tool takes precedence over everything else the
-      // background does.
-      if (armedShape && e.button === 0) {
+      // An armed shape or container tool takes precedence over everything
+      // else the background does.
+      if ((armedShape || frameArmed) && e.button === 0) {
         e.preventDefault()
         const rect = containerRef.current!.getBoundingClientRect()
         const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
@@ -379,7 +391,7 @@ export function BoardCanvas() {
         setInteraction({
           kind: 'draw',
           pointerId: e.pointerId,
-          shape: armedShape,
+          shape: frameArmed ? 'frame' : (armedShape as ShapeKind),
           startWorld: world,
           currentWorld: world,
           constrain: e.shiftKey,
@@ -406,7 +418,7 @@ export function BoardCanvas() {
         clearSelection()
       }
     },
-    [armedShape, clearSelection, penOn, screenToWorld],
+    [armedShape, frameArmed, clearSelection, penOn, screenToWorld],
   )
 
   const beginPinDrag = useCallback(
@@ -609,35 +621,6 @@ export function BoardCanvas() {
     [addPin, pins, pushToast, selectOnly],
   )
 
-  // An empty frame to draw around things afterwards: drop it, size it by
-  // its corner, drag cards in. Whatever ends up inside belongs to it,
-  // because membership is geometric and needs no further ceremony.
-  const createEmptyFrameAt = useCallback(
-    (centre: { x: number; y: number }) => {
-      const w = 640
-      const h = 420
-      const minZ = pins.reduce((m, p) => Math.min(m, p.z), 0)
-      const frame: Pin = {
-        id: crypto.randomUUID(),
-        type: 'frame',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        z: minZ - 1,
-        x: Math.round(centre.x - w / 2),
-        y: Math.round(centre.y - h / 2),
-        w,
-        h,
-        title: 'Контейнер',
-        color: '#2dd4bf',
-        fillOpacity: 8,
-        padding: FRAME_DEFAULT_PADDING,
-      }
-      addPin(frame)
-      selectOnly(frame.id)
-    },
-    [addPin, pins, selectOnly],
-  )
-
   // Removes the frame and leaves its contents exactly where they are.
   // Nothing else to undo: membership was never stored anywhere.
   const ungroupFrame = useCallback(
@@ -821,14 +804,38 @@ export function BoardCanvas() {
         // resize floor would be born unusable.
         if (box.w >= MIN_W / 2 && box.h >= MIN_H / 2) {
           const z = pins.reduce((m, p) => Math.max(m, p.z), 0) + 1
-          const pin = makeShapePin({ x: box.x, y: box.y, z }, interaction.shape)
-          pin.w = Math.max(MIN_W, Math.round(box.w))
-          pin.h = Math.max(MIN_H, Math.round(box.h))
-          addPin(pin)
-          useBoardStore.getState().selectOnly(pin.id)
+          if (interaction.shape === 'frame') {
+            // Behind everything, same as groupIntoFrame/createEmptyFrameAt:
+            // a container is a backdrop, not a card on top of the stack.
+            const minZ = pins.reduce((m, p) => Math.min(m, p.z), 0)
+            const frame: Pin = {
+              id: crypto.randomUUID(),
+              type: 'frame',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              z: minZ - 1,
+              x: Math.round(box.x),
+              y: Math.round(box.y),
+              w: Math.max(MIN_W, Math.round(box.w)),
+              h: Math.max(MIN_H, Math.round(box.h)),
+              title: 'Контейнер',
+              color: '#2dd4bf',
+              fillOpacity: 8,
+              padding: FRAME_DEFAULT_PADDING,
+            }
+            addPin(frame)
+            useBoardStore.getState().selectOnly(frame.id)
+          } else {
+            const pin = makeShapePin({ x: box.x, y: box.y, z }, interaction.shape)
+            pin.w = Math.max(MIN_W, Math.round(box.w))
+            pin.h = Math.max(MIN_H, Math.round(box.h))
+            addPin(pin)
+            useBoardStore.getState().selectOnly(pin.id)
+          }
         }
         // One shape per arming: see the note where armedShape is declared.
         setArmedShape(null)
+        setFrameArmed(false)
       } else if (interaction.kind === 'marquee') {
         const { startWorld, currentWorld } = interaction
         const box: Rect = {
@@ -947,9 +954,10 @@ export function BoardCanvas() {
         setPenOn(false)
         return
       }
-      if (e.key === 'Escape' && armedShape) {
+      if (e.key === 'Escape' && (armedShape || frameArmed)) {
         e.preventDefault()
         setArmedShape(null)
+        setFrameArmed(false)
         return
       }
       if (e.key === 'Escape') {
@@ -1637,7 +1645,7 @@ export function BoardCanvas() {
       ref={containerRef}
       className={styles.canvas}
       style={gridStyle}
-      data-armed={armedShape || penOn ? 'true' : undefined}
+      data-armed={armedShape || frameArmed || penOn ? 'true' : undefined}
       onPointerDown={onContainerPointerDown}
       // Focusable so the board can take focus back when a pin's editor
       // closes. Without it focus lands on <body>, which works by accident
@@ -1674,8 +1682,8 @@ export function BoardCanvas() {
             silently in drawing mode is a board that "does nothing" when
             you try to drag a card. */}
         {/* Align palette: only with a multi-selection, and never while a
-            shape tool is armed (two banners in the same slot). */}
-        {!armedShape && <AlignBar />}
+            shape or container tool is armed (two banners in the same slot). */}
+        {!armedShape && !frameArmed && <AlignBar />}
 
         {/* Into <body>, for the same reason the align palette is: a
             `position: fixed` element inside the transformed world layer is
@@ -1717,10 +1725,12 @@ export function BoardCanvas() {
             document.body,
           )}
 
-        {armedShape &&
+        {(armedShape || frameArmed) &&
           createPortal(
             <div className={styles.modeBanner} role="status">
-              Рисование: растяни рамку на холсте. Shift — квадрат, Esc — отмена
+              {frameArmed
+                ? 'Контейнер: растяни рамку на холсте. Esc — отмена'
+                : 'Рисование: растяни рамку на холсте. Shift — квадрат, Esc — отмена'}
             </div>,
             document.body,
           )}
@@ -1893,6 +1903,7 @@ export function BoardCanvas() {
             if (next) pushToast('Растяни рамку на холсте. Shift — ровный квадрат, Esc — отмена')
             return next
           })
+          setFrameArmed(false)
         }}
         armedShape={armedShape}
         penOn={penOn}
@@ -1905,14 +1916,25 @@ export function BoardCanvas() {
             return !on
           })
           setArmedShape(null)
+          setFrameArmed(false)
         }}
         onCreateFrame={() => {
+          // With a selection, wrap it immediately — there is already a box
+          // to draw around. Empty-handed, arm the tool instead of dropping
+          // a fixed 640x420 box: the next drag draws the container at the
+          // size actually wanted, same as the shape tool.
           if (selected.size > 0) {
             groupIntoFrame(Array.from(selected))
             return
           }
-          createEmptyFrameAt(viewportCenterWorld(viewport, containerSize))
+          setFrameArmed((cur) => {
+            const next = !cur
+            if (next) pushToast('Контейнер: растяни рамку на холсте. Esc — отмена')
+            return next
+          })
+          setArmedShape(null)
         }}
+        frameArmed={frameArmed}
         onFit={fitToPins}
         onExport={(f) => void exportBoard(f)}
         exporting={exporting}

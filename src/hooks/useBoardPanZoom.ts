@@ -94,6 +94,13 @@ interface Options {
   // ref (not a query selector) so multiple boards mounted in different
   // DOM positions don't collide.
   containerRef: React.RefObject<HTMLElement | null>
+  // True while the pencil or a draw-by-dragging tool (shape, container) is
+  // armed. This hook's own pointerdown listener sits directly on the
+  // canvas node, so it always runs before the parent's — without this
+  // check it started a pan on the exact same drag a tool was using to draw,
+  // and the viewport drifted under the shape being sized instead of the
+  // shape appearing.
+  disabled?: boolean
 }
 
 // Zoom is anchored on the cursor, not the origin — otherwise zooming into
@@ -115,7 +122,7 @@ function zoomAt(v: ViewportState, worldX: number, worldY: number, factor: number
   }
 }
 
-export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
+export function useBoardPanZoom({ viewport, onChange, containerRef, disabled }: Options) {
   // Latest viewport kept in a ref so event handlers don't need to be
   // re-attached on every viewport change (a pan would otherwise rebuild
   // listeners 60×/sec).
@@ -123,6 +130,14 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
   useEffect(() => {
     viewportRef.current = viewport
   }, [viewport])
+
+  // Same reasoning as viewportRef: read through a ref rather than a
+  // dependency, so arming/disarming a tool mid-session doesn't tear down
+  // and rebuild the listeners.
+  const disabledRef = useRef(disabled)
+  useEffect(() => {
+    disabledRef.current = disabled
+  }, [disabled])
 
   // Single-finger pan state for touch. Mouse drag reuses the same ref.
   const dragRef = useRef<{
@@ -147,6 +162,8 @@ export function useBoardPanZoom({ viewport, onChange, containerRef }: Options) {
 
   const onPointerDown = useCallback(
     (e: PointerEvent) => {
+      // A tool that draws by dragging owns this gesture instead.
+      if (disabledRef.current) return
       // Alt is the marquee-selection modifier — a pointerdown with alt held
       // is the parent's problem, not ours.
       if (e.altKey) return
