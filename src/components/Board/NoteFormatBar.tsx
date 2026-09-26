@@ -21,6 +21,7 @@ import {
   CaseUpper,
   Italic,
   Minus,
+  MoreHorizontal,
   Plus,
   RotateCcw,
   Scaling,
@@ -70,13 +71,24 @@ const GAP = 10
 export function NoteFormatBar({ pin, rect, container }: Props) {
   const updatePin = useBoardStore((s) => s.updatePin)
   const barRef = useRef<HTMLDivElement | null>(null)
-  const [width, setWidth] = useState(0)
+  const [dims, setDims] = useState({ w: 0, h: BAR_HEIGHT })
+  // The bar defaults to its compact row: the rarer controls (vertical align,
+  // spacing, fit-to-box, reset) sit behind this instead of stretching the
+  // bar wide enough to cover whatever note happens to be next door.
+  const [more, setMore] = useState(false)
+
+  // Closed again on every new note: an expanded panel left open from the
+  // last note would otherwise widen the bar before anyone asked for it.
+  useEffect(() => setMore(false), [pin.id])
 
   // Measured rather than assumed: the bar wraps on a narrow canvas, and a
-  // guessed width would centre it wrongly the moment it did.
+  // guessed size would place it wrongly the moment it did — including its
+  // height, which changes when the "more" row opens or closes.
   useEffect(() => {
-    if (barRef.current) setWidth(barRef.current.offsetWidth)
-  }, [pin.id, pin.font, pin.fontSize])
+    if (barRef.current) {
+      setDims({ w: barRef.current.offsetWidth, h: barRef.current.offsetHeight })
+    }
+  }, [pin.id, pin.font, pin.fontSize, more])
 
   const set = (field: string, value: unknown) => updatePin(pin.id, field, value)
   // Clicking the active option again clears it, so there is always a way
@@ -91,9 +103,10 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
 
   // Above the note by preference; below it when the note is near the top
   // edge, so the bar can never end up off-screen where it can't be used.
-  const above = rect.y - BAR_HEIGHT - GAP >= 0
-  const top = above ? rect.y - BAR_HEIGHT - GAP : Math.min(rect.y + rect.h + GAP, container.h - BAR_HEIGHT - 4)
-  const half = (width || 520) / 2
+  const barHeight = dims.h || BAR_HEIGHT
+  const above = rect.y - barHeight - GAP >= 0
+  const top = above ? rect.y - barHeight - GAP : Math.min(rect.y + rect.h + GAP, container.h - barHeight - 4)
+  const half = (dims.w || 320) / 2
   const left = Math.min(Math.max(rect.x + rect.w / 2, half + 8), Math.max(half + 8, container.w - half - 8))
 
   // Grow the text until it would overflow, then step back one. Measured on
@@ -168,170 +181,196 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
       onDoubleClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
     >
-      <select
-        className={styles.select}
-        value={font}
-        title="Шрифт"
-        aria-label="Шрифт"
-        style={{ fontFamily: FONT_BY_ID.get(font)?.css }}
-        onChange={(e) => set('font', e.target.value === 'default' ? undefined : e.target.value)}
-      >
-        {FONT_GROUPS.map((group) => (
-          <optgroup key={group} label={group}>
-            {NOTE_FONTS.filter((f) => f.group === group).map((f) => (
-              <option key={f.id} value={f.id} style={{ fontFamily: f.css }}>
-                {f.label}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
+      <div className={styles.row}>
+        <select
+          className={styles.select}
+          value={font}
+          title="Шрифт"
+          aria-label="Шрифт"
+          style={{ fontFamily: FONT_BY_ID.get(font)?.css }}
+          onChange={(e) => set('font', e.target.value === 'default' ? undefined : e.target.value)}
+        >
+          {FONT_GROUPS.map((group) => (
+            <optgroup key={group} label={group}>
+              {NOTE_FONTS.filter((f) => f.group === group).map((f) => (
+                <option key={f.id} value={f.id} style={{ fontFamily: f.css }}>
+                  {f.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
 
-      <div className={styles.stepper} title="Размер текста">
+        <div className={styles.stepper} title="Размер текста">
+          <button
+            type="button"
+            className={styles.step}
+            aria-label="Меньше"
+            onClick={() => set('fontSize', stepFontSize(size, -1))}
+          >
+            <Minus size={13} />
+          </button>
+          <input
+            className={styles.num}
+            type="number"
+            min={8}
+            max={200}
+            value={size}
+            aria-label="Размер текста"
+            onChange={(e) => set('fontSize', clampFontSize(Number(e.target.value)))}
+          />
+          <button
+            type="button"
+            className={styles.step}
+            aria-label="Больше"
+            onClick={() => set('fontSize', stepFontSize(size, 1))}
+          >
+            <Plus size={13} />
+          </button>
+        </div>
+
+        <div className={styles.sep} />
+
+        {/* Text colour. It was only ever in the context menu's colour
+            submenu, three levels in, which is why it read as "you still
+            can't colour the text" — the feature existed, nothing pointed at
+            it. Right-click puts it back to automatic. Kept in the primary
+            row for the same reason: buried again is buried again. */}
+        <label
+          className={styles.colorBtn}
+          title="Цвет текста (правый клик — автоматически)"
+          onContextMenu={(e) => {
+            e.preventDefault()
+            set('textColor', undefined)
+          }}
+        >
+          <Baseline size={15} />
+          <span
+            className={styles.colorSwatch}
+            style={{ background: pin.textColor ?? readableOn(pin.color) }}
+          />
+          <input
+            className={styles.colorInput}
+            type="color"
+            aria-label="Цвет текста"
+            value={pin.textColor ?? readableOn(pin.color)}
+            onChange={(e) => set('textColor', e.target.value)}
+          />
+        </label>
+
+        <div className={styles.sep} />
+
+        {markBtn('bold', <Bold size={15} />, 'Жирный')}
+        {markBtn('italic', <Italic size={15} />, 'Курсив')}
+        {markBtn('underline', <Underline size={15} />, 'Подчёркнутый')}
+
+        <div className={styles.sep} />
+
+        {alignBtn('left', <AlignLeft size={15} />, 'По левому краю')}
+        {alignBtn('center', <AlignCenter size={15} />, 'По центру')}
+        {alignBtn('right', <AlignRight size={15} />, 'По правому краю')}
+
+        <div className={styles.sep} />
+
         <button
           type="button"
-          className={styles.step}
-          aria-label="Меньше"
-          onClick={() => set('fontSize', stepFontSize(size, -1))}
+          className={`${styles.btn} ${more ? styles.on : ''}`}
+          title={more ? 'Скрыть остальные настройки' : 'Ещё настройки'}
+          aria-label={more ? 'Скрыть остальные настройки' : 'Ещё настройки'}
+          aria-expanded={more}
+          onClick={() => setMore((v) => !v)}
         >
-          <Minus size={13} />
-        </button>
-        <input
-          className={styles.num}
-          type="number"
-          min={8}
-          max={200}
-          value={size}
-          aria-label="Размер текста"
-          onChange={(e) => set('fontSize', clampFontSize(Number(e.target.value)))}
-        />
-        <button
-          type="button"
-          className={styles.step}
-          aria-label="Больше"
-          onClick={() => set('fontSize', stepFontSize(size, 1))}
-        >
-          <Plus size={13} />
+          <MoreHorizontal size={15} />
         </button>
       </div>
 
-      <div className={styles.sep} />
+      {/* Everything reached for occasionally rather than constantly: strike
+          and uppercase, justify, vertical align, spacing, fit-to-box, reset.
+          Behind one toggle instead of stretched across the top, so the bar
+          over a small note stays roughly the note's own width instead of
+          six times it. */}
+      {more && (
+        <div className={styles.row}>
+          {markBtn('strike', <Strikethrough size={15} />, 'Зачёркнутый')}
+          {markBtn('uppercase', <CaseUpper size={15} />, 'ЗАГЛАВНЫМИ')}
 
-      {/* Text colour. It was only ever in the context menu's colour
-          submenu, three levels in, which is why it read as "you still
-          can't colour the text" — the feature existed, nothing pointed at
-          it. Right-click puts it back to automatic. */}
-      <label
-        className={styles.colorBtn}
-        title="Цвет текста (правый клик — автоматически)"
-        onContextMenu={(e) => {
-          e.preventDefault()
-          set('textColor', undefined)
-        }}
-      >
-        <Baseline size={15} />
-        <span
-          className={styles.colorSwatch}
-          style={{ background: pin.textColor ?? readableOn(pin.color) }}
-        />
-        <input
-          className={styles.colorInput}
-          type="color"
-          aria-label="Цвет текста"
-          value={pin.textColor ?? readableOn(pin.color)}
-          onChange={(e) => set('textColor', e.target.value)}
-        />
-      </label>
-
-      <div className={styles.sep} />
-
-      {markBtn('bold', <Bold size={15} />, 'Жирный')}
-      {markBtn('italic', <Italic size={15} />, 'Курсив')}
-      {markBtn('underline', <Underline size={15} />, 'Подчёркнутый')}
-      {markBtn('strike', <Strikethrough size={15} />, 'Зачёркнутый')}
-      {markBtn('uppercase', <CaseUpper size={15} />, 'ЗАГЛАВНЫМИ')}
-
-      <div className={styles.sep} />
-
-      {alignBtn('left', <AlignLeft size={15} />, 'По левому краю')}
-      {alignBtn('center', <AlignCenter size={15} />, 'По центру')}
-      {alignBtn('right', <AlignRight size={15} />, 'По правому краю')}
-      {alignBtn('justify', <AlignJustify size={15} />, 'По ширине')}
-
-      <div className={styles.sep} />
-
-      {valignBtn('top', <AlignVerticalJustifyStart size={15} />, 'Прижать вверх')}
-      {valignBtn('middle', <AlignVerticalJustifyCenter size={15} />, 'По центру по высоте')}
-      {valignBtn('bottom', <AlignVerticalJustifyEnd size={15} />, 'Прижать вниз')}
-
-      <div className={styles.sep} />
-
-      <div className={styles.stepper} title="Межстрочный интервал">
-        <span className={styles.stepIcon}><Baseline size={14} /></span>
-        <input
-          className={styles.num}
-          type="number"
-          step={0.05}
-          min={0.8}
-          max={3}
-          value={lineHeight}
-          aria-label="Межстрочный интервал"
-          onChange={(e) => set('lineHeight', clampLineHeight(Number(e.target.value)))}
-        />
-      </div>
-
-      <div className={styles.stepper} title="Межбуквенный интервал, сотые em">
-        <span className={styles.stepIcon}><Type size={14} /></span>
-        <input
-          className={styles.num}
-          type="number"
-          step={1}
-          min={-10}
-          max={50}
-          value={tracking}
-          aria-label="Межбуквенный интервал"
-          onChange={(e) => set('letterSpacing', clampLetterSpacing(Number(e.target.value)))}
-        />
-      </div>
-
-      <button
-        type="button"
-        className={styles.btn}
-        title="Подогнать размер под рамку"
-        aria-label="Подогнать размер под рамку"
-        onClick={fitToBox}
-      >
-        <Scaling size={15} />
-      </button>
-
-      {hasTextFormat(pin) && (
-        <>
           <div className={styles.sep} />
+
+          {alignBtn('justify', <AlignJustify size={15} />, 'По ширине')}
+          {valignBtn('top', <AlignVerticalJustifyStart size={15} />, 'Прижать вверх')}
+          {valignBtn('middle', <AlignVerticalJustifyCenter size={15} />, 'По центру по высоте')}
+          {valignBtn('bottom', <AlignVerticalJustifyEnd size={15} />, 'Прижать вниз')}
+
+          <div className={styles.sep} />
+
+          <div className={styles.stepper} title="Межстрочный интервал">
+            <span className={styles.stepIcon}><Baseline size={14} /></span>
+            <input
+              className={styles.num}
+              type="number"
+              step={0.05}
+              min={0.8}
+              max={3}
+              value={lineHeight}
+              aria-label="Межстрочный интервал"
+              onChange={(e) => set('lineHeight', clampLineHeight(Number(e.target.value)))}
+            />
+          </div>
+
+          <div className={styles.stepper} title="Межбуквенный интервал, сотые em">
+            <span className={styles.stepIcon}><Type size={14} /></span>
+            <input
+              className={styles.num}
+              type="number"
+              step={1}
+              min={-10}
+              max={50}
+              value={tracking}
+              aria-label="Межбуквенный интервал"
+              onChange={(e) => set('letterSpacing', clampLetterSpacing(Number(e.target.value)))}
+            />
+          </div>
+
           <button
             type="button"
             className={styles.btn}
-            title="Сбросить форматирование"
-            aria-label="Сбросить форматирование"
-            onClick={() => {
-              for (const f of [
-                'fontSize',
-                'align',
-                'valign',
-                'lineHeight',
-                'letterSpacing',
-                'bold',
-                'italic',
-                'underline',
-                'strike',
-                'uppercase',
-              ]) {
-                set(f, undefined)
-              }
-            }}
+            title="Подогнать размер под рамку"
+            aria-label="Подогнать размер под рамку"
+            onClick={fitToBox}
           >
-            <RotateCcw size={15} />
+            <Scaling size={15} />
           </button>
-        </>
+
+          {hasTextFormat(pin) && (
+            <>
+              <div className={styles.sep} />
+              <button
+                type="button"
+                className={styles.btn}
+                title="Сбросить форматирование"
+                aria-label="Сбросить форматирование"
+                onClick={() => {
+                  for (const f of [
+                    'fontSize',
+                    'align',
+                    'valign',
+                    'lineHeight',
+                    'letterSpacing',
+                    'bold',
+                    'italic',
+                    'underline',
+                    'strike',
+                    'uppercase',
+                  ]) {
+                    set(f, undefined)
+                  }
+                }}
+              >
+                <RotateCcw size={15} />
+              </button>
+            </>
+          )}
+        </div>
       )}
     </div>
   )

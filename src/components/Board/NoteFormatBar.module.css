@@ -6,10 +6,9 @@
   z-index: 40;
   transform: translateX(-50%);
   display: flex;
-  align-items: center;
-  gap: 2px;
+  flex-direction: column;
+  gap: 4px;
   max-width: calc(100% - 16px);
-  flex-wrap: wrap;
   padding: 5px 7px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -19,6 +18,17 @@
      read as a board gesture. */
   cursor: default;
   user-select: none;
+}
+
+/* One line of controls. The bar stacks two of these (primary, and the
+   "more" row when open) instead of one long line — a note a few hundred
+   pixels wide was otherwise sitting under a bar wide enough to cover its
+   neighbours. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
 }
 
 .btn {
@@ -138,10 +148,10 @@
 }
 
 /* --- touch --------------------------------------------------------------
-   Eighteen controls do not fit across a phone. They wrap on desktop, which
-   is fine over a wide canvas and wrong over a 390px one: a four-row bar
-   covers the note it formats. On a phone it becomes one row that scrolls,
-   pinned above the toolbar rather than chasing the note. */
+   Even the trimmed primary row does not fit across a phone. Each row wraps
+   on desktop, which is fine over a wide canvas; on touch every row instead
+   becomes one line that scrolls, pinned above the app's own toolbar rather
+   than chasing the note. */
 
 @media (pointer: coarse), (max-width: 640px) {
   .bar {
@@ -152,13 +162,16 @@
     bottom: calc(var(--tap) + 26px + var(--safe-bottom));
     transform: none;
     max-width: none;
+  }
+
+  .row {
     flex-wrap: nowrap;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
   }
 
-  .bar::-webkit-scrollbar { display: none; }
+  .row::-webkit-scrollbar { display: none; }
 
   .btn,
   .step {
