@@ -179,6 +179,11 @@ export function NotePin({ pin }: { pin: NotePinT }) {
   // keeps the last known text as a cache so the pin renders instantly, but
   // the file wins on load and receives every edit.
   const [linkError, setLinkError] = useState<string | null>(null)
+  // The GET below can be slow; by the time it answers, the note may have been
+  // opened, typed into and saved. Compare against what is current, not what
+  // was current when the request went out.
+  const latest = useRef({ text: pin.text, activated })
+  latest.current = { text: pin.text, activated }
 
   useEffect(() => {
     if (!pin.sourcePath) return
@@ -190,7 +195,7 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         setLinkError(null)
         // Only touch the board when the file actually differs, or every
         // board open would mark the board dirty and trigger a save.
-        if (fresh !== pin.text) {
+        if (fresh !== latest.current.text && !latest.current.activated) {
           updatePin(pin.id, 'text', fresh)
           setDraft(fresh)
         }
@@ -334,6 +339,7 @@ export function NotePin({ pin }: { pin: NotePinT }) {
         <Suspense fallback={<div className={styles.noteEditor} style={textStyle} />}>
           <NoteEditorHost
             pinId={pin.id}
+            linked={Boolean(pin.sourcePath)}
             domRef={(el) => {
               areaRef.current = el
             }}
@@ -341,10 +347,10 @@ export function NotePin({ pin }: { pin: NotePinT }) {
             style={textStyle}
             value={draft}
             onChange={setDraft}
-            onEscape={() => {
-              setDraft(pin.text)
-              setActivated(false)
-            }}
+            // Escape leaves editing and keeps what was typed — the help says so,
+            // and it is what Escape does when focus is anywhere but the
+            // editor. It used to throw the whole session's text away.
+            onEscape={commit}
             onBlur={(to) => {
               // Focus moving onto the formatting bar (a font list, a colour
               // picker, a size box) is not the end of editing: the bar needs
@@ -352,6 +358,9 @@ export function NotePin({ pin }: { pin: NotePinT }) {
               // PinShell ends the edit on the next pointerdown outside the
               // pin and the bar, and the cleanup below commits the draft.
               if (to?.closest('[data-note-format-bar]')) return
+              // Switching to another window blurs the editor with nowhere for
+              // focus to go; coming back should find the editor still open.
+              if (!document.hasFocus()) return
               commit()
             }}
           />

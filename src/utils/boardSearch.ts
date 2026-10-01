@@ -23,10 +23,22 @@ export function searchableText(pin: Pin): string {
   return parts.join(' ')
 }
 
+// The note editor writes characters that mean something to markdown with a
+// backslash (`file_name` is stored as `file\_name`, `[1]` as `\[1\]`) and a
+// few as entities (`&amp;`). The reader shows them plainly, so a person
+// searching for `file_name` must find it.
+export function unescapeMarkdown(s: string): string {
+  return s
+    .replace(/\\([\\`*_{}[\]()#+\-.!~|<>$&])/g, '$1')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+}
+
 // Case- and diacritic-insensitive, so "ЗАМЕТКА" finds "заметка" and a
 // query typed without ё finds text written with it.
 function fold(s: string): string {
-  return s.toLowerCase().replace(/ё/g, 'е').normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  return unescapeMarkdown(s).toLowerCase().replace(/ё/g, 'е').normalize('NFKD').replace(/[̀-ͯ]/g, '')
 }
 
 export interface Match {

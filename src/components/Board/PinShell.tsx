@@ -170,7 +170,9 @@ export function PinShell({
           height: `${h}px`,
           zIndex: pin.z,
         }}
-        onContextMenu={onContextMenu}
+        // While the note is being edited a right-click belongs to the text
+        // (the browser's paste and copy), not to the pin's menu.
+        onContextMenu={activated ? undefined : onContextMenu}
         onDoubleClick={(e) => {
           e.stopPropagation()
           setActivatedState(true)

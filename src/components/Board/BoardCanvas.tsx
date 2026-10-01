@@ -913,7 +913,12 @@ export function BoardCanvas() {
         target &&
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
+          target.tagName === 'SELECT' ||
+          target.isContentEditable ||
+          // The formatting bar's buttons, font list and number boxes: a key
+          // pressed there is not a board shortcut. Backspace on the font list
+          // used to delete the note.
+          target.closest('[data-note-format-bar]'))
       ) {
         return
       }

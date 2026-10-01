@@ -30,6 +30,14 @@ describe('findMatches', () => {
     expect(findMatches([note('a', 'НаЁмный узел')], 'наемный')).toHaveLength(1)
   })
 
+  it('finds text the editor stored with markdown escapes', () => {
+    // The editor writes `file_name` as `file\_name` and `AT&T` as `AT&amp;T`.
+    expect(findMatches([note('a', 'see file\\_name.txt')], 'file_name')).toHaveLength(1)
+    expect(findMatches([note('a', 'pass fort\\_icecream88yum')], 'fort_icecream')).toHaveLength(1)
+    expect(findMatches([note('a', 'AT&amp;T line')], 'at&t')).toHaveLength(1)
+    expect(findMatches([note('a', 'ref \\[1\\]')], '[1]')).toHaveLength(1)
+  })
+
   it('returns nothing for an empty or blank query', () => {
     expect(findMatches([note('a', 'x')], '')).toEqual([])
     expect(findMatches([note('a', 'x')], '   ')).toEqual([])

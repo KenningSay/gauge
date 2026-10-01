@@ -45,7 +45,13 @@ export function StatusBar() {
   }, [info])
 
   const refresh = useCallback(() => {
-    getStorageInfo().then(setInfo).catch(() => {})
+    // A failed or empty answer keeps what is already shown: dropping the bar
+    // on one bad poll makes the layout jump and the numbers flicker.
+    getStorageInfo()
+      .then((next) => {
+        if (next && next.total > 0) setInfo(next)
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {

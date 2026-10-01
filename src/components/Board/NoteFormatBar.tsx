@@ -126,6 +126,83 @@ function readEditor(ed: Editor): EditorView {
   }
 }
 
+// A number box that can be typed into. The old one applied every keystroke as
+// it came: typing "24" first produced "2", which was clamped to the minimum 8
+// and written back into the box, so the next key made it "84". The box now
+// keeps what is typed as text and applies it when it is committed — Enter or
+// leaving the box — while the arrow keys and the browser's spinner, which
+// change the value in one step, apply immediately.
+function NumberField({
+  value,
+  onCommit,
+  onDone,
+  className,
+  ariaLabel,
+  min,
+  max,
+  step,
+  disabled,
+}: {
+  value: number
+  // `step` is true for an arrow key or the spinner: one nudge in a row of them,
+  // which must leave focus where it is so the next one lands.
+  onCommit: (n: number, step: boolean) => void
+  // Called after Enter or Escape, to hand focus back to the editor.
+  onDone: () => void
+  className: string
+  ariaLabel: string
+  min: number
+  max: number
+  step?: number
+  disabled?: boolean
+}) {
+  const [text, setText] = useState<string | null>(null)
+  const shown = text ?? String(value)
+
+  const commit = () => {
+    if (text === null) return
+    const n = Number(text)
+    setText(null)
+    if (text.trim() !== '' && Number.isFinite(n)) onCommit(n, false)
+  }
+
+  return (
+    <input
+      className={className}
+      type="number"
+      min={min}
+      max={max}
+      step={step}
+      value={shown}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onChange={(e) => {
+        const native = e.nativeEvent as InputEvent
+        // Typing and deleting are held until commit; the spinner and the
+        // arrow keys carry no inputType and are one deliberate step.
+        if (native.inputType) setText(e.target.value)
+        else {
+          setText(null)
+          const n = Number(e.target.value)
+          if (Number.isFinite(n)) onCommit(n, true)
+        }
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit()
+          onDone()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          setText(null)
+          onDone()
+        }
+      }}
+    />
+  )
+}
+
 export function NoteFormatBar({ pin, rect, container }: Props) {
   const updatePin = useBoardStore((s) => s.updatePin)
   const barRef = useRef<HTMLDivElement | null>(null)
@@ -156,6 +233,13 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   }, [])
 
   const editor = useNoteEditor(pin.id)
+  // The note is open but has no visual editor: either it is still loading or
+  // it was opened as plain text. Controls that edit the text itself have
+  // nothing to work on then, and writing to the stored text would be undone by
+  // the draft the text box is showing.
+  const editing = useBoardStore((s) => s.activePinId === pin.id)
+  const textBusy = editing && !editor
+  const backToEditor = () => editor?.commands.focus()
   const view = useEditorSnapshot(editor, readEditor)
   // A fragment is being edited: the editor is open and something is selected.
   const frag = Boolean(editor && view?.frag)
@@ -220,6 +304,7 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   // selected; with the note only selected on the board (no editor), there is
   // no caret, so the whole text gets the prefix.
   const applyList = (kind: 'bullet' | 'numbered') => {
+    if (textBusy) return
     if (editor) {
       if (kind === 'bullet') run().toggleBulletList().run()
       else run().toggleOrderedList().run()
@@ -233,15 +318,18 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
     else set('font', id === 'default' ? undefined : id)
   }
 
-  const applySize = (px: number) => {
+  // Commands from a step keep focus where it is; the rest return it to the editor.
+  const chain = (step: boolean) => (step ? editor!.chain() : run())
+
+  const applySize = (px: number, step = false) => {
     const v = clampFontSize(px)
-    if (frag) editor!.chain().setFontSize(`${v}px`).run()
+    if (frag) chain(step).setFontSize(`${v}px`).run()
     else set('fontSize', v)
   }
 
   const applyColor = (hex: string | null) => {
     if (frag) {
-      if (hex) editor!.chain().setColor(hex).run()
+      if (hex) run().setColor(hex).run()
       else run().unsetColor().removeEmptyTextStyle().run()
     } else set('textColor', hex ?? undefined)
   }
@@ -253,15 +341,15 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
     } else toggle('align', value, pin.align)
   }
 
-  const applyLineHeight = (value: number) => {
+  const applyLineHeight = (value: number, step = false) => {
     const v = clampLineHeight(value)
-    if (frag) editor!.chain().updateAttributes('paragraph', { lineHeight: v }).updateAttributes('heading', { lineHeight: v }).run()
+    if (frag) chain(step).updateAttributes('paragraph', { lineHeight: v }).updateAttributes('heading', { lineHeight: v }).run()
     else set('lineHeight', v)
   }
 
-  const applyTracking = (value: number) => {
+  const applyTracking = (value: number, step = false) => {
     const v = clampLetterSpacing(value)
-    if (frag) editor!.chain().setMark('textStyle', { letterSpacing: v === 0 ? null : v }).removeEmptyTextStyle().run()
+    if (frag) chain(step).setMark('textStyle', { letterSpacing: v === 0 ? null : v }).removeEmptyTextStyle().run()
     else set('letterSpacing', v)
   }
 
@@ -285,7 +373,14 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
 
   const resetFormatting = () => {
     if (frag) {
-      run().unsetAllMarks().unsetTextAlign().run()
+      run()
+        .unsetMark('textStyle')
+        .unsetMark('underline')
+        .unsetMark('bold')
+        .unsetMark('italic')
+        .unsetMark('strike')
+        .unsetTextAlign()
+        .run()
       return
     }
     for (const f of [
@@ -365,6 +460,22 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
       onPointerDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
+      // A press on the bar's padding, a separator or a label is not on a
+      // focusable element, so the browser moves focus to the nearest one that
+      // is — the board — and the editor closes with the selection. Only the
+      // fields need to take focus.
+      onMouseDown={(e) => {
+        const t = e.target as HTMLElement
+        if (!t.closest('input, select')) e.preventDefault()
+      }}
+      // Escape in one of the bar's own fields hands focus back to the editor.
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && (e.target as HTMLElement).closest('input, select')) {
+          e.preventDefault()
+          e.stopPropagation()
+          backToEditor()
+        }
+      }}
     >
       <div className={styles.row}>
         {/* Only while the note is open for editing: otherwise there is no
@@ -403,14 +514,14 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
           >
             <Minus size={13} />
           </button>
-          <input
+          <NumberField
             className={styles.num}
-            type="number"
             min={8}
             max={200}
             value={shownSize}
-            aria-label="Размер текста"
-            onChange={(e) => applySize(Number(e.target.value))}
+            ariaLabel="Размер текста"
+            onCommit={applySize}
+            onDone={backToEditor}
           />
           <button
             type="button"
@@ -467,6 +578,7 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
           className={styles.btn}
           title="Маркированный список"
           aria-label="Маркированный список"
+          disabled={textBusy}
           onMouseDown={noFocus}
           onClick={() => applyList('bullet')}
         >
@@ -477,6 +589,7 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
           className={styles.btn}
           title="Нумерованный список"
           aria-label="Нумерованный список"
+          disabled={textBusy}
           onMouseDown={noFocus}
           onClick={() => applyList('numbered')}
         >
@@ -519,30 +632,30 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
 
           <div className={styles.stepper} title="Межстрочный интервал">
             <span className={styles.stepIcon}><Baseline size={14} /></span>
-            <input
+            <NumberField
               className={styles.num}
-              type="number"
               step={0.05}
               min={0.8}
               max={3}
               value={shownLineHeight}
-              aria-label="Межстрочный интервал"
+              ariaLabel="Межстрочный интервал"
               disabled={!blockOk}
-              onChange={(e) => applyLineHeight(Number(e.target.value))}
+              onCommit={applyLineHeight}
+              onDone={backToEditor}
             />
           </div>
 
           <div className={styles.stepper} title="Межбуквенный интервал, сотые em">
             <span className={styles.stepIcon}><Type size={14} /></span>
-            <input
+            <NumberField
               className={styles.num}
-              type="number"
               step={1}
               min={-10}
               max={50}
               value={shownTracking}
-              aria-label="Межбуквенный интервал"
-              onChange={(e) => applyTracking(Number(e.target.value))}
+              ariaLabel="Межбуквенный интервал"
+              onCommit={applyTracking}
+              onDone={backToEditor}
             />
           </div>
 

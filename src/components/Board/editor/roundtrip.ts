@@ -119,15 +119,34 @@ function flatten(node: MdNode, ctx: Ctx, out: Item[]) {
 }
 
 // Consecutive runs with the same formatting are one run: where the parser
-// happened to split the text is not something a reader can see.
+// happened to split the text is not something a reader can see. Spaces are
+// compared without their formatting — a colour on a space is invisible, and
+// the editor moves spaces from inside a coloured span to outside it.
 function merged(items: Item[]): Item[] {
   const out: Item[] = []
-  for (const it of items) {
+  const push = (t: string, k: string) => {
     const last = out[out.length - 1]
-    if (typeof it !== 'string' && last && typeof last !== 'string' && last.k === it.k) last.t += it.t
-    else out.push(typeof it === 'string' ? it : { ...it })
+    if (last && typeof last !== 'string' && last.k === k) last.t += t
+    else out.push({ t, k })
   }
-  return out
+  for (const it of items) {
+    if (typeof it === 'string') {
+      out.push(it)
+      continue
+    }
+    for (const ch of it.t) push(ch, /\s/.test(ch) ? '' : it.k)
+  }
+  // Spaces at the very start or end of a block are not drawn: markdown trims
+  // them, and the editor happily writes one just outside a span that used to
+  // contain it.
+  const isOpen = (i: Item | undefined) => typeof i === 'string' && !i.startsWith('</')
+  const isClose = (i: Item | undefined) => typeof i === 'string' && i.startsWith('</')
+  return out.filter((it, idx) => {
+    if (typeof it === 'string' || it.t.trim() !== '') return true
+    const before = out[idx - 1]
+    const after = out[idx + 1]
+    return !(before === undefined || isOpen(before) || after === undefined || isClose(after))
+  })
 }
 
 export function semanticForm(markdown: string): string {
@@ -146,4 +165,61 @@ export function survivesTrip(original: string, serialized: string): boolean {
   } catch {
     return false
   }
+}
+
+// ---- what may be opened in the visual editor --------------------------------
+//
+// The trip test above asks "would the reader draw the same thing?". That is
+// not the whole question. The note is also stored, searched, read by the AI
+// and — for a note linked to a vault file — written back over a file that
+// Obsidian owns. A wikilink the editor turns into `\[\[x\]\]` draws exactly
+// the same and has still been broken. So there are two further rules.
+
+// Syntax the editor has no way to hold. A note with any of it opens as text,
+// where nothing is rewritten.
+const UNSUPPORTED: RegExp[] = [
+  /\[\[/, // wikilinks and embeds
+  /^>\s*\[!/m, // callouts
+  /^---[ \t]*\r?\n/, // front matter at the very start
+  /<!--/, // comments
+  /<(?!\/?(?:span|u)\b)[a-zA-Z][^>]*>/, // any tag but our own (<kbd>, <sup>, <br>…)
+  /\[\^/, // footnotes
+  /!\[/, // images
+  /^\s*\|.*\|\s*$/m, // tables
+  /\$\$|(?<![\\$])\$[^\s$][^$\n]*\$/, // formulas
+]
+
+export function hasUnsupportedSyntax(text: string): boolean {
+  return UNSUPPORTED.some((re) => re.test(text))
+}
+
+const escapes = (s: string) => (s.match(/\\|&amp;|&lt;|&gt;/g) ?? []).length
+
+// Characters that mean nothing to markdown but that the editor escapes to be
+// safe (`file_name`, `[1]`, `C:\\path`, `AT&T`). The reader draws them the
+// same, which is why the trip test lets them through; the stored text is
+// still different, and plain-text search and the AI would see backslashes.
+export function addsEscapes(original: string, serialized: string): boolean {
+  return escapes(serialized) > escapes(original)
+}
+
+// May this note be opened in the visual editor, given what the editor would
+// write back for it?
+//
+// Refusing sends the note to the plain-text editor, which shows the raw text
+// and rewrites nothing. That is the safe outcome, but it is also the one that
+// shows `<span style=…>` to a person whose note has formatting in it, so it
+// is kept for what can really be damaged:
+//   - syntax the editor cannot hold (above);
+//   - anything the reader would draw differently;
+//   - for a note linked to a vault file, which is written back as-is and
+//     belongs to Obsidian, any change at all to the characters — even the
+//     backslashes that are invisible in the reader.
+// On a board note those backslashes cost nothing: the reader draws the same,
+// and the board's search ignores them.
+export function visualEditAllowed(original: string, serialized: string, linked: boolean): boolean {
+  if (hasUnsupportedSyntax(original)) return false
+  if (!survivesTrip(original, serialized)) return false
+  if (linked && addsEscapes(original, serialized)) return false
+  return true
 }

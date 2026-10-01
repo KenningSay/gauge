@@ -17,13 +17,15 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Editor, EditorContent, useEditor } from '@tiptap/react'
 import { createNoteExtensions } from './noteExtensions'
-import { survivesTrip } from './roundtrip'
+import { visualEditAllowed } from './roundtrip'
 import { registerNoteEditor } from './noteEditorRegistry'
 import styles from '../pins/Pins.module.css'
 
 export interface NoteEditorProps {
   pinId: string
   value: string
+  // The note is a view onto a vault file, which gets written back as-is.
+  linked: boolean
   onChange: (markdown: string) => void
   onEscape: () => void
   // Focus left the editor; `to` is where it went.
@@ -35,14 +37,14 @@ export interface NoteEditorProps {
 }
 
 // Can the visual editor take this note and give it back unchanged?
-function canEditVisually(text: string): boolean {
+function canEditVisually(text: string, linked: boolean): boolean {
   const probe = new Editor({
     extensions: createNoteExtensions(),
     content: text,
     contentType: 'markdown',
   })
   try {
-    return survivesTrip(text, probe.getMarkdown())
+    return visualEditAllowed(text, probe.getMarkdown(), linked)
   } catch {
     return false
   } finally {
@@ -53,7 +55,7 @@ function canEditVisually(text: string): boolean {
 export default function NoteEditorHost(props: NoteEditorProps) {
   // Decided once, when the note opens: a note must not switch editors under
   // the cursor as it is typed into.
-  const visual = useMemo(() => canEditVisually(props.value), []) // eslint-disable-line react-hooks/exhaustive-deps
+  const visual = useMemo(() => canEditVisually(props.value, props.linked), []) // eslint-disable-line react-hooks/exhaustive-deps
   return visual ? <VisualEditor {...props} /> : <SourceEditor {...props} />
 }
 

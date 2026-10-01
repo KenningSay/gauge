@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { readFileSync, existsSync } from 'node:fs'
 import { createNoteExtensions } from './noteExtensions'
-import { semanticForm, survivesTrip } from './roundtrip'
+import { addsEscapes, hasUnsupportedSyntax, semanticForm, survivesTrip, visualEditAllowed } from './roundtrip'
 
 const trip = (md: string) => {
   const ed = new Editor({
@@ -97,5 +97,62 @@ describe.skipIf(!CORPUS || !existsSync(CORPUS))('real notes', () => {
     // rewriting it is not — and the valve is what stops that.
     expect(verdicts.length).toBe(notes.length)
     console.info(`${verdicts.length} notes, ${lossy.length} would open as text`)
+  })
+})
+
+// The rules above are about what the reader draws. These are about what is
+// stored: a note that draws the same but is rewritten differently is still a
+// note the editor has damaged.
+describe('what the editor may be trusted with', () => {
+  const allowed = (md: string, linked = false) => visualEditAllowed(md, trip(md), linked)
+
+  it('everything the editor handles is allowed, linked or not', () => {
+    for (const md of Object.values(SAFE)) expect(allowed(md)).toBe(true)
+    for (const md of Object.values(BENIGN)) expect(allowed(md)).toBe(true)
+  })
+
+  const UNSUPPORTED_SAMPLES: Record<string, string> = {
+    wikilink: 'see [[Note Name]]',
+    embed: '![[img.png]]',
+    callout: '> [!note] Title\n> body',
+    frontMatter: '---\ntitle: x\n---\n\nbody',
+    htmlTag: 'press <kbd>Ctrl</kbd>',
+    lineBreakTag: 'a<br>b',
+    comment: 'a <!-- todo --> b',
+    image: '![alt](http://x/y.png)',
+    table: '| a | b |\n|---|---|\n| 1 | 2 |',
+    formula: 'energy $E_k = m_a$',
+    footnote: 'text[^1]\n\n[^1]: note',
+  }
+  for (const [name, md] of Object.entries(UNSUPPORTED_SAMPLES)) {
+    it(`${name} is refused, so the note opens as text and is not rewritten`, () => {
+      expect(hasUnsupportedSyntax(md)).toBe(true)
+      expect(allowed(md)).toBe(false)
+    })
+  }
+
+  it('plain text with characters the editor would escape is fine on a board', () => {
+    for (const md of ['pass fort_icecream88yum', 'C:\\Users\\alex\\file_name.txt', 'array[0] and AT&T', 'ref[1]']) {
+      expect(addsEscapes(md, trip(md))).toBe(true)
+      expect(allowed(md, false)).toBe(true)
+    }
+  })
+
+  it('but the same text in a linked file opens as text, so the file is not rewritten', () => {
+    for (const md of ['pass fort_icecream88yum', 'array[0] and AT&T']) expect(allowed(md, true)).toBe(false)
+  })
+
+  it('a linked file with nothing to escape is still edited visually', () => {
+    expect(allowed('# Title\n\n- a\n- b\n\n**bold** text', true)).toBe(true)
+  })
+
+  it('text the editor has already escaped is stable: reopening it is fine', () => {
+    const once = trip('x file_name y')
+    expect(allowed(once)).toBe(true)
+  })
+
+  it('spaces inside a coloured span are not formatting', () => {
+    const md = '<span style="color:#ff0000"> a </span>b'
+    expect(survivesTrip(md, trip(md))).toBe(true)
   })
 })
