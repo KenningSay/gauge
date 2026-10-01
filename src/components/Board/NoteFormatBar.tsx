@@ -53,7 +53,7 @@ import {
   NOTE_FONTS,
   readableOn,
 } from './pins/noteStyles'
-import { useEditorSnapshot, useNoteEditor } from './editor/noteEditorRegistry'
+import { safeFocus, useEditorSnapshot, useNoteEditor } from './editor/noteEditorRegistry'
 import {
   clampFontSize,
   clampLetterSpacing,
@@ -239,7 +239,9 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   // the draft the text box is showing.
   const editing = useBoardStore((s) => s.activePinId === pin.id)
   const textBusy = editing && !editor
-  const backToEditor = () => editor?.commands.focus()
+  const backToEditor = () => {
+    if (editor) safeFocus(editor)
+  }
   const view = useEditorSnapshot(editor, readEditor)
   // A fragment is being edited: the editor is open and something is selected.
   const frag = Boolean(editor && view?.frag)
@@ -274,9 +276,16 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   const half = (dims.w || 320) / 2
   const left = Math.min(Math.max(rect.x + rect.w / 2, half + 8), Math.max(half + 8, container.w - half - 8))
 
-  // Every editor command starts here. `focus()` puts the caret back where it
-  // was; a button that never took focus loses nothing by it.
-  const run = () => editor!.chain().focus()
+  // Every editor command starts here. Focus is given back to the editor first
+  // — and as a command of its own, not as the first link of the chain: focusing
+  // can make the browser fire a selection event at once, which advances the
+  // editor's state, and a chain built before that is then applied to a state it
+  // no longer matches ("Applying a mismatched transaction"). The buttons never
+  // take focus, so normally there is nothing to give back.
+  const run = () => {
+    if (!editor!.view.hasFocus()) safeFocus(editor!)
+    return editor!.chain()
+  }
 
   // Grow the text until it would overflow, then step back one. Measured on
   // the real element rather than on a clone: a clone would have to

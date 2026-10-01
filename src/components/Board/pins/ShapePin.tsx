@@ -148,9 +148,10 @@ export function ShapePin({ pin }: { pin: ShapePinT }) {
             onBlur={commit}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
+                // Leaves editing and keeps what was typed, like every other
+                // way out of it (and like the help says).
                 e.preventDefault()
-                setDraft(pin.text)
-                setActivated(false)
+                commit()
               }
             }}
           />

@@ -11,7 +11,7 @@
 // edited in the editor and a note read by the renderer agree on what a tag
 // means — and nothing a note contains can smuggle in CSS.
 
-import { Extension, type JSONContent, type MarkdownParseHelpers, type MarkdownRendererHelpers, type MarkdownToken, type RenderContext } from '@tiptap/core'
+import { Extension, InputRule, type JSONContent, type MarkdownParseHelpers, type MarkdownRendererHelpers, type MarkdownToken, type RenderContext } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import { Color, FontSize, TextStyle } from '@tiptap/extension-text-style'
@@ -299,6 +299,32 @@ const NoteHeading = Heading.extend({
   },
 })
 
+// "- [ ] " the way GitHub and Obsidian take it. Typing the "- " turns the line
+// into a bullet at once, so what arrives is "[ ] " at the start of a bullet's
+// paragraph — which the library's own rule only expects outside a list. Turn
+// that bullet list into a task list.
+const GithubTaskRule = Extension.create({
+  name: 'githubTaskRule',
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /^\[([ xX])?\]\s$/,
+        handler: ({ state, range, match, chain }) => {
+          const { $from } = state.selection
+          let inBullet = false
+          for (let d = $from.depth; d > 0; d--) if ($from.node(d).type.name === 'bulletList') inBullet = true
+          if (!inBullet) return null
+          const checked = /x/i.test(match[1] ?? '')
+          const c = chain().deleteRange(range).toggleTaskList()
+          if (checked) c.updateAttributes('taskItem', { checked: true })
+          c.run()
+          return undefined
+        },
+      }),
+    ]
+  },
+})
+
 export function createNoteExtensions() {
   return [
     StarterKit.configure({ underline: false, paragraph: false, heading: false, listItem: false }),
@@ -313,6 +339,7 @@ export function createNoteExtensions() {
     BlockLineHeight,
     TaskList,
     TaskItem.configure({ nested: true }),
+    GithubTaskRule,
     Markdown,
   ]
 }

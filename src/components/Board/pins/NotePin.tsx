@@ -54,7 +54,7 @@ const MARKDOWN_COMPONENTS = {
   // .math-display) with the raw TeX as its text — that is the shape
   // rehype-katex looks for, and the reason the first attempt at this
   // matched on <span> and silently did nothing.
-  code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+  code({ className, children, node: _node, ...props }: { className?: string; children?: React.ReactNode; node?: unknown }) {
     if (className?.includes('math-display')) {
       return <KatexBlock tex={String(children).trim()} display />
     }
@@ -245,6 +245,16 @@ export function NotePin({ pin }: { pin: NotePinT }) {
     if (!activated) return
     return () => commitRef.current()
   }, [activated])
+
+  // Save as you type. The draft used to reach the board only when editing
+  // ended, so a reload, a crash or a closed tab in the middle of a note lost
+  // everything typed since it was opened. Saved a moment after the last
+  // keystroke, without ending the edit.
+  useEffect(() => {
+    if (!activated) return
+    const id = window.setTimeout(() => commitRef.current(), 1200)
+    return () => window.clearTimeout(id)
+  }, [activated, draft])
 
   // Drags the whole reaction row by any one of its chips: no extra handle
   // to find, and a plain click still counts up because the drag only

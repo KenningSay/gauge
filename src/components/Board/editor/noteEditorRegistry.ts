@@ -77,3 +77,24 @@ export function useEditorSnapshot<T extends object>(editor: Editor | null, read:
 
   return useSyncExternalStore(subscribeEditor, getSnapshot)
 }
+
+// Gives the editor focus, tolerating a race inside the editor library.
+//
+// Focusing makes the browser fire a selection event synchronously, which
+// advances the editor's state while the focus command is still holding a
+// transaction built from the state before — the library then throws
+// "Applying a mismatched transaction" (seen on a touch device just as an
+// editor opened). The state itself is fine; the focus just did not happen, so
+// it is tried once more a frame later.
+export function safeFocus(editor: Editor, position?: 'end' | 'start' | 'all' | number | boolean | null): void {
+  const attempt = () => {
+    if (editor.isDestroyed) return true
+    try {
+      editor.commands.focus(position ?? null)
+      return true
+    } catch {
+      return false
+    }
+  }
+  if (!attempt()) requestAnimationFrame(() => void attempt())
+}

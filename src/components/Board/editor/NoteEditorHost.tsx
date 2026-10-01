@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Editor, EditorContent, useEditor } from '@tiptap/react'
 import { createNoteExtensions } from './noteExtensions'
 import { visualEditAllowed } from './roundtrip'
-import { registerNoteEditor } from './noteEditorRegistry'
+import { registerNoteEditor, safeFocus } from './noteEditorRegistry'
 import styles from '../pins/Pins.module.css'
 
 export interface NoteEditorProps {
@@ -71,7 +71,8 @@ function VisualEditor({ pinId, value, onChange, onEscape, onBlur, className, sty
     extensions,
     content: value,
     contentType: 'markdown',
-    autofocus: 'end',
+    // No `autofocus` option: it focuses from inside the library's own startup,
+    // which races with the markdown being loaded. See safeFocus.
     editorProps: {
       attributes: {
         class: `${styles.noteMarkdown} ${styles.noteProse}`,
@@ -88,7 +89,9 @@ function VisualEditor({ pinId, value, onChange, onEscape, onBlur, className, sty
       },
     },
     onUpdate: ({ editor: ed }) => {
-      const md = ed.getMarkdown()
+      // No trailing blank lines: the editor keeps an empty paragraph after a
+      // list or a rule to type into, which is not part of the note.
+      const md = ed.getMarkdown().replace(/\n+$/, '')
       emitted.current = md
       callbacks.current.onChange(md)
     },
@@ -96,6 +99,14 @@ function VisualEditor({ pinId, value, onChange, onEscape, onBlur, className, sty
   })
 
   useEffect(() => (editor ? registerNoteEditor(pinId, editor) : undefined), [pinId, editor])
+
+  // Caret at the end, not the start: the editor is often opened by typing a
+  // first character, and the rest of the word has to follow it.
+  useEffect(() => {
+    if (!editor) return
+    const id = requestAnimationFrame(() => safeFocus(editor, 'end'))
+    return () => cancelAnimationFrame(id)
+  }, [editor])
 
   // The note changed from outside while it was open (a linked file loaded).
   useEffect(() => {

@@ -156,8 +156,11 @@
 @media (pointer: coarse), (max-width: 640px) {
   .bar {
     position: fixed;
-    left: max(8px, var(--safe-left));
-    right: max(8px, var(--safe-right));
+    /* !important because the component sets `left` inline to centre the bar
+       over its note, and an inline style beats a plain rule: on a phone the
+       bar came out 198px wide, pushed against the right edge. */
+    left: max(8px, var(--safe-left)) !important;
+    right: max(8px, var(--safe-right)) !important;
     top: auto !important;
     bottom: calc(var(--tap) + 26px + var(--safe-bottom) + var(--status-bar-h, 0px));
     transform: none;
