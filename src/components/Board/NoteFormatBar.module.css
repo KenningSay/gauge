@@ -159,7 +159,7 @@
     left: max(8px, var(--safe-left));
     right: max(8px, var(--safe-right));
     top: auto !important;
-    bottom: calc(var(--tap) + 26px + var(--safe-bottom));
+    bottom: calc(var(--tap) + 26px + var(--safe-bottom) + var(--status-bar-h, 0px));
     transform: none;
     max-width: none;
   }
@@ -231,4 +231,26 @@
     width: var(--tap);
     height: var(--tap);
   }
+}
+
+/* Which of the two things the bar is about to change. 16px like everything
+   else in the interface: the weight and the colour carry the difference. */
+.mode {
+  padding: 2px 8px;
+  margin-right: 2px;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.modeFrag {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }

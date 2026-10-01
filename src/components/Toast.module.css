@@ -1,6 +1,6 @@
 .wrap {
   position: fixed;
-  bottom: 20px;
+  bottom: calc(20px + var(--status-bar-h, 0px));
   right: 20px;
   display: flex;
   flex-direction: column;

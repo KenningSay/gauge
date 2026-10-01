@@ -94,7 +94,8 @@ function MainApp() {
       }
 
       const target = e.target as HTMLElement | null
-      const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      const typing =
+        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
       if (typing) return
 
       if (hasMod(e) && isKey(e, 'a')) { e.preventDefault(); selectAll(); return }

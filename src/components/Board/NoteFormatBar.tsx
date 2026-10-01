@@ -7,7 +7,7 @@
 // whatever the zoom is — a toolbar that shrinks with the board is useless
 // at 30%.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import {
   AlignCenter,
   AlignJustify,
@@ -25,14 +25,13 @@ import {
   Minus,
   MoreHorizontal,
   Plus,
-  Eraser,
   RotateCcw,
   Scaling,
   Strikethrough,
   Underline,
   Type,
 } from 'lucide-react'
-import type { NotePin as NotePinT, TextAlign, TextVAlign } from '../../api/board'
+import type { NoteFont, NotePin as NotePinT, TextAlign, TextVAlign } from '../../api/board'
 import { useBoardStore } from '../../store/useBoardStore'
 import {
   BASE_NOTE_FONT_SIZE,
@@ -42,7 +41,8 @@ import {
   NOTE_FONTS,
   readableOn,
 } from './pins/noteStyles'
-import { applySpanStyle, clearSpans, toggleTag, type SpanPatch } from '../../utils/inlineSpans'
+import { applySpanStyle, clearSpans, toggleTag, type SpanAlign, type SpanPatch } from '../../utils/inlineSpans'
+import { getNoteEditor } from './pins/noteEditorRegistry'
 import {
   clampFontSize,
   toggleWrap,
@@ -88,13 +88,21 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   useEffect(() => setMore(false), [pin.id])
 
   // Measured rather than assumed: the bar wraps on a narrow canvas, and a
-  // guessed size would place it wrongly the moment it did — including its
-  // height, which changes when the "more" row opens or closes.
+  // guessed size would place it wrongly the moment it did. Watched rather
+  // than measured once — its size changes with the "more" row, with the
+  // mode label that appears while a note is being edited, and with the
+  // width of whatever the font list currently shows.
   useEffect(() => {
-    if (barRef.current) {
-      setDims({ w: barRef.current.offsetWidth, h: barRef.current.offsetHeight })
+    const el = barRef.current
+    if (!el) return
+    const measure = () => {
+      setDims((d) => (d.w === el.offsetWidth && d.h === el.offsetHeight ? d : { w: el.offsetWidth, h: el.offsetHeight }))
     }
-  }, [pin.id, pin.font, pin.fontSize, more])
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const set = (field: string, value: unknown) => updatePin(pin.id, field, value)
   // Clicking the active option again clears it, so there is always a way
@@ -105,7 +113,7 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   const size = effectiveSize(pin)
   const lineHeight = pin.lineHeight ?? 1.55
   const tracking = pin.letterSpacing ?? 0
-  const font = pin.font ?? (HUD_STYLES.has(pin.style ?? 'sticky') ? 'mono' : 'default')
+  const noteFont = pin.font ?? (HUD_STYLES.has(pin.style ?? 'sticky') ? 'mono' : 'default')
 
   // Above the note by preference; below it when the note is near the top
   // edge, so the bar can never end up off-screen where it can't be used.
@@ -144,57 +152,77 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   // shortcut uses; with the note only selected (not open for editing),
   // there is no caret to work from, so it applies to the whole text.
   const applyListPrefix = (kind: 'bullet' | 'numbered') => {
-    const area = document.querySelector<HTMLTextAreaElement>(`[data-pin-id="${pin.id}"] textarea`)
-    if (area) {
-      const result = toggleListPrefix(area.value, area.selectionStart, area.selectionEnd, kind)
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!
-      setter.call(area, result.text)
-      area.dispatchEvent(new Event('input', { bubbles: true }))
-      requestAnimationFrame(() => area.setSelectionRange(result.start, result.end))
-      area.focus()
+    const ed = getNoteEditor(pin.id)
+    if (ed) {
+      const { start, end } = ed.getSelection()
+      ed.apply(toggleListPrefix(ed.getText(), start, end, kind))
+      ed.focus()
       return
     }
     const result = toggleListPrefix(pin.text, 0, pin.text.length, kind)
     set('text', result.text)
   }
 
-  // --- formatting a selected fragment -----------------------------------
+  // --- two modes: a selected fragment, or the whole note ----------------
   //
-  // While the note is open for editing the textarea is in the DOM, and
-  // whatever is selected in it is what the person means: colour, size,
-  // typeface and the B/I/U/S marks then apply to that fragment only. With
-  // the note merely selected on the board there is nothing finer than the
-  // whole card, and the same controls keep setting the card's own fields.
-  const editArea = () =>
-    document.querySelector<HTMLTextAreaElement>(`[data-pin-id="${pin.id}"] textarea`)
+  // While the note is open for editing and part of its text is selected,
+  // every control here changes that fragment and nothing else. With no
+  // selection — or with the note merely selected on the board — the same
+  // controls change the note as a whole, exactly as they always did. The
+  // bar says which of the two it is doing, and reads what it shows (the
+  // active alignment, the size, the colour) from the selection, so a button
+  // never claims a state the selected words do not have.
+  const [, refresh] = useReducer((n: number) => n + 1, 0)
+  useEffect(() => {
+    let raf = 0
+    const onSel = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(refresh)
+    }
+    document.addEventListener('selectionchange', onSel)
+    return () => {
+      cancelAnimationFrame(raf)
+      document.removeEventListener('selectionchange', onSel)
+    }
+  }, [])
 
-  const writeArea = (
-    area: HTMLTextAreaElement,
-    result: { text: string; start: number; end: number },
-    refocus: boolean,
-  ) => {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!
-    setter.call(area, result.text)
-    area.dispatchEvent(new Event('input', { bubbles: true }))
-    // Set after React has written the value, or the selection snaps to the end.
-    requestAnimationFrame(() => area.setSelectionRange(result.start, result.end))
-    // Not for a colour picker: pulling focus back while its popup is open
-    // closes the popup on the first drag step.
-    if (refocus) area.focus()
+  const editor = getNoteEditor(pin.id)
+  const sel = editor?.getSelection()
+  const frag = Boolean(editor && sel && sel.start !== sel.end)
+  const atSel = frag && editor ? editor.styleAtSelection() : null
+  const fragStyle = (atSel?.style ?? {}) as {
+    color?: string
+    size?: number
+    font?: string
+    align?: SpanAlign
+    lineHeight?: number
+    tracking?: number
+    upper?: boolean
   }
 
-  // Returns true when it handled the change on a fragment.
-  const styleSelection = (patch: SpanPatch, refocus = true): boolean => {
-    const area = editArea()
-    if (!area || area.selectionStart === area.selectionEnd) return false
-    writeArea(area, applySpanStyle(area.value, area.selectionStart, area.selectionEnd, patch), refocus)
+  // What the controls show: the selection's own value when a fragment is
+  // selected, falling back to the note's, so nothing reads as blank.
+  const shownFont = frag ? (fragStyle.font ?? noteFont) : noteFont
+  const shownSize = frag ? (fragStyle.size ?? size) : size
+  const shownLineHeight = frag ? (fragStyle.lineHeight ?? lineHeight) : lineHeight
+  const shownTracking = frag ? (fragStyle.tracking ?? tracking) : tracking
+  const shownAlign = frag ? fragStyle.align : pin.align
+  const shownColor = frag ? (fragStyle.color ?? pin.textColor ?? readableOn(pin.color)) : (pin.textColor ?? readableOn(pin.color))
+
+  // Returns true when the change went to the fragment.
+  const styleSelection = (patch: SpanPatch): boolean => {
+    if (!editor) return false
+    const { start, end } = editor.getSelection()
+    if (start === end) return false
+    editor.apply(applySpanStyle(editor.getText(), start, end, patch))
     return true
   }
 
   const clearSelection = () => {
-    const area = editArea()
-    if (!area || area.selectionStart === area.selectionEnd) return
-    writeArea(area, clearSpans(area.value, area.selectionStart, area.selectionEnd), true)
+    if (!editor) return
+    const { start, end } = editor.getSelection()
+    if (start === end) return
+    editor.apply(clearSpans(editor.getText(), start, end))
   }
 
   const MARKS: Record<'bold' | 'italic' | 'underline' | 'strike', [string, string]> = {
@@ -204,25 +232,47 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
     strike: ['~~', '~~'],
   }
 
+  const markActive = (field: 'bold' | 'italic' | 'underline' | 'strike'): boolean => {
+    if (!frag || !editor || !sel) return Boolean(pin[field])
+    if (field === 'underline') return Boolean(atSel?.underline)
+    const [open, close] = MARKS[field]
+    const t = editor.getText()
+    const picked = t.slice(sel.start, sel.end)
+    return (
+      (picked.startsWith(open) && picked.endsWith(close) && picked.length >= open.length + close.length) ||
+      (t.slice(0, sel.start).endsWith(open) && t.slice(sel.end).startsWith(close))
+    )
+  }
+
   const applyMark = (field: 'bold' | 'italic' | 'underline' | 'strike') => {
-    const area = editArea()
-    if (!area) {
+    if (!frag || !editor || !sel) {
       set(field, pin[field] ? undefined : true)
       return
     }
     const [open, close] = MARKS[field]
-    const { value, selectionStart: a, selectionEnd: b } = area
-    writeArea(area, open === close ? toggleWrap(value, a, b, open) : toggleTag(value, a, b, open, close), true)
+    const t = editor.getText()
+    editor.apply(
+      open === close ? toggleWrap(t, sel.start, sel.end, open) : toggleTag(t, sel.start, sel.end, open, close),
+    )
+  }
+
+  const toggleUpper = () => {
+    if (frag) styleSelection({ upper: fragStyle.upper ? false : true })
+    else set('uppercase', pin.uppercase ? undefined : true)
   }
 
   const alignBtn = (value: TextAlign, icon: React.ReactNode, label: string) => (
     <button
       type="button"
-      className={`${styles.btn} ${pin.align === value ? styles.on : ''}`}
+      className={`${styles.btn} ${shownAlign === value ? styles.on : ''}`}
       title={label}
       aria-label={label}
-      aria-pressed={pin.align === value}
-      onClick={() => toggle('align', value, pin.align)}
+      aria-pressed={shownAlign === value}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => {
+        if (frag) styleSelection({ align: fragStyle.align === value ? null : value })
+        else toggle('align', value, pin.align)
+      }}
     >
       {icon}
     </button>
@@ -231,33 +281,35 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   const valignBtn = (value: TextVAlign, icon: React.ReactNode, label: string) => (
     <button
       type="button"
-      className={`${styles.btn} ${pin.valign === value ? styles.on : ''}`}
-      title={label}
+      className={`${styles.btn} ${!frag && pin.valign === value ? styles.on : ''}`}
+      title={frag ? `${label} — только для всей заметки` : label}
       aria-label={label}
-      aria-pressed={pin.valign === value}
+      aria-pressed={!frag && pin.valign === value}
+      disabled={frag}
       onClick={() => toggle('valign', value, pin.valign)}
     >
       {icon}
     </button>
   )
 
-  const markBtn = (field: 'bold' | 'italic' | 'underline' | 'strike' | 'uppercase', icon: React.ReactNode, label: string) => (
+  const markBtn = (field: 'bold' | 'italic' | 'underline' | 'strike' | 'uppercase', icon: React.ReactNode, label: string) => {
+    const active = field === 'uppercase' ? (frag ? Boolean(fragStyle.upper) : Boolean(pin.uppercase)) : markActive(field)
+    return (
     <button
       type="button"
-      className={`${styles.btn} ${pin[field] ? styles.on : ''}`}
+      className={`${styles.btn} ${active ? styles.on : ''}`}
       title={label}
       aria-label={label}
-      aria-pressed={Boolean(pin[field])}
-      // mousedown must not blur the textarea, or the selection is gone
+      aria-pressed={active}
+      // mousedown must not blur the editor, or the selection is gone
       // before the click lands (same reason as the list buttons below).
       onMouseDown={(e) => e.preventDefault()}
-      onClick={() =>
-        field === 'uppercase' ? set(field, pin[field] ? undefined : true) : applyMark(field)
-      }
+      onClick={() => (field === 'uppercase' ? toggleUpper() : applyMark(field))}
     >
       {icon}
     </button>
-  )
+    )
+  }
 
   return (
     <div
@@ -272,12 +324,19 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
       onContextMenu={(e) => e.stopPropagation()}
     >
       <div className={styles.row}>
+        {/* Only while the note is open for editing: otherwise there is no
+            selection to speak of and the bar is plainly about the card. */}
+        {editor && (
+          <span className={`${styles.mode} ${frag ? styles.modeFrag : ''}`} aria-live="polite">
+            {frag ? 'Выделенное' : 'Вся заметка'}
+          </span>
+        )}
         <select
           className={styles.select}
-          value={font}
+          value={shownFont}
           title="Шрифт"
           aria-label="Шрифт"
-          style={{ fontFamily: FONT_BY_ID.get(font)?.css }}
+          style={{ fontFamily: FONT_BY_ID.get(shownFont as NoteFont)?.css }}
           onChange={(e) => {
             const id = e.target.value
             if (styleSelection({ font: id === 'default' ? null : id })) return
@@ -301,7 +360,7 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
             className={styles.step}
             aria-label="Меньше"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => (styleSelection({ size: stepFontSize(size, -1) }) ? undefined : set('fontSize', stepFontSize(size, -1)))}
+            onClick={() => (styleSelection({ size: stepFontSize(shownSize, -1) }) ? undefined : set('fontSize', stepFontSize(size, -1)))}
           >
             <Minus size={13} />
           </button>
@@ -310,11 +369,11 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
             type="number"
             min={8}
             max={200}
-            value={size}
+            value={shownSize}
             aria-label="Размер текста"
             onChange={(e) => {
               const px = clampFontSize(Number(e.target.value))
-              if (!styleSelection({ size: px }, false)) set('fontSize', px)
+              if (!styleSelection({ size: px })) set('fontSize', px)
             }}
           />
           <button
@@ -322,7 +381,7 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
             className={styles.step}
             aria-label="Больше"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => (styleSelection({ size: stepFontSize(size, 1) }) ? undefined : set('fontSize', stepFontSize(size, 1)))}
+            onClick={() => (styleSelection({ size: stepFontSize(shownSize, 1) }) ? undefined : set('fontSize', stepFontSize(size, 1)))}
           >
             <Plus size={13} />
           </button>
@@ -347,15 +406,15 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
           <Baseline size={15} />
           <span
             className={styles.colorSwatch}
-            style={{ background: pin.textColor ?? readableOn(pin.color) }}
+            style={{ background: shownColor }}
           />
           <input
             className={styles.colorInput}
             type="color"
             aria-label="Цвет текста"
-            value={pin.textColor ?? readableOn(pin.color)}
+            value={shownColor}
             onChange={(e) => {
-              if (!styleSelection({ color: e.target.value }, false)) set('textColor', e.target.value)
+              if (!styleSelection({ color: e.target.value })) set('textColor', e.target.value)
             }}
           />
         </label>
@@ -441,9 +500,12 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
               step={0.05}
               min={0.8}
               max={3}
-              value={lineHeight}
+              value={shownLineHeight}
               aria-label="Межстрочный интервал"
-              onChange={(e) => set('lineHeight', clampLineHeight(Number(e.target.value)))}
+              onChange={(e) => {
+                const v = clampLineHeight(Number(e.target.value))
+                if (!styleSelection({ lineHeight: v })) set('lineHeight', v)
+              }}
             />
           </div>
 
@@ -455,42 +517,40 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
               step={1}
               min={-10}
               max={50}
-              value={tracking}
+              value={shownTracking}
               aria-label="Межбуквенный интервал"
-              onChange={(e) => set('letterSpacing', clampLetterSpacing(Number(e.target.value)))}
+              onChange={(e) => {
+                const v = clampLetterSpacing(Number(e.target.value))
+                if (!styleSelection({ tracking: v })) set('letterSpacing', v)
+              }}
             />
           </div>
 
           <button
             type="button"
             className={styles.btn}
-            title="Убрать цвет, размер и шрифт у выделенного"
-            aria-label="Убрать цвет, размер и шрифт у выделенного"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={clearSelection}
-          >
-            <Eraser size={15} />
-          </button>
-
-          <button
-            type="button"
-            className={styles.btn}
-            title="Подогнать размер под рамку"
+            title={frag ? 'Подогнать размер под рамку — только для всей заметки' : 'Подогнать размер под рамку'}
             aria-label="Подогнать размер под рамку"
+            disabled={frag}
             onClick={fitToBox}
           >
             <Scaling size={15} />
           </button>
 
-          {hasTextFormat(pin) && (
+          {(frag || hasTextFormat(pin)) && (
             <>
               <div className={styles.sep} />
               <button
                 type="button"
                 className={styles.btn}
-                title="Сбросить форматирование"
-                aria-label="Сбросить форматирование"
+                title={frag ? 'Убрать оформление у выделенного' : 'Сбросить форматирование заметки'}
+                aria-label={frag ? 'Убрать оформление у выделенного' : 'Сбросить форматирование заметки'}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
+                  if (frag) {
+                    clearSelection()
+                    return
+                  }
                   for (const f of [
                     'fontSize',
                     'align',

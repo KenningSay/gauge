@@ -58,6 +58,48 @@ describe('applySpanStyle', () => {
   })
 })
 
+describe('applySpanStyle: block and extra properties', () => {
+  it('aligns whole lines even when only a word is selected', () => {
+    const r = applySpanStyle('one two\nthree', 2, 4, { align: 'center' })
+    expect(r.text).toBe('<span style="text-align:center">one two</span>\nthree')
+  })
+
+  it('aligns several lines, one wrapper each, leaving the others alone', () => {
+    const r = applySpanStyle('a\nb\nc', 0, 3, { align: 'right' })
+    expect(r.text).toBe(
+      '<span style="text-align:right">a</span>\n<span style="text-align:right">b</span>\nc',
+    )
+  })
+
+  it('changing the alignment edits the same wrapper', () => {
+    const first = applySpanStyle('word', 0, 4, { align: 'center' })
+    const second = applySpanStyle(first.text, first.start, first.end, { align: 'right' })
+    expect(second.text).toBe('<span style="text-align:right">word</span>')
+  })
+
+  it('keeps the list marker outside the wrapper so the list survives', () => {
+    const r = applySpanStyle('- item\n- two', 0, 6, { align: 'center' })
+    expect(r.text).toBe('- <span style="text-align:center">item</span>\n- two')
+    const h = applySpanStyle('## Title', 0, 8, { color: '#ff0000' })
+    expect(h.text).toBe('## <span style="color:#ff0000">Title</span>')
+  })
+
+  it('stores leading, tracking and case', () => {
+    const r = applySpanStyle('abc', 0, 3, { lineHeight: 2, tracking: 5, upper: true })
+    expect(parseOpenTag(r.text.slice(0, r.text.indexOf('>') + 1))).toEqual({
+      lineHeight: 2,
+      tracking: 5,
+      upper: true,
+    })
+  })
+
+  it('turning case off removes it again', () => {
+    const on = applySpanStyle('abc', 0, 3, { upper: true })
+    const off = applySpanStyle(on.text, on.start, on.end, { upper: false })
+    expect(off.text).toBe('abc')
+  })
+})
+
 describe('parseOpenTag', () => {
   it('reads only the supported properties', () => {
     expect(parseOpenTag('<span style="color:#abc;position:fixed;font-size:30px">')).toEqual({
@@ -91,6 +133,11 @@ describe('remarkInlineSpans', () => {
     const html = render('a <span style="color:#ff0000;font-size:24px" data-font="mono">word</span> b')
     expect(html).toContain('<span style="color:#ff0000;font-size:24px;font-family:')
     expect(html).toContain('word</span>')
+  })
+  it('renders alignment as a block so it can take effect', () => {
+    const html = render('<span style="text-align:center">mid</span>')
+    expect(html).toContain('text-align:center')
+    expect(html).toContain('display:block')
   })
   it('renders <u> and the old ++ markers as underline', () => {
     expect(render('<u>x</u>')).toContain('<u>x</u>')

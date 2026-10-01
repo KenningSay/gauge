@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { HardDrive } from 'lucide-react'
 import { getStorageInfo, type StorageInfo } from '../api/webdav'
 import { useFileStore } from '../store/useFileStore'
@@ -19,6 +19,30 @@ function levelOf(ratio: number): 'ok' | 'warn' | 'critical' {
 export function StatusBar() {
   const entries = useFileStore((s) => s.entries)
   const [info, setInfo] = useState<StorageInfo | null>(null)
+  const barRef = useRef<HTMLElement | null>(null)
+
+  // Whatever is pinned to the bottom of the window has to clear this bar,
+  // and it cannot know how tall the bar is — the height depends on the
+  // font and on whether the label wraps on a phone. So the bar publishes it.
+  // Without this the floating formatting bar on a phone sat under the board
+  // toolbar: the toolbar moved up with the board's container, the bar,
+  // fixed to the window, did not.
+  useEffect(() => {
+    const el = barRef.current
+    const root = document.documentElement
+    if (!el) {
+      root.style.removeProperty('--status-bar-h')
+      return
+    }
+    const publish = () => root.style.setProperty('--status-bar-h', `${el.offsetHeight}px`)
+    publish()
+    const ro = new ResizeObserver(publish)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      root.style.removeProperty('--status-bar-h')
+    }
+  }, [info])
 
   const refresh = useCallback(() => {
     getStorageInfo().then(setInfo).catch(() => {})
@@ -47,6 +71,7 @@ export function StatusBar() {
 
   return (
     <footer
+      ref={barRef}
       className={styles.bar}
       title={`Занято ${formatSize(info.used, false)} · свободно ${formatSize(info.available, false)} · всего ${formatSize(info.total, false)}`}
     >

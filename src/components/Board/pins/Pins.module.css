@@ -62,6 +62,14 @@
   font-size: 16px;
   line-height: 1.55;
   color: inherit;
+  /* A contenteditable, not a textarea: it has to keep line breaks and let
+     the browser draw its own caret and scrollbar. */
+  display: block;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-x: hidden;
+  overflow-y: auto;
+  cursor: text;
 }
 
 /* Inherit, do not set. This was an absolute 16px, which quietly blocked
