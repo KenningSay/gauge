@@ -92,6 +92,20 @@ function flatten(node: MdNode, ctx: Ctx, out: Item[]) {
       for (const c of node.children ?? []) flatten(c, next, out)
       return
     }
+    case 'paragraph':
+    case 'heading':
+    case 'listItem': {
+      // A block with nothing in it is not content: an empty last bullet
+      // left by pressing Enter at the end of a list, a blank paragraph, a
+      // bare "# ". The editor does not write these back, and a note must not
+      // be taken out of the visual editor over something nobody can read.
+      const inner: Item[] = []
+      for (const c of node.children ?? []) flatten(c, ctx, inner)
+      if (!inner.some((i) => typeof i !== 'string' && i.t.trim() !== '') && !inner.some((i) => typeof i === 'string' && i.startsWith('<image'))) return
+      const attrs = [node.depth, node.ordered, node.checked].map((v) => (v === undefined ? '' : String(v))).join('|')
+      out.push(`<${node.type} ${attrs}>`, ...inner, `</${node.type}>`)
+      return
+    }
     default: {
       const attrs = [node.depth, node.ordered, node.checked, node.lang, node.type === 'image' ? node.url : undefined]
         .map((v) => (v === undefined ? '' : String(v)))

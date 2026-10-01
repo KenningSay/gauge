@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { readFileSync, existsSync } from 'node:fs'
 import { createNoteExtensions } from './noteExtensions'
-import { survivesTrip } from './roundtrip'
+import { semanticForm, survivesTrip } from './roundtrip'
 
 const trip = (md: string) => {
   const ed = new Editor({
@@ -37,6 +37,23 @@ const SAFE: Record<string, string> = {
   aligned: '<span style="text-align:center">c</span>\n\nnext',
 }
 
+// What typing leaves behind. None of it is content, and none of it may send a
+// note to the plain-text editor — which shows the raw tags, the very thing the
+// visual editor exists to hide.
+const BENIGN: Record<string, string> = {
+  emptyLastNumber: '1. a\n2. b\n3. ',
+  emptyLastBullet: '- a\n- ',
+  emptyLastTask: '- [ ] a\n- [ ] ',
+  trailingBlankLines: 'text\n\n\n',
+  leadingBlankLines: '\n\ntext',
+  manyBlankLines: 'a\n\n\n\nb',
+  blankWithSpaces: 'a\n\n \n\nb',
+  trailingSpaces: 'a   \nnext',
+  trailingNewline: 'text\n',
+  bareHash: '# ',
+  styledHeadingThenEmptyItem: '<span style="text-align:center"><span style="color:#ff8000;font-size:48px">ЧЕК</span></span>\n\n1. Архив\n2. Это жуть\n3. ',
+}
+
 // Constructs it does not: the valve has to catch each one, so the note is
 // opened as text instead of being rewritten.
 const UNSAFE: Record<string, string> = {
@@ -44,9 +61,21 @@ const UNSAFE: Record<string, string> = {
   blockMath: '$$\nx_1^2 + y_2^2\n$$',
 }
 
+describe('what counts as content', () => {
+  it('an image on its own is content, not an empty block', () => {
+    expect(semanticForm('![alt](http://x/y.png)')).toContain('image')
+  })
+  it('a missing item with text in it is still caught', () => {
+    expect(survivesTrip('- a\n- b\n- c', '- a\n- c')).toBe(false)
+  })
+})
+
 describe('safety valve', () => {
   for (const [name, md] of Object.entries(SAFE)) {
     it(`lets ${name} through`, () => expect(survivesTrip(md, trip(md))).toBe(true))
+  }
+  for (const [name, md] of Object.entries(BENIGN)) {
+    it(`lets typing leftovers through: ${name}`, () => expect(survivesTrip(md, trip(md))).toBe(true))
   }
   for (const [name, md] of Object.entries(UNSAFE)) {
     it(`catches ${name}`, () => expect(survivesTrip(md, trip(md))).toBe(false))
