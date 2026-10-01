@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { hexWithOpacity } from '../../../utils/color'
 import type React from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -10,8 +10,6 @@ import { remarkInlineSpans } from '../../../utils/inlineSpans'
 import { FileText, AlertCircle } from 'lucide-react'
 import type { NotePin as NotePinT } from '../../../api/board'
 import { BASE_NOTE_FONT_SIZE, FONT_BY_ID, HUD_STYLES, STYLE_CLASS, readableOn } from './noteStyles'
-import { domPointAtPlain } from '../../../utils/noteEditorDom'
-import { NoteEditor } from './NoteEditor'
 import {
   autoGrowHeight,
   bumpReaction,
@@ -39,6 +37,13 @@ import shell from '../PinShell.module.css'
 // a sticky note. People typed a list down a card, pressed Enter between
 // the items, and got one run-on paragraph: "форматирование с новой
 // строкой не работает".
+// The editor is a sizeable library and is only needed once a note is opened
+// for editing, so it is a separate chunk. It is also fetched shortly after
+// the first note appears, so that by the time someone double-clicks there is
+// nothing left to wait for.
+const loadEditor = () => import('../editor/NoteEditorHost')
+const NoteEditorHost = lazy(loadEditor)
+
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks, remarkInlineSpans]
 const REHYPE_PLUGINS = [rehypeNoteHighlight] as never[]
 
@@ -95,7 +100,18 @@ export function NotePin({ pin }: { pin: NotePinT }) {
   const [draft, setDraft] = useState(pin.text)
   const draftRef = useRef(draft)
   draftRef.current = draft
-  const areaRef = useRef<HTMLDivElement | null>(null)
+
+  // The draft is taken from the note at the moment editing opens, in the
+  // same render — not one effect later. "Start typing on a selected note"
+  // writes the first character into the note and opens the editor in one
+  // go, and a draft left over from before that would open the editor on the
+  // old text and drop the character.
+  const [wasActivated, setWasActivated] = useState(false)
+  if (activated !== wasActivated) {
+    setWasActivated(activated)
+    if (activated) setDraft(pin.text)
+  }
+  const areaRef = useRef<HTMLElement | null>(null)
 
   // Sync drafts when the pin's stored text changes from outside (undo,
   // AI "apply", remote save) — but only while the user isn't editing, or
@@ -104,21 +120,11 @@ export function NotePin({ pin }: { pin: NotePinT }) {
     if (!activated) setDraft(pin.text)
   }, [pin.text, activated])
 
+  // Warm the editor chunk once the board has settled.
   useEffect(() => {
-    if (!activated) return
-    const el = areaRef.current
-    if (!el) return
-    el.focus()
-    // Caret at the end, not the start: the editor is often opened by
-    // typing a first character, and the rest of the word has to follow it.
-    const sel = el.ownerDocument.getSelection()
-    const end = domPointAtPlain(el, el.textContent?.length ?? 0)
-    const range = el.ownerDocument.createRange()
-    range.setStart(end.node, end.offset)
-    range.collapse(true)
-    sel?.removeAllRanges()
-    sel?.addRange(range)
-  }, [activated])
+    const id = window.setTimeout(() => void loadEditor(), 1500)
+    return () => window.clearTimeout(id)
+  }, [])
 
   // Grows the card as the text outgrows it. Before this the note kept its
   // size and the overflow scrolled inside, so a long note looked like a
@@ -325,28 +331,31 @@ export function NotePin({ pin }: { pin: NotePinT }) {
           so a chamfered plate can't clip what is pinned to its corners. */}
       {isHud && <span className={styles.hudPlate} aria-hidden />}
       {activated ? (
-        <NoteEditor
-          pinId={pin.id}
-          editorRef={areaRef}
-          className={styles.noteEditor}
-          style={textStyle}
-          value={draft}
-          onChange={setDraft}
-          onEscape={() => {
-            setDraft(pin.text)
-            setActivated(false)
-          }}
-          onBlur={(e) => {
-            // Focus moving onto the formatting bar (a font list, a colour
-            // picker, a size box) is not the end of editing: the bar needs
-            // the editor — and the selection in it — to still be there.
-            // PinShell ends the edit on the next pointerdown outside the
-            // pin and the bar, and the cleanup below commits the draft.
-            const to = e.relatedTarget as HTMLElement | null
-            if (to?.closest('[data-note-format-bar]')) return
-            commit()
-          }}
-        />
+        <Suspense fallback={<div className={styles.noteEditor} style={textStyle} />}>
+          <NoteEditorHost
+            pinId={pin.id}
+            domRef={(el) => {
+              areaRef.current = el
+            }}
+            className={styles.noteEditor}
+            style={textStyle}
+            value={draft}
+            onChange={setDraft}
+            onEscape={() => {
+              setDraft(pin.text)
+              setActivated(false)
+            }}
+            onBlur={(to) => {
+              // Focus moving onto the formatting bar (a font list, a colour
+              // picker, a size box) is not the end of editing: the bar needs
+              // the editor — and the selection in it — to still be there.
+              // PinShell ends the edit on the next pointerdown outside the
+              // pin and the bar, and the cleanup below commits the draft.
+              if (to?.closest('[data-note-format-bar]')) return
+              commit()
+            }}
+          />
+        </Suspense>
       ) : (
         <div
           className={styles.noteBody}

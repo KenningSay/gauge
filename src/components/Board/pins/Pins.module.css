@@ -2260,3 +2260,52 @@
      dragging, and a stroke is a thin line nobody can reliably hit. */
   pointer-events: none;
 }
+
+/* ---- the visual editor ------------------------------------------------ */
+
+/* The editing surface itself. It wears the reader's own typography
+   (.noteMarkdown) so what you edit looks like what you read, and only adds
+   what an editable surface needs. */
+.noteProse {
+  min-height: 100%;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+/* A list item's paragraph is not a paragraph to the eye. */
+.noteProse :global(li) > :global(p) { margin: 0; }
+
+.noteProse :global(ul[data-type='taskList']) { list-style: none; padding-left: 0; }
+.noteProse :global(ul[data-type='taskList']) :global(li) { display: flex; gap: 8px; align-items: flex-start; }
+.noteProse :global(ul[data-type='taskList']) :global(li) > :global(label) { flex: 0 0 auto; margin-top: 0.25em; }
+.noteProse :global(ul[data-type='taskList']) :global(li) > :global(div) { flex: 1 1 auto; }
+
+/* ---- the plain-text fallback ------------------------------------------ */
+
+.sourceBadge {
+  align-self: flex-start;
+  margin-bottom: 6px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.16);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.sourceArea {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
