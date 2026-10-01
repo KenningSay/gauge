@@ -128,6 +128,11 @@ export function PinShell({
       if (!alive) return
       const target = e.target as Node | null
       if (target && shellRef.current?.contains(target)) return
+      // The formatting bar floats outside the pin but belongs to it: a
+      // click on a colour, a size or a typeface is part of editing, and
+      // ending the edit here would close the editor with the selection the
+      // click was about to be applied to.
+      if (target instanceof Element && target.closest('[data-note-format-bar]')) return
       setActivatedState(false)
     }
     document.addEventListener('pointerdown', handler, true)

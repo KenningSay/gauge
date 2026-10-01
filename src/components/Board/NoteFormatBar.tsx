@@ -25,6 +25,7 @@ import {
   Minus,
   MoreHorizontal,
   Plus,
+  Eraser,
   RotateCcw,
   Scaling,
   Strikethrough,
@@ -41,8 +42,10 @@ import {
   NOTE_FONTS,
   readableOn,
 } from './pins/noteStyles'
+import { applySpanStyle, clearSpans, toggleTag, type SpanPatch } from '../../utils/inlineSpans'
 import {
   clampFontSize,
+  toggleWrap,
   clampLetterSpacing,
   clampLineHeight,
   fitFontSize,
@@ -155,6 +158,63 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
     set('text', result.text)
   }
 
+  // --- formatting a selected fragment -----------------------------------
+  //
+  // While the note is open for editing the textarea is in the DOM, and
+  // whatever is selected in it is what the person means: colour, size,
+  // typeface and the B/I/U/S marks then apply to that fragment only. With
+  // the note merely selected on the board there is nothing finer than the
+  // whole card, and the same controls keep setting the card's own fields.
+  const editArea = () =>
+    document.querySelector<HTMLTextAreaElement>(`[data-pin-id="${pin.id}"] textarea`)
+
+  const writeArea = (
+    area: HTMLTextAreaElement,
+    result: { text: string; start: number; end: number },
+    refocus: boolean,
+  ) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!
+    setter.call(area, result.text)
+    area.dispatchEvent(new Event('input', { bubbles: true }))
+    // Set after React has written the value, or the selection snaps to the end.
+    requestAnimationFrame(() => area.setSelectionRange(result.start, result.end))
+    // Not for a colour picker: pulling focus back while its popup is open
+    // closes the popup on the first drag step.
+    if (refocus) area.focus()
+  }
+
+  // Returns true when it handled the change on a fragment.
+  const styleSelection = (patch: SpanPatch, refocus = true): boolean => {
+    const area = editArea()
+    if (!area || area.selectionStart === area.selectionEnd) return false
+    writeArea(area, applySpanStyle(area.value, area.selectionStart, area.selectionEnd, patch), refocus)
+    return true
+  }
+
+  const clearSelection = () => {
+    const area = editArea()
+    if (!area || area.selectionStart === area.selectionEnd) return
+    writeArea(area, clearSpans(area.value, area.selectionStart, area.selectionEnd), true)
+  }
+
+  const MARKS: Record<'bold' | 'italic' | 'underline' | 'strike', [string, string]> = {
+    bold: ['**', '**'],
+    italic: ['_', '_'],
+    underline: ['<u>', '</u>'],
+    strike: ['~~', '~~'],
+  }
+
+  const applyMark = (field: 'bold' | 'italic' | 'underline' | 'strike') => {
+    const area = editArea()
+    if (!area) {
+      set(field, pin[field] ? undefined : true)
+      return
+    }
+    const [open, close] = MARKS[field]
+    const { value, selectionStart: a, selectionEnd: b } = area
+    writeArea(area, open === close ? toggleWrap(value, a, b, open) : toggleTag(value, a, b, open, close), true)
+  }
+
   const alignBtn = (value: TextAlign, icon: React.ReactNode, label: string) => (
     <button
       type="button"
@@ -188,7 +248,12 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
       title={label}
       aria-label={label}
       aria-pressed={Boolean(pin[field])}
-      onClick={() => set(field, pin[field] ? undefined : true)}
+      // mousedown must not blur the textarea, or the selection is gone
+      // before the click lands (same reason as the list buttons below).
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() =>
+        field === 'uppercase' ? set(field, pin[field] ? undefined : true) : applyMark(field)
+      }
     >
       {icon}
     </button>
@@ -197,6 +262,7 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
   return (
     <div
       ref={barRef}
+      data-note-format-bar=""
       className={styles.bar}
       style={{ left, top }}
       // The bar lives over the canvas: without this, touching it starts a
@@ -212,7 +278,11 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
           title="Шрифт"
           aria-label="Шрифт"
           style={{ fontFamily: FONT_BY_ID.get(font)?.css }}
-          onChange={(e) => set('font', e.target.value === 'default' ? undefined : e.target.value)}
+          onChange={(e) => {
+            const id = e.target.value
+            if (styleSelection({ font: id === 'default' ? null : id })) return
+            set('font', id === 'default' ? undefined : id)
+          }}
         >
           {FONT_GROUPS.map((group) => (
             <optgroup key={group} label={group}>
@@ -230,7 +300,8 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
             type="button"
             className={styles.step}
             aria-label="Меньше"
-            onClick={() => set('fontSize', stepFontSize(size, -1))}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => (styleSelection({ size: stepFontSize(size, -1) }) ? undefined : set('fontSize', stepFontSize(size, -1)))}
           >
             <Minus size={13} />
           </button>
@@ -241,13 +312,17 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
             max={200}
             value={size}
             aria-label="Размер текста"
-            onChange={(e) => set('fontSize', clampFontSize(Number(e.target.value)))}
+            onChange={(e) => {
+              const px = clampFontSize(Number(e.target.value))
+              if (!styleSelection({ size: px }, false)) set('fontSize', px)
+            }}
           />
           <button
             type="button"
             className={styles.step}
             aria-label="Больше"
-            onClick={() => set('fontSize', stepFontSize(size, 1))}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => (styleSelection({ size: stepFontSize(size, 1) }) ? undefined : set('fontSize', stepFontSize(size, 1)))}
           >
             <Plus size={13} />
           </button>
@@ -265,6 +340,7 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
           title="Цвет текста (правый клик — автоматически)"
           onContextMenu={(e) => {
             e.preventDefault()
+            if (styleSelection({ color: null })) return
             set('textColor', undefined)
           }}
         >
@@ -278,7 +354,9 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
             type="color"
             aria-label="Цвет текста"
             value={pin.textColor ?? readableOn(pin.color)}
-            onChange={(e) => set('textColor', e.target.value)}
+            onChange={(e) => {
+              if (!styleSelection({ color: e.target.value }, false)) set('textColor', e.target.value)
+            }}
           />
         </label>
 
@@ -382,6 +460,17 @@ export function NoteFormatBar({ pin, rect, container }: Props) {
               onChange={(e) => set('letterSpacing', clampLetterSpacing(Number(e.target.value)))}
             />
           </div>
+
+          <button
+            type="button"
+            className={styles.btn}
+            title="Убрать цвет, размер и шрифт у выделенного"
+            aria-label="Убрать цвет, размер и шрифт у выделенного"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={clearSelection}
+          >
+            <Eraser size={15} />
+          </button>
 
           <button
             type="button"

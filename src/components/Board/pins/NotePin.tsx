@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import remarkBreaks from 'remark-breaks'
 import { rehypeNoteHighlight } from '../../../utils/noteHighlight'
+import { remarkInlineSpans } from '../../../utils/inlineSpans'
 import { FileText, AlertCircle } from 'lucide-react'
 import type { NotePin as NotePinT } from '../../../api/board'
 import { BASE_NOTE_FONT_SIZE, FONT_BY_ID, HUD_STYLES, STYLE_CLASS, readableOn } from './noteStyles'
@@ -37,7 +38,7 @@ import shell from '../PinShell.module.css'
 // a sticky note. People typed a list down a card, pressed Enter between
 // the items, and got one run-on paragraph: "форматирование с новой
 // строкой не работает".
-const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks]
+const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks, remarkInlineSpans]
 const REHYPE_PLUGINS = [rehypeNoteHighlight] as never[]
 
 const MARKDOWN_COMPONENTS = {
@@ -324,7 +325,16 @@ export function NotePin({ pin }: { pin: NotePinT }) {
           value={draft}
           spellCheck={false}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
+          onBlur={(e) => {
+            // Focus moving onto the formatting bar (a font list, a colour
+            // picker, a size box) is not the end of editing: the bar needs
+            // the textarea — and the selection in it — to still be there.
+            // PinShell ends the edit on the next pointerdown outside the
+            // pin and the bar, and the cleanup below commits the draft.
+            const to = e.relatedTarget as HTMLElement | null
+            if (to?.closest('[data-note-format-bar]')) return
+            commit()
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.preventDefault()
