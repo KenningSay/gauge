@@ -1,6 +1,7 @@
 import type { FileEntry } from '../api/types'
 import { fetchBlob, list } from '../api/webdav'
 import { createZip, type ZipInput } from './zip'
+import { nativeDownload } from './nativeDownload'
 
 // Hands a blob to the browser as a download via a throwaway anchor. Revoke
 // is deferred a beat — doing it synchronously after `.click()` has raced the
@@ -14,11 +15,9 @@ function saveBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-// Fetches the file with a real Authorization header and saves it from an
-// in-memory blob, rather than pointing a download link straight at a
-// credentialed URL.
+// Hands a single file to the browser through an authenticated streaming response.
 export async function downloadEntry(path: string, filename: string): Promise<void> {
-  saveBlob(await fetchBlob(path), filename)
+  await nativeDownload(path, filename)
 }
 
 export interface DownloadPlan {
@@ -82,9 +81,8 @@ export async function downloadSelection(
   if (entries.length === 1 && !entries[0].isDir) {
     const only = entries[0]
     onProgress?.({ filesTotal: 1, filesDone: 0, bytesTotal: only.size, bytesLoaded: 0 })
-    const blob = await fetchBlob(only.path, signal)
+    await nativeDownload(only.path, only.name, signal)
     onProgress?.({ filesTotal: 1, filesDone: 1, bytesTotal: only.size, bytesLoaded: only.size })
-    saveBlob(blob, only.name)
     return { filesTotal: 1, zipped: false }
   }
 

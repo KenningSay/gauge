@@ -596,7 +596,7 @@ export const useFileStore = create<FileStore>((set, get) => {
         controller.signal,
       )
       useUiStore.getState().pushToast(
-        zipped ? `Скачано файлов: ${filesTotal} — «${name}»` : `Скачан «${entries[0].name}»`,
+        zipped ? `Скачано файлов: ${filesTotal} — «${name}»` : `«${entries[0].name}» передан в загрузки браузера`,
       )
     } catch (e) {
       // An aborted fetch() rejects with a DOMException, not this app's own
