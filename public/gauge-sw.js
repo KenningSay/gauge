@@ -83,6 +83,7 @@ async function downloadResponse(ticket) {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request
+  if (new URL(req.url).searchParams.has('gauge-native-download')) return
   const downloadPrefix = new URL('__download/', self.registration.scope).href
   if (req.method === 'GET' && req.url.startsWith(downloadPrefix)) {
     const token = req.url.slice(downloadPrefix.length)

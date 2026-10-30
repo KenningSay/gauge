@@ -2,6 +2,15 @@ import { davUrl } from '../api/webdav'
 
 /** Stream a single file to the browser's download manager, without a Blob. */
 export async function nativeDownload(path: string, filename: string, signal?: AbortSignal): Promise<void> {
+  // Firefox can stall when a large attachment is relayed through a service worker.
+  // Use its native download stack for WebDAV files.
+  if (/Firefox\//.test(navigator.userAgent)) {
+    const a = document.createElement('a')
+    a.href = davUrl(path) + '?gauge-native-download=1'
+    a.download = filename
+    a.click()
+    return
+  }
   if (!('serviceWorker' in navigator)) throw new Error('Для скачивания нужен HTTPS и поддержка service worker')
   const registration = await navigator.serviceWorker.ready
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
