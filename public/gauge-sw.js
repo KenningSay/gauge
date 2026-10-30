@@ -51,9 +51,46 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
+// One-use tickets bind downloads to the initiating tab, never to stored credentials.
+const downloads = new Map()
+self.addEventListener('message', (event) => {
+  const data = event.data
+  if (data?.type !== 'GAUGE_DOWNLOAD') return
+  const client = event.source
+  if (!client?.id || !client.url.startsWith(self.registration.scope)) return
+  if (typeof data.token !== 'string' || !/^[a-f0-9-]{36}$/.test(data.token)) return
+  const target = new URL(data.path, self.location.origin)
+  if (target.origin !== self.location.origin || !target.pathname.startsWith('/dav/')) return
+  downloads.set(data.token, { clientId: client.id, path: target.href, filename: String(data.filename) })
+  setTimeout(() => downloads.delete(data.token), 60000)
+  event.ports[0]?.postMessage({ ready: true })
+})
+
+async function downloadResponse(ticket) {
+  if (!ticket) return new Response('Ссылка скачивания истекла. Повтори скачивание в Gauge.', { status: 410 })
+  const authHeader = await requestAuthHeader(ticket.clientId)
+  if (!authHeader) return new Response('Открой Gauge и повтори скачивание.', { status: 401 })
+  const response = await fetch(ticket.path, {
+    headers: { Authorization: authHeader }, credentials: 'omit', cache: 'no-store',
+  })
+  if (!response.ok) return new Response('Ошибка скачивания: ' + response.status, { status: response.status })
+  const headers = new Headers(response.headers)
+  const filename = encodeURIComponent(ticket.filename).replace(/['()*]/g, c => '%' + c.charCodeAt(0).toString(16))
+  headers.set('Content-Disposition', "attachment; filename*=UTF-8''" + filename)
+  headers.set('Cache-Control', 'no-store')
+  return new Response(response.body, { status: response.status, headers })
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request
-  if (new URL(req.url).searchParams.has('gauge-native-download')) return
+  const downloadPrefix = new URL('__download/', self.registration.scope).href
+  if (req.method === 'GET' && req.url.startsWith(downloadPrefix)) {
+    const token = req.url.slice(downloadPrefix.length)
+    const ticket = downloads.get(token)
+    downloads.delete(token)
+    event.respondWith(downloadResponse(ticket))
+    return
+  }
   // Only the plain, no-custom-header GET requests a <video>/<audio> element
   // makes on its own qualify — webdav.ts's own fetch()/XHR calls already set
   // a real Authorization header themselves and are left completely alone.
