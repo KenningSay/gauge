@@ -6,5 +6,7 @@ export async function nativeDownload(path: string, filename: string, signal?: Ab
   const a = document.createElement('a')
   a.href = davUrl(path) + '?gauge-native-download=1'
   a.download = filename
+  document.body.appendChild(a)
   a.click()
+  setTimeout(() => a.remove(), 1000)
 }
